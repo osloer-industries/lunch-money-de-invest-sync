@@ -42,7 +42,7 @@ loudly with a clear error instead of silently inserting wrong amounts into Lunch
 
 ## Setup
 
-1. `pnpm install`
+1. `npm ci`
 2. Get a Lunch Money API key from **Settings → Developers** in the Lunch Money app.
 3. Create a **manual account** in Lunch Money per brokerage account you want synced (one per
    person per broker — e.g. "Trade Republic (You)", "Trade Republic (Account B)", "Scalable Capital
@@ -56,7 +56,7 @@ loudly with a clear error instead of silently inserting wrong amounts into Lunch
      Lunch Money manual account id to sync into.
    - `scalableCapitalProfiles`: one entry per person, pointing at their running proxy instance
      (see below) and their Lunch Money manual account id.
-5. `LUNCH_MONEY_API_KEY=... pnpm sync`
+5. `LUNCH_MONEY_API_KEY=... npm run sync`
 
 `config.json` and `.env` are gitignored — they carry phone numbers and account ids, not just
 secrets, so don't commit them even though the PIN/API key are the only strictly sensitive bits.
@@ -85,10 +85,11 @@ device-pairing protocol) if you need that.
 ## Development
 
 ```bash
-pnpm typecheck   # tsc --noEmit
-pnpm lint        # eslint
-pnpm test        # vitest run
-pnpm test:watch  # vitest, watch mode
+npm run typecheck   # tsc --noEmit
+npm run lint        # oxlint
+npm test            # vitest run
+npm run test:watch  # vitest, watch mode
+npm run check       # lint, typecheck, coverage, and build (CI parity)
 ```
 
 Every module is covered by unit tests using fakes/stubs for network and WebSocket I/O — no
@@ -106,7 +107,7 @@ test talks to a real broker or to Lunch Money.
 
 ## GitHub Actions
 
-`.github/workflows/sync.yml` runs `pnpm sync` on a schedule against `scalableCapitalProfiles`
+`.github/workflows/sync.yml` runs `npm run sync` on a schedule against `scalableCapitalProfiles`
 only (Scalable Capital's session can survive unattended; Trade Republic's can't without a
 device-pairing client). Set `LUNCH_MONEY_API_KEY` as a repo secret and point
 `scalableCapitalProfiles[].proxyUrl` at a proxy instance reachable from the runner (e.g. a small

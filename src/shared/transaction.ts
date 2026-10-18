@@ -28,10 +28,14 @@ export interface SyncTarget {
  * `Currency` literal (a 150+ member union we don't want to duplicate here). Actual
  * membership is still enforced by the Lunch Money API at insert time.
  */
+function isCurrencyCode(code: string): code is Currency {
+  return /^[a-z]{3}$/.test(code);
+}
+
 export function toCurrency(code: string): Currency {
   const lower = code.toLowerCase();
-  if (!/^[a-z]{3}$/.test(lower)) {
+  if (!isCurrencyCode(lower)) {
     throw new Error(`Not a valid 3-letter currency code: "${code}"`);
   }
-  return lower as Currency;
+  return lower;
 }
