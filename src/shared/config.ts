@@ -38,9 +38,13 @@ export function loadConfig(raw: unknown): SyncConfig {
  * asset ids and phone numbers) plus LUNCH_MONEY_API_KEY from the environment.
  */
 export function readConfigFromDisk(configPath = "config.json"): SyncConfig {
-  const fileContents = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
-  return loadConfig({
-    ...fileContents,
-    lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
-  });
+  const fileContents: unknown = JSON.parse(readFileSync(configPath, "utf-8"));
+  if (typeof fileContents !== "object" || fileContents === null || Array.isArray(fileContents)) {
+    throw new Error(`${configPath} must contain a JSON object`);
+  }
+  return loadConfig(
+    Object.assign({}, fileContents, {
+      lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
+    }),
+  );
 }

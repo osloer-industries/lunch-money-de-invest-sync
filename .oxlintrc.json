@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "typescript", "unicorn", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "perf": "warn",
+    "suspicious": "error"
+  },
+  "options": {
+    "reportUnusedDisableDirectives": "error",
+    "typeAware": true
+  },
+  "rules": {
+    "complexity": ["error", 15],
+    "import/no-cycle": "error",
+    "max-depth": ["error", 4],
+    "max-lines-per-function": [
+      "warn",
+      { "max": 80, "skipBlankLines": true, "skipComments": true }
+    ],
+    "max-params": ["warn", 5],
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "vitest/no-focused-tests": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "max-lines-per-function": "off",
+        "max-params": "off",
+        "vitest/require-mock-type-parameters": "off",
+        "vitest/require-to-throw-message": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+        "typescript/unbound-method": "off"
+      }
+    },
+    {
+      "files": ["src/sync.ts", "src/lunch-money/client.ts", "src/scalable-capital/client.ts"],
+      "rules": {
+        "eslint/no-await-in-loop": "off",
+        "eslint/max-params": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**"]
+}
