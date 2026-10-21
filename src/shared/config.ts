@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import parseJson from "secure-json-parse";
 import { z } from "zod";
 
 /** Hostnames that must never be used as Scalable Capital proxy targets (cloud metadata SSRF). */
@@ -82,16 +83,9 @@ export function resolveConfigFilePath(configPath = CONFIG_BASENAME): string {
   return resolved;
 }
 
-const DANGEROUS_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
-/** Parse JSON text without merging prototype-pollution keys into plain objects. */
+/** Parse JSON text without prototype-pollution keys (see secure-json-parse). */
 export function parseJsonText(text: string): unknown {
-  return JSON.parse(text, (key, value) => {
-    if (DANGEROUS_JSON_KEYS.has(key)) {
-      return undefined;
-    }
-    return value;
-  }) as unknown;
+  return parseJson(text, undefined, { protoAction: "remove", constructorAction: "remove" }) as unknown;
 }
 
 const jsonTextSchema = z.string().transform((text, ctx): unknown => {
