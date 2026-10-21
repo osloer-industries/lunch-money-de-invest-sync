@@ -38,5 +38,7 @@ jobs:
             echo "Scheduled sync skipped: set SYNC_CONFIG_JSON and LUNCH_MONEY_API_KEY repository secrets to enable."
             exit 0
           fi
+          umask 077
           printf '%s\n' "$SYNC_CONFIG_JSON" > config.json
+          chmod 600 config.json
           npm run sync

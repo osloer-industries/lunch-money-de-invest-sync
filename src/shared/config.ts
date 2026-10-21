@@ -1,5 +1,29 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
+
+/** Hostnames that must never be used as Scalable Capital proxy targets (cloud metadata SSRF). */
+const BLOCKED_PROXY_HOSTS = new Set([
+  "169.254.169.254",
+  "metadata.google.internal",
+  "metadata.goog",
+]);
+
+function validateProxyUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("proxyUrl must be a valid URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("proxyUrl must use http or https");
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (BLOCKED_PROXY_HOSTS.has(host)) {
+    throw new Error(`proxyUrl must not target ${host}`);
+  }
+}
 
 const tradeRepublicProfileSchema = z.object({
   owner: z.string().min(1),
@@ -11,7 +35,17 @@ const tradeRepublicProfileSchema = z.object({
 const scalableCapitalProfileSchema = z.object({
   owner: z.string().min(1),
   /** Base URL of the local auth proxy (e.g. http://localhost:8000). */
-  proxyUrl: z.string().url(),
+  proxyUrl: z
+    .string()
+    .url()
+    .superRefine((value, ctx) => {
+      try {
+        validateProxyUrl(value);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "invalid proxyUrl";
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+      }
+    }),
   proxyToken: z.string().min(1).optional(),
   lunchMoneyAssetId: z.number().int().positive(),
 });
@@ -33,13 +67,36 @@ export function loadConfig(raw: unknown): SyncConfig {
   return syncConfigSchema.parse(raw);
 }
 
-/**
- * Reads config.json (profiles: not a secret by itself, but gitignored since it carries
- * asset ids and phone numbers) plus LUNCH_MONEY_API_KEY from the environment.
- */
+const CONFIG_BASENAME = "config.json";
+
+/** Resolve config.json under the process working directory (blocks path traversal). */
+export function resolveConfigFilePath(configPath = CONFIG_BASENAME): string {
+  if (path.basename(configPath) !== CONFIG_BASENAME) {
+    throw new Error(`Only ${CONFIG_BASENAME} is supported`);
+  }
+  const cwd = path.resolve(process.cwd());
+  const resolved = path.resolve(cwd, configPath);
+  if (resolved !== path.join(cwd, CONFIG_BASENAME)) {
+    throw new Error(`${CONFIG_BASENAME} must be read from the working directory`);
+  }
+  return resolved;
+}
+
+const DANGEROUS_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/** Parse JSON text without merging prototype-pollution keys into plain objects. */
+export function parseJsonText(text: string): unknown {
+  return JSON.parse(text, (key, value) => {
+    if (DANGEROUS_JSON_KEYS.has(key)) {
+      return undefined;
+    }
+    return value;
+  }) as unknown;
+}
+
 const jsonTextSchema = z.string().transform((text, ctx): unknown => {
   try {
-    return JSON.parse(text) as unknown;
+    return parseJsonText(text);
   } catch {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -49,11 +106,11 @@ const jsonTextSchema = z.string().transform((text, ctx): unknown => {
   }
 });
 
-function parseJsonFile(configPath: string): unknown {
-  const text = readFileSync(configPath, "utf-8");
+function readConfigJsonFile(absolutePath: string): unknown {
+  const text = readFileSync(absolutePath, "utf-8");
   const parsed = jsonTextSchema.safeParse(text);
   if (!parsed.success) {
-    throw new Error(`${configPath} contains invalid JSON`);
+    throw new Error(`${CONFIG_BASENAME} contains invalid JSON`);
   }
   return parsed.data;
 }
@@ -61,11 +118,18 @@ function parseJsonFile(configPath: string): unknown {
 /** Fields allowed in config.json on disk (API key comes from the environment). */
 const configFileSchema = syncConfigSchema.omit({ lunchMoneyApiKey: true }).partial();
 
-export function readConfigFromDisk(configPath = "config.json"): SyncConfig {
-  const parsed = parseJsonFile(configPath);
+/**
+ * Reads config.json (profiles: not a secret by itself, but gitignored since it carries
+ * asset ids and phone numbers) plus LUNCH_MONEY_API_KEY from the environment.
+ */
+export function readConfigFromDisk(configPath = CONFIG_BASENAME): SyncConfig {
+  const absolutePath = resolveConfigFilePath(configPath);
+  const parsed = readConfigJsonFile(absolutePath);
   const fromFile = configFileSchema.parse(parsed);
   return loadConfig({
-    ...fromFile,
+    sharedCardLast4: fromFile.sharedCardLast4,
+    tradeRepublicProfiles: fromFile.tradeRepublicProfiles,
+    scalableCapitalProfiles: fromFile.scalableCapitalProfiles,
     lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
   });
 }
