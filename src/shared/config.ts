@@ -37,13 +37,25 @@ export function loadConfig(raw: unknown): SyncConfig {
  * Reads config.json (profiles: not a secret by itself, but gitignored since it carries
  * asset ids and phone numbers) plus LUNCH_MONEY_API_KEY from the environment.
  */
-function parseJsonFile(configPath: string): unknown {
-  const text = readFileSync(configPath, "utf-8");
+const jsonTextSchema = z.string().transform((text, ctx): unknown => {
   try {
     return JSON.parse(text) as unknown;
   } catch {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "invalid JSON",
+    });
+    return z.NEVER;
+  }
+});
+
+function parseJsonFile(configPath: string): unknown {
+  const text = readFileSync(configPath, "utf-8");
+  const parsed = jsonTextSchema.safeParse(text);
+  if (!parsed.success) {
     throw new Error(`${configPath} contains invalid JSON`);
   }
+  return parsed.data;
 }
 
 /** Fields allowed in config.json on disk (API key comes from the environment). */
