@@ -1,8 +1,9 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
+import { chdir, cwd } from "node:process";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadConfig, readConfigFromDisk } from "./config.js";
+import { loadConfig, readConfigFromDisk, resolveConfigFilePath } from "./config.js";
 
 const validRaw = {
   lunchMoneyApiKey: "lm_test_key",
@@ -55,12 +56,40 @@ describe("loadConfig", () => {
       }),
     ).toThrow();
   });
+
+  it("rejects cloud metadata proxy URLs", () => {
+    expect(() =>
+      loadConfig({
+        ...validRaw,
+        scalableCapitalProfiles: [
+          {
+            owner: "me",
+            proxyUrl: "http://169.254.169.254/",
+            lunchMoneyAssetId: 1,
+          },
+        ],
+      }),
+    ).toThrow(/must not target 169.254.169.254/);
+  });
+});
+
+describe("resolveConfigFilePath", () => {
+  it("allows config.json in the working directory", () => {
+    expect(resolveConfigFilePath("config.json")).toBe(path.join(path.resolve(cwd()), "config.json"));
+  });
+
+  it("rejects path traversal outside the working directory", () => {
+    expect(() => resolveConfigFilePath("/etc/config.json")).toThrow(/working directory/);
+    expect(() => resolveConfigFilePath("../config.json")).toThrow(/working directory/);
+  });
 });
 
 describe("readConfigFromDisk", () => {
   const originalApiKey = process.env["LUNCH_MONEY_API_KEY"];
+  const originalCwd = cwd();
 
   afterEach(() => {
+    chdir(originalCwd);
     if (originalApiKey === undefined) {
       delete process.env["LUNCH_MONEY_API_KEY"];
     } else {
@@ -69,10 +98,10 @@ describe("readConfigFromDisk", () => {
   });
 
   it("loads profiles from disk and injects the API key from the environment", () => {
-    const dir = mkdtempSync(join(tmpdir(), "lm-sync-config-"));
-    const configPath = join(dir, "config.json");
+    const dir = mkdtempSync(path.join(tmpdir(), "lm-sync-config-"));
+    chdir(dir);
     writeFileSync(
-      configPath,
+      "config.json",
       JSON.stringify({
         sharedCardLast4: ["1234"],
         tradeRepublicProfiles: validRaw.tradeRepublicProfiles,
@@ -80,29 +109,29 @@ describe("readConfigFromDisk", () => {
     );
     process.env["LUNCH_MONEY_API_KEY"] = "lm_from_env";
 
-    const config = readConfigFromDisk(configPath);
+    const config = readConfigFromDisk();
     expect(config.lunchMoneyApiKey).toBe("lm_from_env");
     expect(config.tradeRepublicProfiles).toHaveLength(1);
   });
 
   it("ignores unexpected JSON keys such as __proto__", () => {
-    const dir = mkdtempSync(join(tmpdir(), "lm-sync-config-"));
-    const configPath = join(dir, "config.json");
+    const dir = mkdtempSync(path.join(tmpdir(), "lm-sync-config-"));
+    chdir(dir);
     writeFileSync(
-      configPath,
+      "config.json",
       '{"__proto__":{"polluted":true},"sharedCardLast4":[],"tradeRepublicProfiles":[]}',
     );
     process.env["LUNCH_MONEY_API_KEY"] = "lm_from_env";
 
-    expect(() => readConfigFromDisk(configPath)).not.toThrow();
+    expect(() => readConfigFromDisk()).not.toThrow();
     expect(Object.prototype).not.toHaveProperty("polluted");
   });
 
   it("rejects invalid JSON", () => {
-    const dir = mkdtempSync(join(tmpdir(), "lm-sync-config-"));
-    const configPath = join(dir, "config.json");
-    writeFileSync(configPath, "{not-json");
+    const dir = mkdtempSync(path.join(tmpdir(), "lm-sync-config-"));
+    chdir(dir);
+    writeFileSync("config.json", "{not-json");
 
-    expect(() => readConfigFromDisk(configPath)).toThrow(/invalid JSON/);
+    expect(() => readConfigFromDisk()).toThrow(/invalid JSON/);
   });
 });
