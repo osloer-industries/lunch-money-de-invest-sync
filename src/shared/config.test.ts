@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { loadConfig } from "./config.js";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { loadConfig, readConfigFromDisk } from "./config.js";
 
 const validRaw = {
   lunchMoneyApiKey: "lm_test_key",
@@ -51,5 +54,55 @@ describe("loadConfig", () => {
         tradeRepublicProfiles: [profileWithoutPin],
       }),
     ).toThrow();
+  });
+});
+
+describe("readConfigFromDisk", () => {
+  const originalApiKey = process.env["LUNCH_MONEY_API_KEY"];
+
+  afterEach(() => {
+    if (originalApiKey === undefined) {
+      delete process.env["LUNCH_MONEY_API_KEY"];
+    } else {
+      process.env["LUNCH_MONEY_API_KEY"] = originalApiKey;
+    }
+  });
+
+  it("loads profiles from disk and injects the API key from the environment", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lm-sync-config-"));
+    const configPath = join(dir, "config.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        sharedCardLast4: ["1234"],
+        tradeRepublicProfiles: validRaw.tradeRepublicProfiles,
+      }),
+    );
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_from_env";
+
+    const config = readConfigFromDisk(configPath);
+    expect(config.lunchMoneyApiKey).toBe("lm_from_env");
+    expect(config.tradeRepublicProfiles).toHaveLength(1);
+  });
+
+  it("ignores unexpected JSON keys such as __proto__", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lm-sync-config-"));
+    const configPath = join(dir, "config.json");
+    writeFileSync(
+      configPath,
+      '{"__proto__":{"polluted":true},"sharedCardLast4":[],"tradeRepublicProfiles":[]}',
+    );
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_from_env";
+
+    expect(() => readConfigFromDisk(configPath)).not.toThrow();
+    expect(Object.prototype).not.toHaveProperty("polluted");
+  });
+
+  it("rejects invalid JSON", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lm-sync-config-"));
+    const configPath = join(dir, "config.json");
+    writeFileSync(configPath, "{not-json");
+
+    expect(() => readConfigFromDisk(configPath)).toThrow(/invalid JSON/);
   });
 });

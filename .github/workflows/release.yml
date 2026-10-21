@@ -17,6 +17,7 @@ concurrency:
 jobs:
   release-please:
     name: Prepare or publish release
+    if: ${{ secrets.RELEASE_TOKEN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -26,3 +27,10 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+  release-skipped:
+    name: Release Please skipped
+    if: ${{ secrets.RELEASE_TOKEN == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "Release Please skipped because RELEASE_TOKEN is not configured for this repository."
