@@ -37,14 +37,23 @@ export function loadConfig(raw: unknown): SyncConfig {
  * Reads config.json (profiles: not a secret by itself, but gitignored since it carries
  * asset ids and phone numbers) plus LUNCH_MONEY_API_KEY from the environment.
  */
-export function readConfigFromDisk(configPath = "config.json"): SyncConfig {
-  const fileContents: unknown = JSON.parse(readFileSync(configPath, "utf-8"));
-  if (typeof fileContents !== "object" || fileContents === null || Array.isArray(fileContents)) {
-    throw new Error(`${configPath} must contain a JSON object`);
+function parseJsonFile(configPath: string): unknown {
+  const text = readFileSync(configPath, "utf-8");
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error(`${configPath} contains invalid JSON`);
   }
-  return loadConfig(
-    Object.assign({}, fileContents, {
-      lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
-    }),
-  );
+}
+
+/** Fields allowed in config.json on disk (API key comes from the environment). */
+const configFileSchema = syncConfigSchema.omit({ lunchMoneyApiKey: true }).partial();
+
+export function readConfigFromDisk(configPath = "config.json"): SyncConfig {
+  const parsed = parseJsonFile(configPath);
+  const fromFile = configFileSchema.parse(parsed);
+  return loadConfig({
+    ...fromFile,
+    lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
+  });
 }
