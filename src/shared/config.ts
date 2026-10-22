@@ -20,6 +20,9 @@ function validateProxyUrl(url: string): void {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error("proxyUrl must use http or https");
   }
+  if (parsed.username || parsed.password) {
+    throw new Error("proxyUrl must not embed credentials");
+  }
   const host = parsed.hostname.toLowerCase();
   if (BLOCKED_PROXY_HOSTS.has(host)) {
     throw new Error(`proxyUrl must not target ${host}`);

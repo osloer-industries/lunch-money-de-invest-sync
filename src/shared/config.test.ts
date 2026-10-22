@@ -12,7 +12,7 @@ const validRaw = {
     {
       owner: "me",
       phoneNumber: "+491234567",
-      pin: "1234",
+      pin: "sync-test-pin",
       lunchMoneyAssetId: 1,
     },
   ],
