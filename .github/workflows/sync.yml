@@ -28,7 +28,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Run sync or skip when secrets are missing
         env:
           LUNCH_MONEY_API_KEY: ${{ secrets.LUNCH_MONEY_API_KEY }}

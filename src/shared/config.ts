@@ -1,14 +1,16 @@
 import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
 import path from "node:path";
 import parseJson from "secure-json-parse";
 import { z } from "zod";
 
 /** Hostnames that must never be used as Scalable Capital proxy targets (cloud metadata SSRF). */
-const BLOCKED_PROXY_HOSTS = new Set([
-  "169.254.169.254",
-  "metadata.google.internal",
-  "metadata.goog",
-]);
+const BLOCKED_PROXY_HOSTNAMES = new Set(["metadata.google.internal", "metadata.goog"]);
+
+/** IPv4 link-local block (includes cloud metadata endpoints such as 169.254.169.254). */
+function isLinkLocalIpv4Address(hostname: string): boolean {
+  return isIP(hostname) === 4 && hostname.startsWith("169.254.");
+}
 
 function validateProxyUrl(url: string): void {
   let parsed: URL;
@@ -24,7 +26,7 @@ function validateProxyUrl(url: string): void {
     throw new Error("proxyUrl must not embed credentials");
   }
   const host = parsed.hostname.toLowerCase();
-  if (BLOCKED_PROXY_HOSTS.has(host)) {
+  if (BLOCKED_PROXY_HOSTNAMES.has(host) || isLinkLocalIpv4Address(host)) {
     throw new Error(`proxyUrl must not target ${host}`);
   }
 }
