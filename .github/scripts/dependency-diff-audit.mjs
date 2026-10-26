@@ -10,33 +10,36 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 const baseRef = process.env.BASE_REF ?? "origin/main";
 const FAIL_RANK = 3; // high and critical
 
-/** GitHub-hosted Ubuntu PATH without repo- or job-writable entries (Sonar S4036). */
-const TRUSTED_PATH =
-  "/home/runner/.local/bin:/home/runner/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+const nodeBin = process.env.NODE_BIN;
+const npmCli = process.env.NPM_CLI;
+const gitBin = process.env.GIT_BIN;
 
-function subprocessEnv() {
-  const nodeBinDir = dirname(process.execPath);
-  const pathParts = new Set([nodeBinDir, ...TRUSTED_PATH.split(":")]);
-  return { ...process.env, PATH: [...pathParts].join(":") };
+if (!nodeBin || !npmCli || !gitBin) {
+  throw new Error(
+    "NODE_BIN, NPM_CLI, and GIT_BIN must be set by the workflow (absolute paths, fixed PATH lookup).",
+  );
 }
 
-const npmCli = join(dirname(process.execPath), "npm");
-const gitBin = "/usr/bin/git";
+/** Minimal env for subprocesses; absolute binaries avoid a writable PATH (Sonar S4036). */
+const SUBPROCESS_ENV = {
+  PATH: "/usr/bin:/bin",
+  HOME: "/home/runner",
+  LANG: "C.UTF-8",
+};
 
 function runNpm(args, options) {
-  const env = subprocessEnv();
-  if (existsSync(npmCli)) {
-    return spawnSync(process.execPath, [npmCli, ...args], {
-      ...options,
-      env,
-    });
+  if (!existsSync(npmCli)) {
+    throw new Error(`Expected npm CLI at ${npmCli}`);
   }
-  return spawnSync("npm", args, { ...options, env });
+  return spawnSync(nodeBin, [npmCli, ...args], {
+    ...options,
+    env: SUBPROCESS_ENV,
+  });
 }
 
 const SEVERITY_RANK = {
@@ -64,7 +67,7 @@ function runAudit(cwd) {
 function refHasFile(ref, path) {
   const res = spawnSync(gitBin, ["cat-file", "-e", `${ref}:${path}`], {
     encoding: "utf8",
-    env: subprocessEnv(),
+    env: SUBPROCESS_ENV,
   });
   return res.status === 0;
 }
@@ -73,7 +76,7 @@ function gitShow(ref, path) {
   const res = spawnSync(gitBin, ["show", `${ref}:${path}`], {
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
-    env: subprocessEnv(),
+    env: SUBPROCESS_ENV,
   });
   if (res.status !== 0) {
     throw new Error(res.stderr || `git show failed for ${ref}:${path}`);
