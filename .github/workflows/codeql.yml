@@ -13,27 +13,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   analyze:
-    name: Analyze JavaScript and TypeScript
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        with: { languages: javascript-typescript, queries: security-and-quality }
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        with:
-          upload: never
-          upload-database: false
-          wait-for-processing: false
-          output: codeql-results
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: codeql-sarif-${{ github.run_id }}
-          path: codeql-results/**/*.sarif
-          retention-days: 14
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: { node-version-file: .nvmrc }
-      - name: Gate on CodeQL security findings (no code scanning upload)
-        run: node .github/scripts/codeql-gate.mjs codeql-results
+    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@e3961f13d7c2d28ad5306f200c21374274c6dd36 # .github PR #5 head
+    with:
+      code-scanning-upload: false
+      queries: security-and-quality
