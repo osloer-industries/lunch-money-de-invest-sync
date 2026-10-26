@@ -19,7 +19,17 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --ignore-scripts
+      - id: tool-paths
+        env:
+          PATH: /usr/local/bin:/usr/bin:/bin
+        run: |
+          echo "node_bin=$(command -v node)" >> "$GITHUB_OUTPUT"
+          echo "npm_cli=$(command -v npm)" >> "$GITHUB_OUTPUT"
+          echo "git_bin=$(command -v git)" >> "$GITHUB_OUTPUT"
       - name: Block new high-severity npm advisories (GHAS-free dependency gate)
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha }}
+          NODE_BIN: ${{ steps.tool-paths.outputs.node_bin }}
+          NPM_CLI: ${{ steps.tool-paths.outputs.npm_cli }}
+          GIT_BIN: ${{ steps.tool-paths.outputs.git_bin }}
         run: node .github/scripts/dependency-diff-audit.mjs
