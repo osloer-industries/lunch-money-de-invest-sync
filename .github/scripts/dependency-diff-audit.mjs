@@ -7,13 +7,37 @@
  * present on the base ref at the same npm advisory URL, with severity high or critical
  * (equivalent to dependency-review-action fail-on-severity: high).
  */
-import { execSync, spawnSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const baseRef = process.env.BASE_REF ?? "origin/main";
 const FAIL_RANK = 3; // high and critical
+
+/** GitHub-hosted Ubuntu PATH without repo- or job-writable entries (Sonar S4036). */
+const TRUSTED_PATH =
+  "/home/runner/.local/bin:/home/runner/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+function subprocessEnv() {
+  const nodeBinDir = dirname(process.execPath);
+  const pathParts = new Set([nodeBinDir, ...TRUSTED_PATH.split(":")]);
+  return { ...process.env, PATH: [...pathParts].join(":") };
+}
+
+const npmCli = join(dirname(process.execPath), "npm");
+const gitBin = "/usr/bin/git";
+
+function runNpm(args, options) {
+  const env = subprocessEnv();
+  if (existsSync(npmCli)) {
+    return spawnSync(process.execPath, [npmCli, ...args], {
+      ...options,
+      env,
+    });
+  }
+  return spawnSync("npm", args, { ...options, env });
+}
 
 const SEVERITY_RANK = {
   info: 0,
@@ -24,30 +48,37 @@ const SEVERITY_RANK = {
 };
 
 function runAudit(cwd) {
-  const res = spawnSync("npm", ["audit", "--omit=dev", "--json"], {
+  const res = runNpm(["audit", "--omit=dev", "--json"], {
     cwd,
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
   });
-  const text = res.stdout || res.stderr;
+  const text = res.stdout;
   if (!text?.trim()) {
-    throw new Error(`npm audit produced no output in ${cwd} (exit ${res.status})`);
+    const detail = res.stderr?.toString().trim() || `exit ${res.status}`;
+    throw new Error(`npm audit produced no JSON on stdout in ${cwd}: ${detail}`);
   }
   return JSON.parse(text);
 }
 
 function refHasFile(ref, path) {
-  const res = spawnSync("git", ["cat-file", "-e", `${ref}:${path}`], {
+  const res = spawnSync(gitBin, ["cat-file", "-e", `${ref}:${path}`], {
     encoding: "utf8",
+    env: subprocessEnv(),
   });
   return res.status === 0;
 }
 
 function gitShow(ref, path) {
-  return execSync(`git show ${ref}:${path}`, {
+  const res = spawnSync(gitBin, ["show", `${ref}:${path}`], {
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
+    env: subprocessEnv(),
   });
+  if (res.status !== 0) {
+    throw new Error(res.stderr || `git show failed for ${ref}:${path}`);
+  }
+  return res.stdout;
 }
 
 function auditAtGitRef(ref) {
@@ -56,10 +87,13 @@ function auditAtGitRef(ref) {
   try {
     writeFileSync(join(dir, "package.json"), gitShow(ref, "package.json"));
     writeFileSync(join(dir, "package-lock.json"), gitShow(ref, "package-lock.json"));
-    execSync("npm ci --ignore-scripts --omit=dev", {
+    const install = runNpm(["ci", "--ignore-scripts", "--omit=dev"], {
       cwd: dir,
       stdio: "pipe",
     });
+    if (install.status !== 0) {
+      throw new Error(install.stderr?.toString() || "npm ci failed for base ref audit");
+    }
     return runAudit(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -101,7 +135,7 @@ if (!refHasFile(baseRef, "package-lock.json")) {
   console.log(
     "Trade-off: cannot diff advisories vs merge base until both sides use npm lockfiles.",
   );
-  const res = spawnSync("npm", ["audit", "--omit=dev", "--audit-level=high"], {
+  const res = runNpm(["audit", "--omit=dev", "--audit-level=high"], {
     stdio: "inherit",
   });
   process.exit(res.status === 0 ? 0 : 1);
