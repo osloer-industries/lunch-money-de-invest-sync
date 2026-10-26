@@ -31,7 +31,7 @@
     "@lunch-money/lunch-money-js-v2": "2.9.0",
     "secure-json-parse": "4.1.1",
     "trade-republic-api": "1.2.0",
-    "zod": "3.24.1"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.20.1",
