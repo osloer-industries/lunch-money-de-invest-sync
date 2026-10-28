@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   analyze:
-    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@e3961f13d7c2d28ad5306f200c21374274c6dd36 # .github PR #5 head
+    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@f8af0b286b1bd58abd92d08fa10ee61e60910e42 # .github PR #5 head (TypeScript gate)
     with:
       code-scanning-upload: false
       queries: security-and-quality
