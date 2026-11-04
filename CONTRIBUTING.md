@@ -1,6 +1,6 @@
 # Contributing
 
-1. Install Node.js 22.23.1.
+1. Install Node.js 24.22.0 (see `.nvmrc`).
 2. Run `npm ci`.
 3. Create a focused branch and add tests with the change.
 4. Run `npm run check` and `npm audit --omit=dev`.

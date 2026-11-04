@@ -12,7 +12,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 
 ## Toolchain and commands
 
-- Use the Node.js 22 version declared by `.nvmrc` and `.node-version`.
+- Use the Node.js 24 version declared by `.nvmrc` and `.node-version`.
 - Install reproducibly with `npm ci`. Use `npm install --save-exact` when a
   dependency intentionally changes, then commit `package-lock.json`.
 - Run `npm run check` before submitting a change. This runs Oxlint, the
