@@ -104,10 +104,16 @@ test talks to a real broker or to Lunch Money.
 - **More brokers**: add a `src/<broker>/{types,client,mapper}.ts` following the existing
   modules' shape, then wire a `collect<Broker>` function into `liveCollectors` in `src/sync.ts`.
 
-## GitHub Actions
+## Running locally
 
-`.github/workflows/sync.yml` runs `pnpm sync` on a schedule against `scalableCapitalProfiles`
-only (Scalable Capital's session can survive unattended; Trade Republic's can't without a
-device-pairing client). Set `LUNCH_MONEY_API_KEY` as a repo secret and point
-`scalableCapitalProfiles[].proxyUrl` at a proxy instance reachable from the runner (e.g. a small
-always-on host on your network, or a self-hosted runner) before enabling it.
+Syncs are **manual and opt-in** on your own machine. Trade Republic and Scalable Capital both
+need interactive logins (SMS code and browser 2FA respectively), so there is no scheduled or
+GitHub-hosted sync workflow — nothing in this repo stores broker or Lunch Money credentials.
+
+Keep `config.json` on disk only (copy from `config.example.json`; it is gitignored). Set
+`LUNCH_MONEY_API_KEY` in your shell or a local `.env` file (also gitignored), then run
+`pnpm sync` when you want to pull fresh transactions. Point each Scalable Capital profile's
+`proxyUrl` at a proxy you run locally (see **Scalable Capital: running the proxy** above).
+
+CI (`.github/workflows/ci.yml`) runs `pnpm typecheck`, `pnpm lint`, and `pnpm test` on pushes
+and pull requests. It does not run `pnpm sync` and requires no repository secrets.
