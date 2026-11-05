@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "24.19.2",
-    "@vitest/coverage-v8": "4.1.12",
+    "@vitest/coverage-v8": "5.0.5",
     "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsx": "4.23.15",
