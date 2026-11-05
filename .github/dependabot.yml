@@ -13,6 +13,11 @@ updates:
       development-dependencies:
         dependency-type: development
         update-types: [minor, patch]
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types: [minor, patch, major]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly, day: monday, time: "05:30", timezone: Europe/Berlin }
