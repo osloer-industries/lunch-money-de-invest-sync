@@ -42,7 +42,7 @@ loudly with a clear error instead of silently inserting wrong amounts into Lunch
 
 ## Setup
 
-1. `pnpm install`
+1. `npm ci`
 2. Get a Lunch Money API key from **Settings → Developers** in the Lunch Money app.
 3. Create a **manual account** in Lunch Money per brokerage account you want synced (one per
    person per broker — e.g. "Trade Republic (You)", "Trade Republic (Account B)", "Scalable Capital
@@ -56,7 +56,7 @@ loudly with a clear error instead of silently inserting wrong amounts into Lunch
      Lunch Money manual account id to sync into.
    - `scalableCapitalProfiles`: one entry per person, pointing at their running proxy instance
      (see below) and their Lunch Money manual account id.
-5. `LUNCH_MONEY_API_KEY=... pnpm sync`
+5. `LUNCH_MONEY_API_KEY=... npm run sync`
 
 `config.json` and `.env` are gitignored — they carry phone numbers and account ids, not just
 secrets, so don't commit them even though the PIN/API key are the only strictly sensitive bits.
@@ -85,10 +85,11 @@ device-pairing protocol) if you need that.
 ## Development
 
 ```bash
-pnpm typecheck   # tsc --noEmit
-pnpm lint        # eslint
-pnpm test        # vitest run
-pnpm test:watch  # vitest, watch mode
+npm run typecheck   # tsc --noEmit
+npm run lint        # oxlint
+npm test            # vitest run
+npm run test:watch  # vitest, watch mode
+npm run check       # lint, typecheck, coverage, and build (CI parity)
 ```
 
 Every module is covered by unit tests using fakes/stubs for network and WebSocket I/O — no
@@ -112,8 +113,9 @@ GitHub-hosted sync workflow — nothing in this repo stores broker or Lunch Mone
 
 Keep `config.json` on disk only (copy from `config.example.json`; it is gitignored). Set
 `LUNCH_MONEY_API_KEY` in your shell or a local `.env` file (also gitignored), then run
-`pnpm sync` when you want to pull fresh transactions. Point each Scalable Capital profile's
+`npm run sync` when you want to pull fresh transactions. Point each Scalable Capital profile's
 `proxyUrl` at a proxy you run locally (see **Scalable Capital: running the proxy** above).
 
-CI (`.github/workflows/ci.yml`) runs `pnpm typecheck`, `pnpm lint`, and `pnpm test` on pushes
-and pull requests. It does not run `pnpm sync` and requires no repository secrets.
+CI (`.github/workflows/ci.yml`) runs `npm run lint`, `npm run typecheck`, `npm run test:coverage`,
+and `npm run build` on pushes and pull requests. It does not run `npm run sync` and requires no
+repository secrets for broker or Lunch Money access.

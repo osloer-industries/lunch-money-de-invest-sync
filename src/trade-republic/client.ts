@@ -13,7 +13,7 @@ export interface TradeRepublicTransport {
   connect(): void;
   disconnect(): void;
   login(phoneNumber: string, pin: string): Promise<void>;
-  oneShot<T>(type: string, payload: unknown): Promise<{ payload: T }>;
+  oneShot(type: string, payload: unknown): Promise<{ payload: unknown }>;
   once(event: "connected", listener: () => void): void;
 }
 
@@ -35,7 +35,7 @@ export async function fetchTradeRepublicTimeline(
   try {
     await waitForConnection(transport);
     await transport.login(credentials.phoneNumber, credentials.pin);
-    const message = await transport.oneShot<unknown>("timeline", {});
+    const message = await transport.oneShot("timeline", {});
     const parsed = timelineResponseSchema.safeParse(message.payload);
     if (!parsed.success) {
       throw new Error(
