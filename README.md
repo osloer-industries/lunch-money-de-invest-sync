@@ -116,6 +116,9 @@ Keep `config.json` on disk only (copy from `config.example.json`; it is gitignor
 `npm run sync` when you want to pull fresh transactions. Point each Scalable Capital profile's
 `proxyUrl` at a proxy you run locally (see **Scalable Capital: running the proxy** above).
 
-CI (`.github/workflows/ci.yml`) runs `npm run lint`, `npm run typecheck`, `npm run test:coverage`,
-and `npm run build` on pushes and pull requests. It does not run `npm run sync` and requires no
-repository secrets for broker or Lunch Money access.
+CI (`.github/workflows/ci.yml`) calls the org **workflow-security** reusable (actionlint + zizmor)
+and runs **Quality** (`npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build`)
+on pushes and pull requests. **CodeQL** (`.github/workflows/codeql.yml`) uses the org JavaScript/TypeScript
+reusable in SARIF artifact mode (`code-scanning-upload: false`; private repo, no GHAS). Reusable refs
+are pinned by full SHA; Dependabot `github-actions` bumps them under `ci(deps)`. It does not run
+`npm run sync` and requires no repository secrets for broker or Lunch Money access.
