@@ -23,9 +23,11 @@ jobs:
         env:
           PATH: /usr/local/bin:/usr/bin:/bin
         run: |
-          echo "node_bin=$(command -v node)" >> "$GITHUB_OUTPUT"
-          echo "npm_cli=$(command -v npm)" >> "$GITHUB_OUTPUT"
-          echo "git_bin=$(command -v git)" >> "$GITHUB_OUTPUT"
+          {
+            echo "node_bin=$(command -v node)"
+            echo "npm_cli=$(command -v npm)"
+            echo "git_bin=$(command -v git)"
+          } >> "$GITHUB_OUTPUT"
       - name: Block new high-severity npm advisories (GHAS-free dependency gate)
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha }}
