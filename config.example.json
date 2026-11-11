@@ -1,5 +1,5 @@
 {
-  "sharedCardLast4": ["1234"],
+  "sharedCardLast4": ["0000"],
   "tradeRepublicProfiles": [
     {
       "owner": "operator-a",
@@ -10,7 +10,7 @@
     {
       "owner": "operator-b",
       "phoneNumber": "+490000000002",
-      "pin": "0000",
+      "pin": "0001",
       "lunchMoneyAssetId": 2
     }
   ],

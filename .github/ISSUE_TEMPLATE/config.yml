@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Support and usage questions
+    url: https://github.com/osloer-industries/lunch-money-de-invest-sync/blob/main/SUPPORT.md
+    about: How to get help, what to include in bug reports, and what is out of scope.
   - name: Security vulnerability
-    url: https://github.com/osloer-industries/typescript-node-template/security/advisories/new
+    url: https://github.com/osloer-industries/lunch-money-de-invest-sync/security/advisories/new
     about: Report vulnerabilities privately. Do not open a public issue.
