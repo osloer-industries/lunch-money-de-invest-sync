@@ -1,12 +1,22 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createScCliRunner } from "./sc-cli.js";
 
 const spawnMock = vi.hoisted(() => vi.fn());
+const existsSyncMock = vi.hoisted(() => vi.fn<typeof import("node:fs").existsSync>());
 
 vi.mock("node:child_process", () => ({
   spawn: spawnMock,
 }));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    existsSync: existsSyncMock,
+  };
+});
+
+import { createScCliRunner, resolveScExecutable } from "./sc-cli.js";
 
 function mockStreams() {
   return Object.assign(new EventEmitter(), { setEncoding: vi.fn() });
@@ -28,6 +38,7 @@ function mockChild(stdoutText: string, stderrText: string, exitCode: number) {
 describe("createScCliRunner", () => {
   afterEach(() => {
     spawnMock.mockReset();
+    existsSyncMock.mockReset();
   });
 
   it("spawns the binary with argv and returns stdout", async () => {
@@ -38,8 +49,13 @@ describe("createScCliRunner", () => {
     const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env: Record<string, string> };
     expect(spawnMock).toHaveBeenCalledWith("/usr/bin/sc", ["broker", "transactions", "--json"], expect.any(Object));
     expect(spawnOptions.env.SC_CONFIG_DIR).toBe("/tmp/sc");
-    expect(spawnOptions.env.PATH).toContain("/usr/bin");
-    expect(spawnOptions.env.PATH).not.toBe(process.env.PATH);
+    expect(spawnOptions.env.PATH).toBeUndefined();
+  });
+
+  it("resolves a relative binary name to an absolute path under trusted dirs", () => {
+    existsSyncMock.mockImplementation((p) => p === "/usr/bin/sc");
+    expect(resolveScExecutable("sc")).toBe("/usr/bin/sc");
+    expect(resolveScExecutable("/opt/custom/sc")).toBe("/opt/custom/sc");
   });
 
   it("surfaces spawn failures to the caller", async () => {
@@ -52,7 +68,7 @@ describe("createScCliRunner", () => {
     queueMicrotask(() => {
       child.emit("error", spawnError);
     });
-    const runner = createScCliRunner("sc");
+    const runner = createScCliRunner("/usr/bin/sc");
     await expect(runner.run(["broker", "transactions", "--json"])).rejects.toBe(spawnError);
   });
 });
