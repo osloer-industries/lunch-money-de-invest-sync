@@ -4,6 +4,7 @@ import {
   isCashMovement,
   mapScalableCapitalTransaction,
   mapScalableCapitalTransactions,
+  utcCalendarDateFromEventTimestamp,
 } from "./mapper.js";
 
 function transaction(overrides: Partial<ScalableCapitalTransaction> = {}): ScalableCapitalTransaction {
@@ -25,6 +26,12 @@ describe("isCashMovement", () => {
 
   it("is false for security trades", () => {
     expect(isCashMovement(transaction({ type: "BrokerSecurityTransaction" }))).toBe(false);
+  });
+});
+
+describe("utcCalendarDateFromEventTimestamp", () => {
+  it("uses the UTC calendar day even when the timestamp carries a positive offset", () => {
+    expect(utcCalendarDateFromEventTimestamp("2026-07-02T00:30:00+02:00")).toBe("2026-07-01");
   });
 });
 
