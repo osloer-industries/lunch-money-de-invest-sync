@@ -58,7 +58,7 @@ const scalableCapitalProfileSchema = z.object({
 
 export const syncConfigSchema = z.object({
   lunchMoneyApiKey: z.string().min(1),
-  /** Last 4 digits of cards shared between household members; matching spend gets a "shared" tag. */
+  /** Last 4 digits of cards shared between operators; matching spend gets a "shared" tag. */
   sharedCardLast4: z.array(z.string().length(4)).default([]),
   tradeRepublicProfiles: z.array(tradeRepublicProfileSchema).default([]),
   scalableCapitalProfiles: z.array(scalableCapitalProfileSchema).default([]),
@@ -117,18 +117,35 @@ function readConfigJsonFile(absolutePath: string): unknown {
 /** Fields allowed in config.json on disk (API key comes from the environment). */
 const configFileSchema = syncConfigSchema.omit({ lunchMoneyApiKey: true }).partial();
 
+export interface ReadConfigFromDiskOptions {
+  /**
+   * When true, missing LUNCH_MONEY_API_KEY is allowed (for `--dry-run`, which never
+   * calls Lunch Money). A placeholder value is substituted so validation still passes.
+   */
+  lunchMoneyApiKeyOptional?: boolean;
+}
+
 /**
  * Reads config.json (profiles: not a secret by itself, but gitignored since it carries
  * asset ids and phone numbers) plus LUNCH_MONEY_API_KEY from the environment.
  */
-export function readConfigFromDisk(configPath = CONFIG_BASENAME): SyncConfig {
+export function readConfigFromDisk(
+  configPath = CONFIG_BASENAME,
+  options: ReadConfigFromDiskOptions = {},
+): SyncConfig {
   const absolutePath = resolveConfigFilePath(configPath);
   const parsed = readConfigJsonFile(absolutePath);
   const fromFile = configFileSchema.parse(parsed);
+  const apiKey = process.env["LUNCH_MONEY_API_KEY"];
+  if (!apiKey && !options.lunchMoneyApiKeyOptional) {
+    throw new Error(
+      "LUNCH_MONEY_API_KEY is not set — export it in your shell or add it to a local .env file (never commit it)",
+    );
+  }
   return loadConfig({
     sharedCardLast4: fromFile.sharedCardLast4,
     tradeRepublicProfiles: fromFile.tradeRepublicProfiles,
     scalableCapitalProfiles: fromFile.scalableCapitalProfiles,
-    lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
+    lunchMoneyApiKey: apiKey ?? "dry-run-without-lunch-money-api-key",
   });
 }

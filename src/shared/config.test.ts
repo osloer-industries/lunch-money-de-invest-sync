@@ -18,7 +18,7 @@ const validRaw = {
   ],
   scalableCapitalProfiles: [
     {
-      owner: "wife",
+      owner: "operator-b",
       proxyUrl: "http://localhost:8000",
       lunchMoneyAssetId: 2,
     },
@@ -29,7 +29,7 @@ describe("loadConfig", () => {
   it("parses a fully populated config", () => {
     const config = loadConfig(validRaw);
     expect(config.tradeRepublicProfiles).toHaveLength(1);
-    expect(config.scalableCapitalProfiles[0]?.owner).toBe("wife");
+    expect(config.scalableCapitalProfiles[0]?.owner).toBe("operator-b");
   });
 
   it("defaults optional arrays to empty", () => {
@@ -133,5 +133,24 @@ describe("readConfigFromDisk", () => {
     writeFileSync("config.json", "{not-json");
 
     expect(() => readConfigFromDisk()).toThrow(/invalid JSON/);
+  });
+
+  it("requires LUNCH_MONEY_API_KEY for a real sync", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "lm-sync-config-"));
+    chdir(dir);
+    writeFileSync("config.json", JSON.stringify({ tradeRepublicProfiles: [] }));
+    delete process.env["LUNCH_MONEY_API_KEY"];
+
+    expect(() => readConfigFromDisk()).toThrow(/LUNCH_MONEY_API_KEY is not set/);
+  });
+
+  it("allows a missing API key when lunchMoneyApiKeyOptional is true", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "lm-sync-config-"));
+    chdir(dir);
+    writeFileSync("config.json", JSON.stringify({ tradeRepublicProfiles: [] }));
+    delete process.env["LUNCH_MONEY_API_KEY"];
+
+    const config = readConfigFromDisk(undefined, { lunchMoneyApiKeyOptional: true });
+    expect(config.lunchMoneyApiKey).toBe("dry-run-without-lunch-money-api-key");
   });
 });
