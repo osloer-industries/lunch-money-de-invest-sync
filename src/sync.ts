@@ -6,7 +6,10 @@ import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-mon
 import { upsertTransactions, type TransactionsApi } from "./lunch-money/upsert.js";
 import { createTradeRepublicTransport, fetchTradeRepublicTimeline } from "./trade-republic/client.js";
 import { mapTradeRepublicEvents } from "./trade-republic/mapper.js";
-import { fetchAllScalableCapitalTransactions } from "./scalable-capital/client.js";
+import {
+  createDefaultScCliRunner,
+  fetchAllScalableCapitalTransactions,
+} from "./scalable-capital/client.js";
 import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
 
 export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
@@ -72,6 +75,10 @@ export async function runSync(
   }
 }
 
+export function createLiveCollectors(): BrokerCollectors {
+  return liveCollectors;
+}
+
 const liveCollectors: BrokerCollectors = {
   async collectTradeRepublic(profile) {
     const transport = createTradeRepublicTransport();
@@ -82,10 +89,13 @@ const liveCollectors: BrokerCollectors = {
     return mapTradeRepublicEvents(events);
   },
   async collectScalableCapital(profile) {
-    const transactions = await fetchAllScalableCapitalTransactions(fetch, {
-      proxyUrl: profile.proxyUrl,
-      ...(profile.proxyToken ? { proxyToken: profile.proxyToken } : {}),
-    });
+    const cliConfig = {
+      ...(profile.scBinaryPath ? { scBinaryPath: profile.scBinaryPath } : {}),
+      ...(profile.scConfigDir ? { scConfigDir: profile.scConfigDir } : {}),
+      ...(profile.portfolioId ? { portfolioId: profile.portfolioId } : {}),
+    };
+    const runner = createDefaultScCliRunner(cliConfig);
+    const transactions = await fetchAllScalableCapitalTransactions(runner, cliConfig);
     return mapScalableCapitalTransactions(transactions);
   },
 };

@@ -19,8 +19,8 @@ const validRaw = {
   scalableCapitalProfiles: [
     {
       owner: "wife",
-      proxyUrl: "http://localhost:8000",
       lunchMoneyAssetId: 2,
+      portfolioId: "portfolio-operator-a",
     },
   ],
 };
@@ -57,19 +57,19 @@ describe("loadConfig", () => {
     ).toThrow();
   });
 
-  it("rejects cloud metadata proxy URLs", () => {
+  it("rejects removed scalable capital proxy fields", () => {
     expect(() =>
       loadConfig({
         ...validRaw,
         scalableCapitalProfiles: [
           {
             owner: "me",
-            proxyUrl: "http://169.254.169.254/",
+            proxyUrl: "http://127.0.0.1:3141",
             lunchMoneyAssetId: 1,
           },
         ],
       }),
-    ).toThrow(/must not target 169.254.169.254/);
+    ).toThrow();
   });
 });
 

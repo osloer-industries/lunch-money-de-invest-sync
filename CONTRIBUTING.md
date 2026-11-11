@@ -8,6 +8,8 @@
 
 Coverage must remain at least 80% for branches, functions, lines, and statements. Keep dependencies exact and commit lockfile changes. Never commit secrets or generated output.
 
+Scalable Capital tests must use sanitized JSON fixtures under `src/scalable-capital/fixtures/` and a mocked `ScCliRunner` — never real broker sessions or personal account data.
+
 Use Conventional Commit prefixes such as `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, and `chore:`. Release Please treats `feat:` as a minor release and `fix:` as a patch release. Use a `BREAKING CHANGE:` footer or `!` marker for a major release.
 
 Pull request titles are validated automatically. Squash merging uses the validated title as the commit subject on `main`, giving Release Please one reliable Conventional Commit per pull request. Dependabot uses `chore(deps):` for npm updates and `ci(deps):` for GitHub Actions updates.

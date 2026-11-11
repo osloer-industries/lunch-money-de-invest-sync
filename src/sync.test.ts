@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CanonicalTransaction } from "./shared/transaction.js";
 import type { SyncConfig } from "./shared/config.js";
-import { runSync, type BrokerCollectors, type LunchMoneySyncClient } from "./sync.js";
+import { createLiveCollectors, runSync, type BrokerCollectors, type LunchMoneySyncClient } from "./sync.js";
+
+const fetchAllScalableCapitalTransactions = vi.hoisted(() => vi.fn());
+const createDefaultScCliRunner = vi.hoisted(() => vi.fn(() => ({})));
+
+vi.mock("./scalable-capital/client.js", () => ({
+  fetchAllScalableCapitalTransactions,
+  createDefaultScCliRunner,
+}));
 
 function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction {
   return {
@@ -74,7 +82,7 @@ describe("runSync", () => {
     };
     const config = baseConfig({
       scalableCapitalProfiles: [
-        { owner: "wife", proxyUrl: "http://localhost:3141", lunchMoneyAssetId: 2 },
+        { owner: "wife", lunchMoneyAssetId: 2 },
       ],
     });
 
@@ -104,6 +112,27 @@ describe("runSync", () => {
     await runSync(config, client, collectors, logger);
 
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:me"));
+  });
+
+  it("wires the live scalable collector to the CLI transport", async () => {
+    fetchAllScalableCapitalTransactions.mockResolvedValue([
+      {
+        id: "tx-cash-1",
+        date: "2026-03-10T10:00:00Z",
+        type: "BrokerCashTransaction",
+        description: "Deposit",
+        amount: 10,
+        currency: "EUR",
+      },
+    ]);
+    const collectors = createLiveCollectors();
+    const mapped = await collectors.collectScalableCapital({
+      owner: "operator-a",
+      lunchMoneyAssetId: 3,
+      portfolioId: "portfolio-operator-a",
+    });
+    expect(mapped[0]?.externalId).toBe("scalable-capital:tx-cash-1");
+    expect(fetchAllScalableCapitalTransactions).toHaveBeenCalled();
   });
 
   it("does nothing and logs nothing when no profiles are configured", async () => {
