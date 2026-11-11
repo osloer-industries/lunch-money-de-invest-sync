@@ -36,8 +36,8 @@
   "devDependencies": {
     "@types/node": "24.19.2",
     "@vitest/coverage-v8": "4.1.12",
-    "oxlint": "1.79.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxlint": "1.91.0",
+    "oxlint-tsgolint": "7.0.2006",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "4.1.12"
