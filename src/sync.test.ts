@@ -55,7 +55,7 @@ describe("runSync", () => {
     const config = baseConfig({
       tradeRepublicProfiles: [
         {
-          owner: "me",
+          owner: "operator-a",
           phoneNumber: "+49123",
           pin: "1234",
           lunchMoneyAssetId: 1,
@@ -81,9 +81,7 @@ describe("runSync", () => {
       collectScalableCapital: vi.fn().mockResolvedValue([tx({ source: "scalable-capital" })]),
     };
     const config = baseConfig({
-      scalableCapitalProfiles: [
-        { owner: "wife", lunchMoneyAssetId: 2 },
-      ],
+      scalableCapitalProfiles: [{ owner: "operator-b", lunchMoneyAssetId: 2 }],
     });
 
     await runSync(config, client, collectors, () => {});
@@ -104,14 +102,14 @@ describe("runSync", () => {
     };
     const config = baseConfig({
       tradeRepublicProfiles: [
-        { owner: "me", phoneNumber: "+1", pin: "1", lunchMoneyAssetId: 9 },
+        { owner: "operator-a", phoneNumber: "+1", pin: "1", lunchMoneyAssetId: 9 },
       ],
     });
     const logger = vi.fn();
 
     await runSync(config, client, collectors, logger);
 
-    expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:me"));
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:operator-a"));
   });
 
   it("wires the live scalable collector to the CLI transport", async () => {
