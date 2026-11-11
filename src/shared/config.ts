@@ -1,35 +1,7 @@
 import { readFileSync } from "node:fs";
-import { isIP } from "node:net";
 import path from "node:path";
 import parseJson from "secure-json-parse";
 import { z } from "zod";
-
-/** Hostnames that must never be used as Scalable Capital proxy targets (cloud metadata SSRF). */
-const BLOCKED_PROXY_HOSTNAMES = new Set(["metadata.google.internal", "metadata.goog"]);
-
-/** IPv4 link-local block (includes cloud metadata endpoints such as 169.254.169.254). */
-function isLinkLocalIpv4Address(hostname: string): boolean {
-  return isIP(hostname) === 4 && hostname.startsWith("169.254.");
-}
-
-function validateProxyUrl(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error("proxyUrl must be a valid URL");
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("proxyUrl must use http or https");
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error("proxyUrl must not embed credentials");
-  }
-  const host = parsed.hostname.toLowerCase();
-  if (BLOCKED_PROXY_HOSTNAMES.has(host) || isLinkLocalIpv4Address(host)) {
-    throw new Error(`proxyUrl must not target ${host}`);
-  }
-}
 
 const tradeRepublicProfileSchema = z.object({
   owner: z.string().min(1),
@@ -38,23 +10,18 @@ const tradeRepublicProfileSchema = z.object({
   lunchMoneyAssetId: z.number().int().positive(),
 });
 
-const scalableCapitalProfileSchema = z.object({
-  owner: z.string().min(1),
-  /** Base URL of the local auth proxy (e.g. http://localhost:8000). */
-  proxyUrl: z
-    .string()
-    .url()
-    .superRefine((value, ctx) => {
-      try {
-        validateProxyUrl(value);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "invalid proxyUrl";
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message });
-      }
-    }),
-  proxyToken: z.string().min(1).optional(),
-  lunchMoneyAssetId: z.number().int().positive(),
-});
+const scalableCapitalProfileSchema = z
+  .object({
+    owner: z.string().min(1),
+    lunchMoneyAssetId: z.number().int().positive(),
+    /** `sc broker transactions --portfolio-id` when multiple portfolios exist. */
+    portfolioId: z.string().min(1).optional(),
+    /** Path to the `sc` binary (default: `sc` on PATH). */
+    scBinaryPath: z.string().min(1).optional(),
+    /** Overrides SC_CONFIG_DIR for the child process when sessions live outside the default dir. */
+    scConfigDir: z.string().min(1).optional(),
+  })
+  .strict();
 
 export const syncConfigSchema = z.object({
   lunchMoneyApiKey: z.string().min(1),

@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "command": "broker.transactions",
+  "error": { "code": "no_session", "message": "No active session" },
+  "hints": ["Run 'sc login' first to create a session."]
+}

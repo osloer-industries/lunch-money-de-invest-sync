@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "command": "broker.transactions",
+  "error": { "code": "refresh_retryable", "message": "Temporary refresh failure" },
+  "hints": ["Retry the same command."]
+}

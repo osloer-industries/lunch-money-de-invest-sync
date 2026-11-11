@@ -12,7 +12,7 @@ src/
   shared/          canonical Transaction type, config loading, shared-card tagging
   lunch-money/     thin wrapper around the official Lunch Money v2 API client
   trade-republic/  transport + mapper for Trade Republic's timeline
-  scalable-capital/ transport + mapper for the Scalable Capital local proxy
+  scalable-capital/ transport + mapper for the official Scalable CLI (`sc`)
   sync.ts          orchestrator: fetch -> map -> tag -> upsert, per configured profile
 ```
 
@@ -30,15 +30,15 @@ real transports together; tests inject fakes instead.
   (community, unofficial). It authenticates over Trade Republic's WebSocket API and exposes a
   `timeline` topic with cash-relevant events (card spend, transfers, interest, savings-plan
   executions, ...).
-- **Scalable Capital**: no maintained npm client exists. Instead this talks REST to
-  [`ffischbach/unofficial-scalable-capital-api`](https://github.com/ffischbach/unofficial-scalable-capital-api),
-  a local proxy you run yourself that handles the interactive browser login + 2FA once and then
-  serves `GET /transactions` over `http://127.0.0.1:3141`.
+- **Scalable Capital**: the official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli)
+  (`sc`, Apache-2.0). Sync shells out to `sc broker transactions --json`, parses the machine JSON
+  envelope, and maps cash summaries into Lunch Money. Operators authenticate with `sc login`
+  (device-code OAuth) after enabling **Profile → Security → Agentic Investing** in the Scalable
+  web app. Recommended for sync: `sc login --local-read-only`.
 
-Both broker integrations are unofficial and reverse-engineered — Trade Republic and Scalable
-Capital don't publish these APIs and can change them without notice. Response shapes are
-validated with `zod` at the boundary (see `types.ts` in each module) so a drifted field fails
-loudly with a clear error instead of silently inserting wrong amounts into Lunch Money.
+Trade Republic remains an unofficial integration; Scalable uses the supported CLI surface. Both
+outputs are validated with `zod` at the boundary (see `types.ts` in each module) so a drifted
+field fails loudly with a clear error instead of silently inserting wrong amounts into Lunch Money.
 
 ## Setup
 
@@ -54,8 +54,9 @@ loudly with a clear error instead of silently inserting wrong amounts into Lunch
      matcher if your bank formats it differently.
    - `tradeRepublicProfiles`: one entry per person, with their phone number, PIN, and the
      Lunch Money manual account id to sync into.
-   - `scalableCapitalProfiles`: one entry per person, pointing at their running proxy instance
-     (see below) and their Lunch Money manual account id.
+   - `scalableCapitalProfiles`: one entry per person (and optionally per portfolio), with their
+     Lunch Money manual account id. Set `portfolioId` when `sc broker portfolios` shows more than
+     one portfolio for that operator.
 5. `LUNCH_MONEY_API_KEY=... npm run sync`
 
 `config.json` and `.env` are gitignored — they carry phone numbers and account ids, not just
@@ -72,15 +73,23 @@ none of the TypeScript clients on npm currently do. Swap the `TradeRepublicTrans
 `src/trade-republic/client.ts` for one that shells out to `pytr` (or a TS port of its
 device-pairing protocol) if you need that.
 
-### Scalable Capital: running the proxy
+### Scalable Capital: Scalable CLI (`sc`)
 
-1. Clone and run [`unofficial-scalable-capital-api`](https://github.com/ffischbach/unofficial-scalable-capital-api)
-   per person (different port per person, e.g. `3141` / `3142`), following its own setup —
-   this opens a real browser window for you to log in and complete 2FA interactively.
-2. Point each `scalableCapitalProfiles` entry's `proxyUrl` at the matching instance. If you ran
-   the proxy with `--token`, set `proxyToken` too.
-3. The proxy's session lasts ~8 hours before you need to log in again, so this is closer to
-   cron-friendly than Trade Republic, as long as something re-runs the login periodically.
+1. Install `sc` per operator machine ([releases](https://github.com/ScalableCapital/scalable-cli/releases);
+   macOS: Homebrew tap `ScalableCapital/tap`; Linux: official tarballs require **glibc ≥ 2.38**).
+2. In the Scalable web app, enable **Profile → Security → Agentic Investing**.
+3. Run `sc login --local-read-only` and complete the browser device-code flow (do not automate login).
+4. If needed, run `sc broker portfolios` and either `sc broker context select --portfolio-id <ID>`
+   or set `portfolioId` on the matching `scalableCapitalProfiles` entry.
+5. Run `npm run sync` with `LUNCH_MONEY_API_KEY` set. Sessions refresh automatically but expire
+   after idle/max lifetime documented in scalable-cli — re-run `sc login` when prompted.
+
+Broker credentials and CLI session files stay on the operator's machine only (`SC_CONFIG_DIR` /
+default config dir). Never commit them to this repo.
+
+Adopting Scalable CLI is a **clean break** from the old proxy workflow: use a fresh Lunch Money
+manual account (or clean up old proxy-synced rows yourself). Re-running sync on the new path is
+safe because `external_id` values are stable broker ids (`scalable-capital:{id}`).
 
 ## Development
 
@@ -107,14 +116,13 @@ test talks to a real broker or to Lunch Money.
 
 ## Running locally
 
-Syncs are **manual and opt-in** on your own machine. Trade Republic and Scalable Capital both
-need interactive logins (SMS code and browser 2FA respectively), so there is no scheduled or
-GitHub-hosted sync workflow — nothing in this repo stores broker or Lunch Money credentials.
+Syncs are **manual and opt-in** on your own machine. Trade Republic needs SMS 2FA; Scalable
+needs periodic `sc login` on each operator laptop. There is no scheduled or GitHub-hosted sync
+workflow — nothing in this repo stores broker or Lunch Money credentials.
 
 Keep `config.json` on disk only (copy from `config.example.json`; it is gitignored). Set
 `LUNCH_MONEY_API_KEY` in your shell or a local `.env` file (also gitignored), then run
-`npm run sync` when you want to pull fresh transactions. Point each Scalable Capital profile's
-`proxyUrl` at a proxy you run locally (see **Scalable Capital: running the proxy** above).
+`npm run sync` when you want to pull fresh transactions (see **Scalable Capital: Scalable CLI** above).
 
 CI (`.github/workflows/ci.yml`) calls the org **workflow-security** reusable (actionlint + zizmor)
 and runs **Quality** (`npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build`)

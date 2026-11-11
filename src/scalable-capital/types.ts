@@ -1,17 +1,10 @@
 import { z } from "zod";
 
-/**
- * The local proxy (ffischbach/unofficial-scalable-capital-api) normalizes Scalable
- * Capital's GraphQL transaction categories (BrokerCashTransaction,
- * BrokerSecurityTransaction, BrokerNonTradeSecurityTransaction, BrokerEltifTransaction)
- * into REST JSON via `GET /transactions`. The proxy's README doesn't publish an example
- * response, so this schema is a best-effort mapping of the underlying GraphQL fields —
- * verify field names against your own proxy's output and adjust before relying on this.
- */
+/** Normalized cash transaction used by the mapper (broker backend id preserved for dedup). */
 export const scalableCapitalTransactionSchema = z.object({
   id: z.string(),
   date: z.string(),
-  /** e.g. "BrokerCashTransaction", "BrokerSecurityTransaction", ... */
+  /** Normalized cash rows use `BrokerCashTransaction`; mapper tests may pass other type strings. */
   type: z.string(),
   description: z.string().optional().default(""),
   amount: z.number(),
@@ -20,14 +13,46 @@ export const scalableCapitalTransactionSchema = z.object({
 });
 export type ScalableCapitalTransaction = z.infer<typeof scalableCapitalTransactionSchema>;
 
-export const transactionsResponseSchema = z.object({
-  transactions: z.array(scalableCapitalTransactionSchema),
-  cursor: z.string().nullable().optional(),
-  total: z.number().optional(),
+export const scTransactionSummarySchema = z.object({
+  id: z.string(),
+  summary_type: z.union([z.string(), z.null()]).optional(),
+  currency: z.union([z.string(), z.null()]).optional(),
+  status: z.union([z.string(), z.null()]).optional(),
+  is_cancellation: z.union([z.boolean(), z.null()]).optional(),
+  last_event_datetime: z.union([z.string(), z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  amount: z.union([z.string(), z.number(), z.null()]).optional(),
 });
-export type TransactionsResponse = z.infer<typeof transactionsResponseSchema>;
+export type ScTransactionSummary = z.infer<typeof scTransactionSummarySchema>;
 
-export interface ScalableCapitalProxyConfig {
-  proxyUrl: string;
-  proxyToken?: string;
+export const scBrokerTransactionsResultSchema = z.object({
+  cursor: z.union([z.string(), z.null()]).optional(),
+  items: z.array(scTransactionSummarySchema),
+});
+
+export const scBrokerTransactionsDataSchema = z.object({
+  result: scBrokerTransactionsResultSchema,
+});
+
+export const scMachineEnvelopeSchema = z.object({
+  ok: z.boolean(),
+  command: z.string().optional(),
+  data: z.unknown().optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string().optional(),
+    })
+    .optional(),
+  hints: z.array(z.string()).optional(),
+});
+export type ScMachineEnvelope = z.infer<typeof scMachineEnvelopeSchema>;
+
+export interface ScalableCapitalCliConfig {
+  /** Executable name or path (default `sc` on PATH). */
+  scBinaryPath?: string;
+  /** When set, passed as SC_CONFIG_DIR for the child process. */
+  scConfigDir?: string;
+  /** Passed as `sc broker transactions --portfolio-id` when the operator has multiple portfolios. */
+  portfolioId?: string;
 }

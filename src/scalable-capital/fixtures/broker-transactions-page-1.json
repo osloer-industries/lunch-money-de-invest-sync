@@ -1,0 +1,44 @@
+{
+  "ok": true,
+  "command": "broker.transactions",
+  "data": {
+    "account_id": "account-operator-a",
+    "portfolio_id": "portfolio-operator-a",
+    "resolution": { "account": "auto_resolved", "portfolio": "auto_resolved" },
+    "result": {
+      "cursor": "page-2",
+      "total": 3,
+      "count": 2,
+      "items": [
+        {
+          "id": "tx-cash-1",
+          "summary_type": "BrokerCashTransactionSummary",
+          "currency": "EUR",
+          "type": "CASH_TRANSACTION",
+          "status": "SETTLED",
+          "is_cancellation": false,
+          "last_event_datetime": "2026-03-10T10:00:00Z",
+          "description": "Deposit",
+          "amount": "100"
+        },
+        {
+          "id": "tx-security-1",
+          "summary_type": "BrokerSecurityTransactionSummary",
+          "currency": "EUR",
+          "type": "SECURITY_TRANSACTION",
+          "status": "FILLED",
+          "is_cancellation": false,
+          "last_event_datetime": "2026-03-09T10:00:00Z",
+          "description": "Buy",
+          "amount": "200"
+        }
+      ],
+      "crypto": {
+        "count": 0,
+        "items": [],
+        "cursor": null,
+        "total": null
+      }
+    }
+  }
+}
