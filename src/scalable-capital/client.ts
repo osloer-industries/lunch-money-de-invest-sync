@@ -49,7 +49,7 @@ function assertSuccessEnvelope(envelope: ReturnType<typeof parseEnvelope>): void
 function parseDecimalAmount(value: string | number | null | undefined): number {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new Error("Scalable CLI transaction amount is not a finite number");
+      throw new TypeError("Scalable CLI transaction amount is not a finite number");
     }
     return value;
   }
@@ -57,12 +57,12 @@ function parseDecimalAmount(value: string | number | null | undefined): number {
     throw new Error("Scalable CLI cash transaction is missing amount");
   }
   if (typeof value !== "string") {
-    throw new Error("Scalable CLI transaction amount has an unexpected type");
+    throw new TypeError("Scalable CLI transaction amount has an unexpected type");
   }
   const trimmed = value.trim();
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Scalable CLI transaction amount is not numeric: ${trimmed}`);
+    throw new TypeError(`Scalable CLI transaction amount is not numeric: ${trimmed}`);
   }
   return parsed;
 }

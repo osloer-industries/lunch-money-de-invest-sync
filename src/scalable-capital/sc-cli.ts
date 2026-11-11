@@ -1,5 +1,25 @@
 import { spawn } from "node:child_process";
 
+/** Hardened PATH for `sc` lookup — do not inherit a user-writable `PATH` from the parent process. */
+const SC_CLI_PATH =
+  "/opt/homebrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+function buildScSpawnEnv(extraEnv?: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
+  const env: Record<string, string> = {
+    PATH: SC_CLI_PATH,
+    LANG: typeof process.env.LANG === "string" ? process.env.LANG : "C.UTF-8",
+  };
+  if (typeof process.env.HOME === "string" && process.env.HOME.length > 0) {
+    env.HOME = process.env.HOME;
+  }
+  if (extraEnv) {
+    for (const [key, value] of Object.entries(extraEnv)) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
 export interface ScCliRunResult {
   readonly stdout: string;
   readonly stderr: string;
@@ -16,7 +36,7 @@ export function createScCliRunner(binaryPath = "sc"): ScCliRunner {
     run(argv, extraEnv) {
       return new Promise((resolve, reject) => {
         const child = spawn(binaryPath, [...argv], {
-          env: { ...process.env, ...extraEnv },
+          env: buildScSpawnEnv(extraEnv),
           stdio: ["ignore", "pipe", "pipe"],
         });
         let stdout = "";
