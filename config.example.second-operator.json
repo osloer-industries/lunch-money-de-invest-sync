@@ -1,0 +1,19 @@
+{
+  "sharedCardLast4": ["0000"],
+  "tradeRepublicProfiles": [
+    {
+      "owner": "operator-b-trade-republic",
+      "phoneNumber": "+490000000002",
+      "pin": "0001",
+      "lunchMoneyAssetId": 101
+    }
+  ],
+  "scalableCapitalProfiles": [
+    {
+      "owner": "operator-b-scalable",
+      "proxyUrl": "http://127.0.0.1:3142",
+      "proxyToken": "replace-with-proxy-token-if-you-use---token",
+      "lunchMoneyAssetId": 102
+    }
+  ]
+}

@@ -1,9 +1,8 @@
 # lunch-money-de-invest-sync
 
 Syncs German investment/broker accounts into [Lunch Money](https://lunchmoney.app), starting
-with **Trade Republic** and **Scalable Capital**. Built to cover a household with two people's
-accounts feeding into one Lunch Money instance, with shared-card spend auto-tagged so it's easy
-to split later.
+with **Trade Republic** and **Scalable Capital**. Built for two operators' accounts feeding into
+one Lunch Money instance, with shared-card spend auto-tagged so it's easy to split later.
 
 ## How it's put together
 
@@ -45,18 +44,24 @@ loudly with a clear error instead of silently inserting wrong amounts into Lunch
 1. `npm ci`
 2. Get a Lunch Money API key from **Settings → Developers** in the Lunch Money app.
 3. Create a **manual account** in Lunch Money per brokerage account you want synced (one per
-   person per broker — e.g. "Trade Republic (You)", "Trade Republic (Account B)", "Scalable Capital
-   (You)"), and note each one's numeric account id.
-4. Copy `config.example.json` to `config.json` and fill in:
+   operator per broker — e.g. "Trade Republic (operator A)", "Trade Republic (operator B)",
+   "Scalable Capital (operator A)"), and note each one's numeric account id.
+4. Copy `config.example.json` to `config.json` and fill in **only the brokerage accounts this
+   machine syncs** (see **Second operator setup** below when two people share one Lunch Money
+   budget from different laptops):
    - `sharedCardLast4`: last 4 digits of any card you share expenses on. Transactions whose
      payee/notes mention one of these get tagged `shared` in Lunch Money — check this actually
      matches your real transaction text (see note in `src/shared/tagging.ts`) and adjust the
      matcher if your bank formats it differently.
-   - `tradeRepublicProfiles`: one entry per person, with their phone number, PIN, and the
-     Lunch Money manual account id to sync into.
-   - `scalableCapitalProfiles`: one entry per person, pointing at their running proxy instance
-     (see below) and their Lunch Money manual account id.
-5. `LUNCH_MONEY_API_KEY=... npm run sync`
+   - `tradeRepublicProfiles`: one entry per Trade Republic account on **this machine**, with
+     phone number, PIN, and the Lunch Money manual account id to sync into.
+   - `scalableCapitalProfiles`: one entry per Scalable account on **this machine**, pointing at
+     a local proxy (see below) and the matching Lunch Money manual account id.
+5. Run a dry-run first, then sync for real:
+   - `npm run sync:dry-run` — fetches broker data and prints what would be upserted (no Lunch
+     Money writes; API key optional).
+   - `LUNCH_MONEY_API_KEY=... npm run sync` — upserts into Lunch Money for the profiles in
+     **your** `config.json` only.
 
 `config.json` and `.env` are gitignored — they carry phone numbers and account ids, not just
 secrets, so don't commit them even though the PIN/API key are the only strictly sensitive bits.
@@ -105,20 +110,68 @@ test talks to a real broker or to Lunch Money.
 - **More brokers**: add a `src/<broker>/{types,client,mapper}.ts` following the existing
   modules' shape, then wire a `collect<Broker>` function into `liveCollectors` in `src/sync.ts`.
 
+## Second operator setup (shared Lunch Money budget, separate laptop)
+
+The **primary operator** and **second operator** share **one** Lunch Money budget, but each runs
+this repo **locally** on their own machine with **their own** gitignored `config.json`. A sync
+only touches the manual accounts listed in that file — it never resets or overwrites other Lunch
+Money accounts.
+
+**Prerequisites:** Node.js 24 (see `.nvmrc`), git, npm, and read access to this repository (the
+primary operator or a repo admin must add the second operator as a GitHub collaborator if the
+repo is private).
+
+1. **Clone and install**
+   ```bash
+   git clone https://github.com/osloer-industries/lunch-money-de-invest-sync.git
+   cd lunch-money-de-invest-sync
+   npm ci
+   ```
+2. **Lunch Money manual accounts** — In the shared budget, create one manual account per
+   brokerage account the second operator syncs (e.g. "Trade Republic (operator B)", "Scalable
+   (operator B)"). Note each numeric account id.
+3. **Their own API token** — In Lunch Money: **Settings → Developers**. Each budget member can
+   mint their own developer token for the shared budget. The second operator should **not** copy
+   the primary operator's token; either token can write to the same budget, and transactions
+   dedupe on `(manual_account_id, external_id)` so the two laptops do not clobber each other.
+4. **Local config (placeholders only in git)** — Copy the committed example for a second machine:
+   ```bash
+   cp config.example.second-operator.json config.json
+   ```
+   Edit `config.json` locally: set `lunchMoneyAssetId` for each profile, their broker
+   credentials, and `sharedCardLast4` if they use a shared card. List **every account they sync**
+   (for example two profiles for two brokers). Do not commit `config.json`.
+5. **Secrets only on disk** — Put `LUNCH_MONEY_API_KEY` in the shell or a local `.env` (from
+   `.env.example`). Never commit tokens, PINs, or phone numbers.
+6. **Dry-run, then confirm, then sync**
+   ```bash
+   npm run sync:dry-run
+   ```
+   Review the `[dry-run]` lines (per profile: transaction count, dates, Lunch Money manual
+   account id). When output looks right:
+   ```bash
+   export LUNCH_MONEY_API_KEY='their-token'
+   npm run sync
+   ```
+   Re-running `npm run sync` is safe: duplicates are skipped server-side.
+
+If the second operator uses **Claude Code** (or another local coding agent), follow the
+step-by-step runbook in **AGENTS.md → Second operator setup runbook** — same flow, with explicit
+guardrails around secrets and user confirmation before a real sync.
+
 ## Running locally
 
 Syncs are **manual and opt-in** on your own machine. Trade Republic and Scalable Capital both
 need interactive logins (SMS code and browser 2FA respectively), so there is no scheduled or
 GitHub-hosted sync workflow — nothing in this repo stores broker or Lunch Money credentials.
 
-Keep `config.json` on disk only (copy from `config.example.json`; it is gitignored). Set
-`LUNCH_MONEY_API_KEY` in your shell or a local `.env` file (also gitignored), then run
-`npm run sync` when you want to pull fresh transactions. Point each Scalable Capital profile's
-`proxyUrl` at a proxy you run locally (see **Scalable Capital: running the proxy** above).
+Keep `config.json` on disk only (copy from `config.example.json` or
+`config.example.second-operator.json`; both are safe templates, and `config.json` is gitignored).
+Set `LUNCH_MONEY_API_KEY` in your shell or a local `.env` file (also gitignored). Run
+`npm run sync:dry-run` before the first real sync, then `npm run sync` when you want to pull
+fresh transactions. Point each Scalable Capital profile's `proxyUrl` at a proxy you run locally
+(see **Scalable Capital: running the proxy** above).
 
-CI (`.github/workflows/ci.yml`) calls the org **workflow-security** reusable (actionlint + zizmor)
-and runs **Quality** (`npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build`)
-on pushes and pull requests. **CodeQL** (`.github/workflows/codeql.yml`) uses the org JavaScript/TypeScript
-reusable in SARIF artifact mode (`code-scanning-upload: false`; private repo, no GHAS). Reusable refs
-are pinned by full SHA; Dependabot `github-actions` bumps them under `ci(deps)`. It does not run
-`npm run sync` and requires no repository secrets for broker or Lunch Money access.
+CI (`.github/workflows/ci.yml`) runs `npm run lint`, `npm run typecheck`, `npm run test:coverage`,
+and `npm run build` on pushes and pull requests. It does not run `npm run sync` and requires no
+repository secrets for broker or Lunch Money access.
