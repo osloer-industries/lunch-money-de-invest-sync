@@ -37,6 +37,8 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   payloads with `zod`. Do not log stdout that may contain account metadata.
 - Map only `BrokerCashTransactionSummary` rows to Lunch Money; preserve dedup ids as
   `scalable-capital:{id}` using the broker transaction id from `sc`.
+- Set each transaction **date** to the **UTC calendar day** of `last_event_datetime` (not local
+  timezone).
 - Credentials and sessions are **local-only**: operators run `sc login` on their own machine
   after enabling Agentic Investing in the Scalable web profile. Never commit `sc` session
   files, tokens, or operator config with secrets. CI uses fixtures and mocked `ScCliRunner`
