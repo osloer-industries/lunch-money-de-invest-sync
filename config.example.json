@@ -1,24 +1,24 @@
 {
-  "sharedCardLast4": ["1234"],
+  "sharedCardLast4": ["0000"],
   "tradeRepublicProfiles": [
     {
-      "owner": "me",
-      "phoneNumber": "+490000000010",
+      "owner": "operator-a",
+      "phoneNumber": "+490000000001",
       "pin": "0000",
       "lunchMoneyAssetId": 1
     },
     {
-      "owner": "secondary",
-      "phoneNumber": "+490000000011",
-      "pin": "5678",
+      "owner": "operator-b",
+      "phoneNumber": "+490000000002",
+      "pin": "0001",
       "lunchMoneyAssetId": 2
     }
   ],
   "scalableCapitalProfiles": [
     {
-      "owner": "me",
+      "owner": "operator-a",
       "proxyUrl": "http://127.0.0.1:3141",
-      "proxyToken": "set-a-real-token-when-you-run-the-proxy-with---token",
+      "proxyToken": "replace-with-proxy-token-if-you-use---token",
       "lunchMoneyAssetId": 3
     }
   ]

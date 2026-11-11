@@ -47,7 +47,7 @@ describe("runSync", () => {
     const config = baseConfig({
       tradeRepublicProfiles: [
         {
-          owner: "me",
+          owner: "operator-a",
           phoneNumber: "+490000000003",
           pin: "0000",
           lunchMoneyAssetId: 1,
@@ -74,7 +74,7 @@ describe("runSync", () => {
     };
     const config = baseConfig({
       scalableCapitalProfiles: [
-        { owner: "secondary", proxyUrl: "http://localhost:3141", lunchMoneyAssetId: 2 },
+        { owner: "operator-b", proxyUrl: "http://localhost:3141", lunchMoneyAssetId: 2 },
       ],
     });
 
@@ -96,14 +96,14 @@ describe("runSync", () => {
     };
     const config = baseConfig({
       tradeRepublicProfiles: [
-        { owner: "me", phoneNumber: "+1", pin: "1", lunchMoneyAssetId: 9 },
+        { owner: "operator-a", phoneNumber: "+1", pin: "1", lunchMoneyAssetId: 9 },
       ],
     });
     const logger = vi.fn();
 
     await runSync(config, client, collectors, logger);
 
-    expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:me"));
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:operator-a"));
   });
 
   it("does nothing and logs nothing when no profiles are configured", async () => {
