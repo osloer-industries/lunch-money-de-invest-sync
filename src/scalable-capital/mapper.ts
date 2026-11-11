@@ -2,7 +2,7 @@ import { toCurrency, type CanonicalTransaction } from "../shared/transaction.js"
 import type { ScalableCapitalTransaction } from "./types.js";
 
 /**
- * Only cash transactions (deposits, withdrawals, fees, interest) represent household
+ * Only broker cash transactions (deposits, withdrawals, fees, interest) represent household
  * spend/income worth tracking in Lunch Money. Security trades (buys/sells) are investment
  * activity internal to the account, not budgetable transactions — extend this set if you
  * want those synced too.
