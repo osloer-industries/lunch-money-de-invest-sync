@@ -16,8 +16,12 @@ const scalableCapitalProfileSchema = z
     lunchMoneyAssetId: z.number().int().positive(),
     /** `sc broker transactions --portfolio-id` when multiple portfolios exist. */
     portfolioId: z.string().min(1).optional(),
-    /** Path to the `sc` binary (default: `sc` on PATH). */
-    scBinaryPath: z.string().min(1).optional(),
+    /** Absolute path to the `sc` binary (otherwise resolved under trusted system dirs). */
+    scBinaryPath: z
+      .string()
+      .min(1)
+      .refine((value) => path.isAbsolute(value), { message: "scBinaryPath must be an absolute path" })
+      .optional(),
     /** Overrides SC_CONFIG_DIR for the child process when sessions live outside the default dir. */
     scConfigDir: z.string().min(1).optional(),
   })

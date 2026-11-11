@@ -84,6 +84,9 @@ device-pairing protocol) if you need that.
 5. Run `npm run sync` with `LUNCH_MONEY_API_KEY` set. Sessions refresh automatically but expire
    after idle/max lifetime documented in scalable-cli — re-run `sc login` when prompted.
 
+If `sc` is installed outside standard directories, set `scBinaryPath` in config to the absolute
+path from `which sc`.
+
 Broker credentials and CLI session files stay on the operator's machine only (`SC_CONFIG_DIR` /
 default config dir). Never commit them to this repo.
 
