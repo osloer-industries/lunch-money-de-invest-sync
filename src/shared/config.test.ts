@@ -10,7 +10,7 @@ const validRaw = {
   sharedCardLast4: ["1234"],
   tradeRepublicProfiles: [
     {
-      owner: "me",
+      owner: "operator-a",
       phoneNumber: "+491234567",
       pin: "sync-test-pin",
       lunchMoneyAssetId: 1,
@@ -18,7 +18,7 @@ const validRaw = {
   ],
   scalableCapitalProfiles: [
     {
-      owner: "wife",
+      owner: "operator-b",
       proxyUrl: "http://localhost:8000",
       lunchMoneyAssetId: 2,
     },
@@ -29,7 +29,7 @@ describe("loadConfig", () => {
   it("parses a fully populated config", () => {
     const config = loadConfig(validRaw);
     expect(config.tradeRepublicProfiles).toHaveLength(1);
-    expect(config.scalableCapitalProfiles[0]?.owner).toBe("wife");
+    expect(config.scalableCapitalProfiles[0]?.owner).toBe("operator-b");
   });
 
   it("defaults optional arrays to empty", () => {
@@ -63,7 +63,7 @@ describe("loadConfig", () => {
         ...validRaw,
         scalableCapitalProfiles: [
           {
-            owner: "me",
+            owner: "operator-a",
             proxyUrl: "http://169.254.169.254/",
             lunchMoneyAssetId: 1,
           },
