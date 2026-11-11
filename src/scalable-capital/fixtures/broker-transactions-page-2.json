@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "command": "broker.transactions",
+  "data": {
+    "account_id": "account-operator-a",
+    "portfolio_id": "portfolio-operator-a",
+    "resolution": { "account": "auto_resolved", "portfolio": "auto_resolved" },
+    "result": {
+      "cursor": null,
+      "total": 3,
+      "count": 1,
+      "items": [
+        {
+          "id": "tx-cash-2",
+          "summary_type": "BrokerCashTransactionSummary",
+          "currency": "EUR",
+          "type": "CASH_TRANSACTION",
+          "status": "SETTLED",
+          "is_cancellation": false,
+          "last_event_datetime": "2026-03-08T12:00:00Z",
+          "description": "Account fee",
+          "amount": "-2.50"
+        }
+      ],
+      "crypto": {
+        "count": 0,
+        "items": [],
+        "cursor": null,
+        "total": null
+      }
+    }
+  }
+}

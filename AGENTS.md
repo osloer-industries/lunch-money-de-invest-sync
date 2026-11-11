@@ -29,6 +29,25 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Use strict TypeScript, ECMAScript modules, and explicit `.js` extensions for
   relative imports compiled with NodeNext.
 
+## Scalable Capital (scalable-cli)
+
+- Transport lives in `src/scalable-capital/client.ts` and **must** call the official `sc`
+  binary as a child process (`sc broker transactions --json`), never an HTTP proxy.
+- Parse the machine JSON envelope (`ok`, `command`, `data`, `error`) and validate broker
+  payloads with `zod`. Do not log stdout that may contain account metadata.
+- Map only `BrokerCashTransactionSummary` rows to Lunch Money; preserve dedup ids as
+  `scalable-capital:{id}` using the broker transaction id from `sc`.
+- Set each transaction **date** to the **UTC calendar day** of `last_event_datetime` (not local
+  timezone).
+- Credentials and sessions are **local-only**: operators run `sc login` on their own machine
+  after enabling Agentic Investing in the Scalable web profile. Never commit `sc` session
+  files, tokens, or operator config with secrets. CI uses fixtures and mocked `ScCliRunner`
+  only — no live `sc` or broker calls.
+- Optional profile fields: `portfolioId`, `scBinaryPath`, `scConfigDir` (`SC_CONFIG_DIR`).
+- **Clean break:** the old HTTP proxy integration is removed entirely (no `proxyUrl`,
+  no migration shims). Assume operators use a fresh Lunch Money manual account when adopting
+  `sc`; `external_id` format `scalable-capital:{id}` is for idempotent re-sync only.
+
 ## Tests and security
 
 - Unit tests use fakes for network and WebSocket I/O; no live broker or Lunch Money calls.

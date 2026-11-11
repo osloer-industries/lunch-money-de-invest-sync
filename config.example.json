@@ -17,9 +17,12 @@
   "scalableCapitalProfiles": [
     {
       "owner": "operator-a",
-      "proxyUrl": "http://127.0.0.1:3141",
-      "proxyToken": "replace-with-proxy-token-if-you-use---token",
       "lunchMoneyAssetId": 3
+    },
+    {
+      "owner": "operator-b",
+      "lunchMoneyAssetId": 4,
+      "portfolioId": "portfolio-operator-b"
     }
   ]
 }
