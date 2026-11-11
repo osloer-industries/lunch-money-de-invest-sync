@@ -35,13 +35,11 @@ describe("createScCliRunner", () => {
     const runner = createScCliRunner("/usr/bin/sc");
     const result = await runner.run(["broker", "transactions", "--json"], { SC_CONFIG_DIR: "/tmp/sc" });
     expect(result).toEqual({ stdout: '{"ok":true}', stderr: "", exitCode: 0 });
-    expect(spawnMock).toHaveBeenCalledWith(
-      "/usr/bin/sc",
-      ["broker", "transactions", "--json"],
-      expect.objectContaining({
-        env: expect.objectContaining({ SC_CONFIG_DIR: "/tmp/sc" }),
-      }),
-    );
+    const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env: Record<string, string> };
+    expect(spawnMock).toHaveBeenCalledWith("/usr/bin/sc", ["broker", "transactions", "--json"], expect.any(Object));
+    expect(spawnOptions.env.SC_CONFIG_DIR).toBe("/tmp/sc");
+    expect(spawnOptions.env.PATH).toContain("/usr/bin");
+    expect(spawnOptions.env.PATH).not.toBe(process.env.PATH);
   });
 
   it("surfaces spawn failures to the caller", async () => {
