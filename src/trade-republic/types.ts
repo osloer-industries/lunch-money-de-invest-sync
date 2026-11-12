@@ -1,30 +1,38 @@
 import { z } from "zod";
 
-/**
- * Shape returned by the `timeline` topic of the unofficial `trade-republic-api` package
- * (see its `TimelineEvent`/`TimeLineResponse` interfaces). Trade Republic doesn't publish
- * this schema, so we validate defensively rather than trusting the library's static types.
- */
-export const timelineEventSchema = z.object({
-  type: z.string(),
-  data: z.object({
-    id: z.string(),
-    /** Epoch milliseconds. */
-    timestamp: z.number(),
-    title: z.string(),
-    body: z.string().optional().default(""),
-    /** Signed EUR amount; 0 (or absent in practice) for purely informational events. */
-    cashChangeAmount: z.number(),
-  }),
-});
-export type TimelineEvent = z.infer<typeof timelineEventSchema>;
+const pytrAmountSchema = z
+  .object({
+    currency: z.string(),
+    value: z.number(),
+    fractionDigits: z.number().optional(),
+  })
+  .nullable()
+  .optional();
 
-export const timelineResponseSchema = z.object({
-  data: z.array(timelineEventSchema),
+/** Shape of one enriched timeline row in pytr's `all_events.json` (validated at the boundary). */
+export const pytrTimelineEventSchema = z.object({
+  id: z.string().min(1),
+  timestamp: z.string().min(1),
+  title: z.string(),
+  subtitle: z.string().nullable().optional(),
+  amount: pytrAmountSchema,
+  eventType: z.string().nullable().optional(),
+  hidden: z.boolean().optional(),
+  deleted: z.boolean().optional(),
 });
-export type TimelineResponse = z.infer<typeof timelineResponseSchema>;
+export type PytrTimelineEvent = z.infer<typeof pytrTimelineEventSchema>;
 
-export interface TradeRepublicCredentials {
-  phoneNumber: string;
-  pin: string;
+export const pytrAllEventsSchema = z.array(pytrTimelineEventSchema);
+
+export type TradeRepublicWafTokenMode = "default" | "playwright" | "awswaf" | "no-waf";
+
+export interface TradeRepublicPytrConfig {
+  readonly pytrCommand?: readonly string[];
+  /** Absolute path to the pytr data directory (typically ends with `.pytr`). */
+  readonly pytrHome?: string;
+  readonly loginV2?: boolean;
+  readonly wafTokenMode?: TradeRepublicWafTokenMode;
+  /** Passed through to pytr `--account` when syncing a non-primary TR account. */
+  readonly account?: string;
+  readonly pytrMinVersion?: string;
 }

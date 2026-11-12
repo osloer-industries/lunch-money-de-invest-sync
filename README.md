@@ -23,8 +23,9 @@
 
 ## What it does
 
-- Pulls cash-relevant activity from **Trade Republic** (community WebSocket client) and **Scalable Capital**
-  (official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) via `sc broker transactions --json`).
+- Pulls cash-relevant activity from **Trade Republic** ([pytr](https://github.com/pytr-org/pytr) CLI → `all_events.json`)
+  and **Scalable Capital** (official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) via
+  `sc broker transactions --json`).
 - Maps broker events into Lunch Money **manual account** transactions with stable `external_id` values so
   re-running a sync is idempotent (duplicates are skipped server-side).
 - Tags spend that matches configured shared-card last-four digits with a `shared` tag for easier splitting later.
@@ -33,13 +34,13 @@
 
 | Broker | Integration | What gets synced |
 | --- | --- | --- |
-| **Trade Republic** | [`trade-republic-api`](https://www.npmjs.com/package/trade-republic-api) (community, unofficial) | Timeline events with non-zero `cashChangeAmount` (card spend, transfers, interest, savings-plan executions, …) |
+| **Trade Republic** | [pytr](https://github.com/pytr-org/pytr) (community CLI, unofficial) | pytr timeline events with non-zero cash amount (card spend, transfers, interest, saveback as one row, …) |
 | **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries only (security buy/sell activity is excluded) |
 
 Both broker surfaces can change without notice. Payloads are validated with **zod** at the boundary so schema drift
 should fail loudly instead of inserting wrong amounts.
 
-Planned clean-break migrations are tracked in the issue tracker — see [#14](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/14) (Trade Republic / pytr) and [#15](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/15) (Scalable Capital / scalable-cli, shipped on `main`).
+Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/14)) and Scalable Capital via scalable-cli ([#15](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/15)).
 
 ## How it works (local only)
 
@@ -53,17 +54,18 @@ Planned clean-break migrations are tracked in the issue tracker — see [#14](ht
          ┌────────────────┼────────────────┐
          │                │                │
    Trade Republic    Scalable CLI      Lunch Money API
-   (SMS 2FA CLI)     (`sc login`)      (official v2 client)
+   (`pytr login`)    (`sc login`)      (official v2 client)
 ```
 
 - **No cloud sync.** Nothing in GitHub Actions runs `npm run sync` or needs repository secrets for brokers.
-- **Interactive auth.** Trade Republic prompts for SMS 2FA each run; Scalable Capital uses `sc login` on each operator machine
-  (sessions expire — re-auth when `sc` prompts).
+- **Interactive auth.** Trade Republic uses `pytr login` on each operator machine; Scalable Capital uses `sc login`
+  (sessions expire — re-auth when pytr or `sc` prompts).
 
 ## Requirements
 
 - **Node.js 24** (see [`.nvmrc`](.nvmrc) / [`.node-version`](.node-version))
 - A [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per brokerage profile
+- For Trade Republic: [pytr](https://github.com/pytr-org/pytr) installed locally per operator (`uvx pytr@0.4.10` recommended)
 - For Scalable Capital: [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) installed locally per operator
 
 ## Quick start
@@ -85,7 +87,7 @@ Copy [`config.example.json`](config.example.json) to `config.json` in the repo r
 | Field | Purpose |
 | --- | --- |
 | `sharedCardLast4` | Last four digits of cards whose spend should receive the `shared` tag (matched in payee/notes text) |
-| `tradeRepublicProfiles[]` | Per-account: `owner` label, `phoneNumber`, `pin`, `lunchMoneyAssetId` (Lunch Money manual account id) |
+| `tradeRepublicProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `pytrCommand`, `pytrHome`, `loginV2`, `wafTokenMode`, `account`, `pytrMinVersion` |
 | `scalableCapitalProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `portfolioId`, `scBinaryPath`, `scConfigDir` |
 
 The `owner` string is a **local label** for logs only (e.g. `operator-a`, `operator-b`). It is not sent to brokers.
@@ -98,10 +100,10 @@ The `owner` string is a **local label** for logs only (e.g. `operator-a`, `opera
   the official TypeScript client for Lunch Money's (alpha) v2 API. Transaction dedup is handled
   server-side: inserting a transaction with the same `(manual_account_id, external_id)` pair
   twice is a no-op, so re-running a sync is always safe.
-- **Trade Republic**: [`trade-republic-api`](https://www.npmjs.com/package/trade-republic-api)
-  (community, unofficial). It authenticates over Trade Republic's WebSocket API and exposes a
-  `timeline` topic with cash-relevant events (card spend, transfers, interest, savings-plan
-  executions, …).
+- **Trade Republic**: [pytr](https://github.com/pytr-org/pytr) (community CLI, MIT). Sync shells out to
+  `pytr export_transactions`, reads `all_events.json`, and maps cash-relevant timeline events.
+  Operators authenticate with `pytr login` (or `pytr login --v2`); credentials live under `~/.pytr`
+  on the operator machine, never in this repo.
 - **Scalable Capital**: the official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli)
   (`sc`, Apache-2.0). Sync shells out to `sc broker transactions --json`, parses the machine JSON
   envelope, and maps cash summaries into Lunch Money. Operators authenticate with `sc login`
@@ -122,19 +124,25 @@ field fails loudly with a clear error instead of silently inserting wrong amount
    - `sharedCardLast4`: last four digits of any shared card. Transactions whose payee/notes mention
      one of these get tagged `shared` in Lunch Money — check this matches your real transaction text
      (see `src/shared/tagging.ts`) and adjust the matcher if your bank formats it differently.
-   - `tradeRepublicProfiles`: one entry per operator with phone number, PIN, and Lunch Money manual account id.
+   - `tradeRepublicProfiles`: one entry per operator with Lunch Money manual account id and optional `pytrCommand`.
    - `scalableCapitalProfiles`: one entry per operator (and optionally per portfolio). Set `portfolioId` when
      `sc broker portfolios` shows more than one portfolio for that operator.
 5. `LUNCH_MONEY_API_KEY=... npm run sync`
 
-`config.json` and `.env` are gitignored — they carry phone numbers and account ids, not just secrets;
-do not commit them.
+`config.json` and `.env` are gitignored — they carry account ids, not broker secrets; do not commit them.
 
-### Trade Republic: running the sync
+### Trade Republic: pytr
 
-`trade-republic-api`'s `login()` blocks on a CLI prompt for the SMS 2FA code — plan for an **interactive** terminal
-session each time you sync. A future clean break may move Trade Republic to a local [`pytr`](https://github.com/pytr-org/pytr)
-CLI instead of in-process WebSocket login — see [#14](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/14).
+1. Install pytr per operator machine ([pytr](https://github.com/pytr-org/pytr); recommended:
+   `uvx pytr@0.4.10` or pin via `pytrCommand` in config).
+2. Run `pytr login` or `pytr login --v2` once (interactive; credentials stay in `~/.pytr`, not in this repo).
+3. Optional: set `pytrHome` when the pytr data dir is not `~/.pytr` (path must end with `/.pytr`).
+4. Run `npm run sync` with `LUNCH_MONEY_API_KEY` set. Re-run `pytr login` when pytr reports an expired session.
+
+Adopting pytr is a **clean break** from the old npm WebSocket client: use a fresh Lunch Money manual account
+(or clean up legacy rows yourself). Re-running sync is safe because `external_id` values are stable TR ids
+(`trade-republic:{id}`). **Saveback** events sync as a single row tagged `saveback`; categorise via Lunch Money
+rules (income vs excluded is up to you — this tool does not pick a category).
 
 ### Scalable Capital: Scalable CLI (`sc`)
 
@@ -158,9 +166,9 @@ manual account (or clean up legacy rows yourself). Re-running sync on the curren
 
 ## Security model
 
-- **Secrets stay local:** API keys, PINs, and phone numbers belong in gitignored `config.json` / `.env` on your laptop.
+- **Secrets stay local:** Lunch Money API keys belong in gitignored `.env` on your laptop; broker sessions live in pytr/`sc` config dirs.
 - **CI is credential-free:** workflows lint, typecheck, test, audit, and scan code — they never call Lunch Money or brokers.
-- **CLI sessions stay local:** `sc` config and session files live only on the operator machine (`SC_CONFIG_DIR`); this repo never reads or stores them.
+- **CLI sessions stay local:** pytr (`~/.pytr`) and `sc` session files live only on the operator machine; this repo never reads or stores them.
 - **Reporting vulnerabilities:** see [SECURITY.md](SECURITY.md) (private GitHub Security Advisories).
 
 ## Multi-operator usage
@@ -179,7 +187,7 @@ Each operator's `config.json` is independent; nothing is synced through GitHub.
 src/
   shared/           canonical Transaction type, config loading, shared-card tagging
   lunch-money/      thin wrapper around the official Lunch Money v2 API client
-  trade-republic/   transport + mapper for Trade Republic's timeline
+  trade-republic/   pytr CLI transport + mapper for Trade Republic timeline events
   scalable-capital/ transport + mapper for the official Scalable CLI (`sc`)
   sync.ts           orchestrator: fetch → map → tag → upsert, per configured profile
 ```
@@ -212,8 +220,7 @@ CI runs org **workflow-security** (actionlint + zizmor), **Quality** (`npm run c
 **CodeQL**, dependency review on pull requests, and semantic pull request title validation.
 Details: [docs/consuming-org-reusables.md](docs/consuming-org-reusables.md).
 
-Every module is covered by unit tests using fakes for network and WebSocket I/O — no test talks to a real broker or
-Lunch Money.
+Every module is covered by unit tests using fakes for broker CLI I/O — no test talks to a real broker or Lunch Money.
 
 ## Versioning and stability
 
@@ -226,8 +233,8 @@ This project is **pre-1.0.0** (`0.1.0` in [`package.json`](package.json)). Until
 
 ## Running locally
 
-Syncs are **manual and opt-in** on your own machine. Trade Republic needs SMS 2FA; Scalable needs periodic `sc login` on
-each operator laptop. There is no scheduled or GitHub-hosted sync workflow.
+Syncs are **manual and opt-in** on your own machine. Trade Republic needs periodic `pytr login`; Scalable needs
+periodic `sc login` on each operator laptop. There is no scheduled or GitHub-hosted sync workflow.
 
 Keep `config.json` on disk only (copy from `config.example.json`; it is gitignored). Set `LUNCH_MONEY_API_KEY` in your
 shell or a local `.env` file (also gitignored), then run `npm run sync` when you want fresh transactions.

@@ -4,7 +4,7 @@ import { tagSharedExpenses } from "./shared/tagging.js";
 import type { BrokerSource, CanonicalTransaction } from "./shared/transaction.js";
 import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-money/client.js";
 import { upsertTransactions, type TransactionsApi } from "./lunch-money/upsert.js";
-import { createTradeRepublicTransport, fetchTradeRepublicTimeline } from "./trade-republic/client.js";
+import { createDefaultPytrCliRunner, fetchTradeRepublicTimeline } from "./trade-republic/client.js";
 import { mapTradeRepublicEvents } from "./trade-republic/mapper.js";
 import {
   createDefaultScCliRunner,
@@ -81,11 +81,16 @@ export function createLiveCollectors(): BrokerCollectors {
 
 const liveCollectors: BrokerCollectors = {
   async collectTradeRepublic(profile) {
-    const transport = createTradeRepublicTransport();
-    const events = await fetchTradeRepublicTimeline(transport, {
-      phoneNumber: profile.phoneNumber,
-      pin: profile.pin,
-    });
+    const pytrConfig = {
+      ...(profile.pytrCommand ? { pytrCommand: profile.pytrCommand } : {}),
+      ...(profile.pytrHome ? { pytrHome: profile.pytrHome } : {}),
+      ...(profile.loginV2 !== undefined ? { loginV2: profile.loginV2 } : {}),
+      ...(profile.wafTokenMode ? { wafTokenMode: profile.wafTokenMode } : {}),
+      ...(profile.account ? { account: profile.account } : {}),
+      ...(profile.pytrMinVersion ? { pytrMinVersion: profile.pytrMinVersion } : {}),
+    };
+    const runner = createDefaultPytrCliRunner(pytrConfig);
+    const events = await fetchTradeRepublicTimeline(runner, pytrConfig);
     return mapTradeRepublicEvents(events);
   },
   async collectScalableCapital(profile) {
