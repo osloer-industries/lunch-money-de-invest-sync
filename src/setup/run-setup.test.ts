@@ -66,7 +66,7 @@ function fakeLmClient(): LunchMoneySetupClient {
   return {
     manualAccounts: {
       getAll: vi.fn().mockResolvedValue([{ id: 3, name: "TR operator-a" }]),
-      create: vi.fn().mockResolvedValue({ id: 99, name: "Broker (operator-a)" }),
+      create: vi.fn().mockResolvedValue({ id: 99, name: "Trade Republic (operator-a)" }),
     },
     categories: {
       getAll: vi.fn().mockResolvedValue([]),
@@ -281,13 +281,18 @@ describe("runSetup", () => {
       defaultRunSetupDeps({
         prompter: trInteractivePrompter({
           selects: ["__new__"],
-          confirms: (message) => message.includes("Create a new"),
+          confirms: (message) => message.includes("Create Lunch Money manual account"),
         }),
         runSync: vi.fn().mockResolvedValue(undefined),
         createLunchMoneyClient: () => lm,
       }),
     );
     expect(result.kind).toBe("completed");
-    expect(lm.manualAccounts.create).toHaveBeenCalled();
+    expect(lm.manualAccounts.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Trade Republic (operator-a)",
+        institution_name: "Trade Republic",
+      }),
+    );
   });
 });

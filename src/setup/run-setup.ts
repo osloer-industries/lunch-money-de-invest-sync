@@ -45,28 +45,30 @@ const NEW_MANUAL_ACCOUNT = "__new__";
 async function chooseManualAccount(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
-  label: string,
+  brokerLabel: string,
+  owner: string,
 ): Promise<number> {
+  const accountName = `${brokerLabel} (${owner})`;
   const accounts = await client.manualAccounts.getAll();
   const choice = await prompter.select(
-    `Lunch Money manual account for ${label}`,
+    `Lunch Money manual account for ${accountName}`,
     [
       ...accounts.map((account) => ({
         name: `[${account.id}] ${account.name}`,
         value: String(account.id),
       })),
-      { name: "Create new manual account", value: NEW_MANUAL_ACCOUNT },
+      { name: `Create new manual account "${accountName}"`, value: NEW_MANUAL_ACCOUNT },
     ],
   );
   if (choice === NEW_MANUAL_ACCOUNT) {
-    const create = await prompter.confirm("Create a new Lunch Money manual account?", false);
+    const create = await prompter.confirm(`Create Lunch Money manual account "${accountName}" (EUR, investment)?`, false);
     if (!create) {
       throw new Error("Manual account mapping cancelled");
     }
     const created = await client.manualAccounts.create({
-      name: `Broker (${label})`,
+      name: accountName,
       currency: "eur",
-      institution_name: "Manual",
+      institution_name: brokerLabel,
       type: "investment",
       balance: "0",
     });
@@ -165,7 +167,7 @@ async function promptOwnerAndManualAccount(
   defaultOwner: string,
 ): Promise<{ owner: string; lunchMoneyAssetId: number }> {
   const owner = (await prompter.input(`${brokerLabel} owner label`, defaultOwner)).trim() || defaultOwner;
-  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
+  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, brokerLabel, owner);
   return { owner, lunchMoneyAssetId };
 }
 
