@@ -1,3 +1,4 @@
+import path from "node:path";
 import { groupTypeObservations, type TypeGroup, type TypeObservation } from "./canonical-type.js";
 import { anonymizeTypeExample } from "./anonymize.js";
 
@@ -37,4 +38,14 @@ export function buildTypeSummaryDocument(observations: readonly TypeObservation[
 
 export function serializeTypeSummaryFromGroups(groups: readonly TypeGroup[]): string {
   return `${JSON.stringify(buildTypeSummaryFromGroups(groups), null, 2)}\n`;
+}
+
+export async function writeAnonymisedTypeSummaryToPath(
+  summaryPath: string,
+  groups: readonly TypeGroup[],
+  sink: { write(absolutePath: string, body: string): Promise<void> },
+): Promise<string> {
+  const resolved = path.resolve(process.cwd(), summaryPath);
+  await sink.write(resolved, serializeTypeSummaryFromGroups(groups));
+  return resolved;
 }

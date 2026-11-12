@@ -14,17 +14,16 @@ import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
 import { applyCategoryTagMappings } from "./shared/apply-mappings.js";
 import { groupTypeObservations } from "./shared/canonical-type.js";
 import { collectTypeObservations } from "./shared/collect-type-observations.js";
-import { serializeTypeSummaryFromGroups } from "./shared/export-type-summary.js";
+import { writeAnonymisedTypeSummaryToPath } from "./shared/export-type-summary.js";
 import {
   filterSyncConfig,
   parseSyncCliOptions,
   SYNC_HELP_TEXT,
   type SyncBroker,
 } from "./sync-options.js";
+import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { runCliModuleMain } from "./shared/cli-main.js";
-import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
-import path from "node:path";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 
 export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
@@ -230,8 +229,9 @@ export async function runSyncCli(
   if (cli.exportTypeSummary) {
     const observations = await collectTypeObservations(config);
     const groups = groupTypeObservations(observations);
-    const target = path.resolve(process.cwd(), cli.exportTypeSummary);
-    await writeFile(target, serializeTypeSummaryFromGroups(groups), "utf8");
+    const target = await writeAnonymisedTypeSummaryToPath(cli.exportTypeSummary, groups, {
+      write: (absolutePath, body) => writeFile(absolutePath, body, "utf8"),
+    });
     (deps.logger ?? console.log)(`Wrote anonymised type summary to ${target}`);
   }
   await runSync(

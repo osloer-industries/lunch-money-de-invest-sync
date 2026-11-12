@@ -5,9 +5,7 @@ import {
   fetchAllScalableCapitalTransactions,
   fetchAllScalableTransactionSummaries,
 } from "../scalable-capital/client.js";
-import type { ScalableCapitalTransaction, ScTransactionSummary } from "../scalable-capital/types.js";
 import { createDefaultPytrCliRunner, fetchTradeRepublicTimeline } from "../trade-republic/client.js";
-import type { PytrTimelineEvent } from "../trade-republic/types.js";
 
 async function runProfileCliFetch<TProfile, TConfig, TRunner, TResult>(
   profile: TProfile,
@@ -20,35 +18,11 @@ async function runProfileCliFetch<TProfile, TConfig, TRunner, TResult>(
   return fetch(runner, config);
 }
 
-export async function fetchTradeRepublicEventsForProfile(
-  profile: TradeRepublicProfile,
-): Promise<PytrTimelineEvent[]> {
-  return runProfileCliFetch(
-    profile,
-    pytrConfigFromProfile,
-    createDefaultPytrCliRunner,
-    fetchTradeRepublicTimeline,
-  );
-}
+export const fetchTradeRepublicEventsForProfile = (profile: TradeRepublicProfile) =>
+  runProfileCliFetch(profile, pytrConfigFromProfile, createDefaultPytrCliRunner, fetchTradeRepublicTimeline);
 
-export async function fetchScalableSummariesForProfile(
-  profile: ScalableCapitalProfile,
-): Promise<ScTransactionSummary[]> {
-  return runProfileCliFetch(
-    profile,
-    scConfigFromProfile,
-    createDefaultScCliRunner,
-    fetchAllScalableTransactionSummaries,
-  );
-}
+export const fetchScalableSummariesForProfile = (profile: ScalableCapitalProfile) =>
+  runProfileCliFetch(profile, scConfigFromProfile, createDefaultScCliRunner, fetchAllScalableTransactionSummaries);
 
-export async function fetchScalableCashTransactionsForProfile(
-  profile: ScalableCapitalProfile,
-): Promise<ScalableCapitalTransaction[]> {
-  return runProfileCliFetch(
-    profile,
-    scConfigFromProfile,
-    createDefaultScCliRunner,
-    fetchAllScalableCapitalTransactions,
-  );
-}
+export const fetchScalableCashTransactionsForProfile = (profile: ScalableCapitalProfile) =>
+  runProfileCliFetch(profile, scConfigFromProfile, createDefaultScCliRunner, fetchAllScalableCapitalTransactions);
