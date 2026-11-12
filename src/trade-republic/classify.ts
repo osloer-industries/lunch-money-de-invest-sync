@@ -1,4 +1,5 @@
 import type { CanonicalType, TypeObservation } from "../shared/canonical-type.js";
+import { flatMapClassified } from "../shared/flat-map-classified.js";
 import { includesAny } from "../shared/includes-any.js";
 import { tradeRepublicEventCalendarDate } from "./event-calendar-date.js";
 import { isSavebackEventType } from "./saveback.js";
@@ -54,8 +55,5 @@ export function classifyTradeRepublicEvent(event: PytrTimelineEvent): TypeObserv
 }
 
 export function observeTradeRepublicEvents(events: readonly PytrTimelineEvent[]): TypeObservation[] {
-  return events.flatMap((event) => {
-    const row = classifyTradeRepublicEvent(event);
-    return row ? [row] : [];
-  });
+  return flatMapClassified(events, classifyTradeRepublicEvent);
 }

@@ -7,43 +7,27 @@ export interface SuggestedCategory {
   readonly exclude_from_totals: boolean;
 }
 
+const INVESTMENTS_CATEGORY: SuggestedCategory = {
+  name: "Investments",
+  is_income: false,
+  exclude_from_budget: true,
+  exclude_from_totals: true,
+};
+
+const TRANSFER_CATEGORY: SuggestedCategory = {
+  name: "Transfer",
+  is_income: false,
+  exclude_from_budget: true,
+  exclude_from_totals: true,
+};
+
 export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCategory>> = {
-  buy: {
-    name: "Investments",
-    is_income: false,
-    exclude_from_budget: true,
-    exclude_from_totals: true,
-  },
-  sell: {
-    name: "Investments",
-    is_income: false,
-    exclude_from_budget: true,
-    exclude_from_totals: true,
-  },
-  "savings-plan": {
-    name: "Investments",
-    is_income: false,
-    exclude_from_budget: true,
-    exclude_from_totals: true,
-  },
-  deposit: {
-    name: "Transfer",
-    is_income: false,
-    exclude_from_budget: true,
-    exclude_from_totals: true,
-  },
-  withdrawal: {
-    name: "Transfer",
-    is_income: false,
-    exclude_from_budget: true,
-    exclude_from_totals: true,
-  },
-  transfer: {
-    name: "Transfer",
-    is_income: false,
-    exclude_from_budget: true,
-    exclude_from_totals: true,
-  },
+  buy: INVESTMENTS_CATEGORY,
+  sell: INVESTMENTS_CATEGORY,
+  "savings-plan": INVESTMENTS_CATEGORY,
+  deposit: TRANSFER_CATEGORY,
+  withdrawal: TRANSFER_CATEGORY,
+  transfer: TRANSFER_CATEGORY,
   dividend: {
     name: "Investment income",
     is_income: true,
