@@ -22,6 +22,7 @@ import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse } from "./manual-account.js";
 import { statusError, statusOk } from "./setup-status.js";
+import { forEachConfirmedRepeat } from "../shared/sequential-profiles.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
   LunchMoneySetupClient,
@@ -304,28 +305,34 @@ async function interactiveProfiles(
     throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
   }
 
-  if (brokers.includes("trade-republic")) {
+  if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
     const defaultOwner = process.env.USER?.trim() || "me";
-    let addAnother = tradeRepublicProfiles.length === 0;
-    while (addAnother) {
-      tradeRepublicProfiles.push(await addTradeRepublicProfile(prompter, client, options, defaultOwner));
-      await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
-      prompter.print(statusOk("Trade Republic profile saved to config.json"));
-      addAnother = await prompter.confirm("Add another Trade Republic profile?", false);
-    }
+    await forEachConfirmedRepeat(
+      prompter,
+      "Add another Trade Republic profile?",
+      true,
+      async () => {
+        tradeRepublicProfiles.push(await addTradeRepublicProfile(prompter, client, options, defaultOwner));
+        await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
+        prompter.print(statusOk("Trade Republic profile saved to config.json"));
+      },
+    );
   }
 
-  if (brokers.includes("scalable-capital")) {
+  if (brokers.includes("scalable-capital") && scalableCapitalProfiles.length === 0) {
     const defaultOwner = process.env.USER?.trim() || "me";
-    let addAnotherSc = scalableCapitalProfiles.length === 0;
-    while (addAnotherSc) {
-      scalableCapitalProfiles.push(
-        await addScalableCapitalProfile(prompter, client, _runners, options, defaultOwner),
-      );
-      await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
-      prompter.print(statusOk("Scalable Capital profile saved to config.json"));
-      addAnotherSc = await prompter.confirm("Add another Scalable Capital profile?", false);
-    }
+    await forEachConfirmedRepeat(
+      prompter,
+      "Add another Scalable Capital profile?",
+      true,
+      async () => {
+        scalableCapitalProfiles.push(
+          await addScalableCapitalProfile(prompter, client, _runners, options, defaultOwner),
+        );
+        await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
+        prompter.print(statusOk("Scalable Capital profile saved to config.json"));
+      },
+    );
   }
 
   return { tradeRepublicProfiles, scalableCapitalProfiles };
