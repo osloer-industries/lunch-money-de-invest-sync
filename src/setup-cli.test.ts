@@ -12,7 +12,25 @@ vi.mock("./setup/run-setup.js", () => ({
   runSetup,
 }));
 
-import { runSetupCli } from "./setup.js";
+import { assertInteractiveSetupAllowed, runSetupCli } from "./setup.js";
+
+function withStdinIsTTY<T>(value: boolean | undefined, run: () => T): T {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+  if (value === undefined) {
+    Reflect.deleteProperty(process.stdin, "isTTY");
+  } else {
+    Object.defineProperty(process.stdin, "isTTY", { value, configurable: true });
+  }
+  try {
+    return run();
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(process.stdin, "isTTY", descriptor);
+    } else {
+      Reflect.deleteProperty(process.stdin, "isTTY");
+    }
+  }
+}
 
 function stubPrompter(): SetupPrompter {
   return {
@@ -36,14 +54,28 @@ function stubFilesystem(): SetupFilesystem {
   };
 }
 
+describe("assertInteractiveSetupAllowed", () => {
+  it("allows non-interactive setup without a TTY", () => {
+    withStdinIsTTY(false, () => {
+      expect(() => assertInteractiveSetupAllowed({ help: false, nonInteractive: true } as never)).not.toThrow();
+    });
+  });
+
+  it("rejects interactive setup when stdin is not a TTY", () => {
+    withStdinIsTTY(false, () => {
+      expect(() => assertInteractiveSetupAllowed({ help: false, nonInteractive: false } as never)).toThrow(/TTY/);
+    });
+  });
+});
+
 describe("runSetupCli", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("prints setup help", async () => {
+  it("prints setup help without a TTY", async () => {
     const logger = vi.fn();
-    await runSetupCli(["--help"], { logger });
+    await withStdinIsTTY(false, () => runSetupCli(["--help"], { logger }));
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("--categories"));
     expect(runSetup).not.toHaveBeenCalled();
     expect(runCategoryMappingSetup).not.toHaveBeenCalled();
