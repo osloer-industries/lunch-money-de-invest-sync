@@ -1,3 +1,7 @@
+import {
+  normalizeIsoOffsetWithoutColon,
+  utcCalendarDateFromIsoTimestamp,
+} from "../shared/utc-calendar-date.js";
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { PytrTimelineEvent } from "./types.js";
 
@@ -25,12 +29,10 @@ export function isCashMovement(event: PytrTimelineEvent): boolean {
 }
 
 function parseUtcCalendarDate(isoTimestamp: string): string {
-  const normalized = isoTimestamp.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
-  const millis = Date.parse(normalized);
-  if (!Number.isFinite(millis)) {
-    throw new Error(`Trade Republic event timestamp is not parseable: ${isoTimestamp}`);
-  }
-  return new Date(millis).toISOString().slice(0, 10);
+  return utcCalendarDateFromIsoTimestamp(
+    normalizeIsoOffsetWithoutColon(isoTimestamp),
+    "Trade Republic event",
+  );
 }
 
 function buildNotes(event: PytrTimelineEvent): string | undefined {
