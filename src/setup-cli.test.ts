@@ -82,22 +82,24 @@ describe("runSetupCli", () => {
   });
 
   it("routes --categories to category mapping", async () => {
-    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
-    await runSetupCli(["--categories"], {
-      prompter: stubPrompter(),
-      filesystem: stubFilesystem(),
-    });
+    await withStdinIsTTY(true, () =>
+      runSetupCli(["--categories"], {
+        prompter: stubPrompter(),
+        filesystem: stubFilesystem(),
+      }),
+    );
     expect(runCategoryMappingSetup).toHaveBeenCalledOnce();
     expect(runSetup).not.toHaveBeenCalled();
   });
 
   it("runs full setup when --categories is omitted", async () => {
-    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
-    await runSetupCli([], {
-      prompter: stubPrompter(),
-      filesystem: stubFilesystem(),
-      runners: {},
-    });
+    await withStdinIsTTY(true, () =>
+      runSetupCli([], {
+        prompter: stubPrompter(),
+        filesystem: stubFilesystem(),
+        runners: {},
+      }),
+    );
     expect(runSetup).toHaveBeenCalledOnce();
     expect(runCategoryMappingSetup).not.toHaveBeenCalled();
   });
