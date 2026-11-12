@@ -83,7 +83,7 @@ function trInteractivePrompter(overrides: Partial<FakePrompterOptions> = {}): Se
     password: "lm_test_key",
     brokers: ["trade-republic"],
     inputs: ["operator-a", "[]"],
-    selects: ["3"],
+    selects: ["v2", "3"],
     ...overrides,
   });
 }
@@ -240,7 +240,7 @@ describe("runSetup", () => {
       runSetup(
         baseSetupOptions(),
         defaultRunSetupDeps({
-          prompter: trInteractivePrompter({ selects: ["999"] }),
+          prompter: trInteractivePrompter({ selects: ["v2", "999"] }),
         }),
       ),
     ).rejects.toThrow(/was not returned/);
@@ -280,8 +280,8 @@ describe("runSetup", () => {
       baseSetupOptions(),
       defaultRunSetupDeps({
         prompter: trInteractivePrompter({
-          selects: ["__new__"],
-          confirms: (message) => message.includes("Create a new"),
+          selects: ["v2", "__new__"],
+          confirms: (message) => message.includes("Create a new") || message.includes("credential"),
         }),
         runSync: vi.fn().mockResolvedValue(undefined),
         createLunchMoneyClient: () => lm,
