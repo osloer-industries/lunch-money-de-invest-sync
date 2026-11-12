@@ -7,6 +7,7 @@ import {
 } from "./broker-profile-transport.js";
 import type { PytrTimelineEvent } from "../trade-republic/types.js";
 import type { ScTransactionSummary } from "../scalable-capital/types.js";
+import { forEachProfileSequentially } from "./sequential-profiles.js";
 
 type ProfileObservationCollector<TProfile, TRaw> = {
   readonly profiles: readonly TProfile[];
@@ -18,10 +19,10 @@ async function appendProfileObservations<TProfile, TRaw>(
   target: TypeObservation[],
   collector: ProfileObservationCollector<TProfile, TRaw>,
 ): Promise<void> {
-  for (const profile of collector.profiles) {
+  await forEachProfileSequentially(collector.profiles, async (profile) => {
     const raw = await collector.fetchRaw(profile);
     target.push(...collector.observe(raw));
-  }
+  });
 }
 
 /** Read-only broker fetch for type discovery (no Lunch Money writes). */
