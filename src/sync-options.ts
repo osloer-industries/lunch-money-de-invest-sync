@@ -1,4 +1,5 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
+import { exportTypeSummaryPath } from "./shared/cli-args.js";
 
 export type SyncBroker = "trade-republic" | "scalable-capital";
 
@@ -83,10 +84,7 @@ export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
     brokers: parseBrokerValues(values.broker),
     owners: parseOwnerValues(values.account),
     dryRun: values["dry-run"] === true,
-    exportTypeSummary:
-      typeof values["export-type-summary"] === "string" && values["export-type-summary"].length > 0
-        ? values["export-type-summary"]
-        : null,
+    exportTypeSummary: exportTypeSummaryPath(values),
     help: false,
   };
 }
