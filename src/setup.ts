@@ -58,14 +58,12 @@ export async function runSetupCli(
   });
 }
 
-async function main(): Promise<void> {
-  await runSetupCli(process.argv.slice(2));
-}
-
 const entryScript = process.argv[1];
 if (entryScript !== undefined && fileURLToPath(import.meta.url) === nodePath.resolve(entryScript)) {
-  void main().catch((error: unknown) => {
+  try {
+    await runSetupCli(process.argv.slice(2));
+  } catch (error: unknown) {
     console.error(error);
     process.exitCode = 1;
-  });
+  }
 }
