@@ -78,6 +78,16 @@ function fakeLmClient(): LunchMoneySetupClient {
   } as unknown as LunchMoneySetupClient;
 }
 
+function trInteractivePrompter(overrides: Partial<FakePrompterOptions> = {}): SetupPrompter {
+  return fakePrompter({
+    password: "lm_test_key",
+    brokers: ["trade-republic"],
+    inputs: ["operator-a", "[]"],
+    selects: ["3"],
+    ...overrides,
+  });
+}
+
 function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOptions {
   return {
     nonInteractive: false,
@@ -138,13 +148,7 @@ describe("runSetup", () => {
           owner: "operator-a",
           lunchMoneyAssetId: 1,
         }),
-        {
-          prompter: fakePrompter({}),
-          filesystem: fakeFilesystem(),
-          runners: {},
-          nodeVersion: "v24.0.0",
-          createLunchMoneyClient: () => fakeLmClient(),
-        },
+        defaultRunSetupDeps(),
       ),
     ).rejects.toThrow(/LUNCH_MONEY_API_KEY/);
   });
@@ -158,14 +162,7 @@ describe("runSetup", () => {
         owner: "operator-a",
         lunchMoneyAssetId: 3,
       }),
-      {
-        prompter: fakePrompter({}),
-        filesystem: fakeFilesystem(),
-        runners: {},
-        nodeVersion: "v24.0.0",
-        runSync: vi.fn().mockResolvedValue(undefined),
-        createLunchMoneyClient: () => fakeLmClient(),
-      },
+      defaultRunSetupDeps({ runSync: vi.fn().mockResolvedValue(undefined) }),
     );
     if (result.kind !== "completed") {
       throw new Error("expected completed setup");
@@ -176,22 +173,12 @@ describe("runSetup", () => {
   });
 
   it("runs the interactive Trade Republic flow", async () => {
-    const prompt = fakePrompter({
-      password: "lm_test_key",
-      brokers: ["trade-republic"],
-      inputs: ["operator-a", "[]"],
-      selects: ["3"],
-    });
     const result = await runSetup(
       baseSetupOptions(),
-      {
-        prompter: prompt,
-        filesystem: fakeFilesystem(),
-        runners: {},
-        nodeVersion: "v24.0.0",
+      defaultRunSetupDeps({
+        prompter: trInteractivePrompter(),
         runSync: vi.fn().mockResolvedValue(undefined),
-        createLunchMoneyClient: () => fakeLmClient(),
-      },
+      }),
     );
     expect(result.kind).toBe("completed");
   });
@@ -206,13 +193,7 @@ describe("runSetup", () => {
         lunchMoneyAssetId: 4,
         portfolioId: "portfolio-operator-b",
       }),
-      {
-        prompter: fakePrompter({}),
-        filesystem: fakeFilesystem(),
-        runners: {},
-        nodeVersion: "v24.0.0",
-        createLunchMoneyClient: () => fakeLmClient(),
-      },
+      defaultRunSetupDeps(),
     );
     expect(result.kind).toBe("completed");
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -237,19 +218,16 @@ describe("runSetup", () => {
     };
     const result = await runSetup(
       baseSetupOptions(),
-      {
+      defaultRunSetupDeps({
         prompter: fakePrompter({
           password: "lm_test_key",
           brokers: ["scalable-capital"],
           inputs: ["operator-b", "[]"],
           selects: ["3", "portfolio-operator-b"],
         }),
-        filesystem: fakeFilesystem(),
         runners: { sc: scRunner },
-        nodeVersion: "v24.0.0",
         runSync: vi.fn().mockResolvedValue(undefined),
-        createLunchMoneyClient: () => fakeLmClient(),
-      },
+      }),
     );
     if (result.kind !== "completed") {
       throw new Error("expected completed setup");
@@ -261,18 +239,9 @@ describe("runSetup", () => {
     await expect(
       runSetup(
         baseSetupOptions(),
-        {
-          prompter: fakePrompter({
-            password: "lm_test_key",
-            brokers: ["trade-republic"],
-            inputs: ["operator-a", "[]"],
-            selects: ["999"],
-          }),
-          filesystem: fakeFilesystem(),
-          runners: {},
-          nodeVersion: "v24.0.0",
-          createLunchMoneyClient: () => fakeLmClient(),
-        },
+        defaultRunSetupDeps({
+          prompter: trInteractivePrompter({ selects: ["999"] }),
+        }),
       ),
     ).rejects.toThrow(/was not returned/);
   });
@@ -281,18 +250,9 @@ describe("runSetup", () => {
     await expect(
       runSetup(
         baseSetupOptions(),
-        {
-          prompter: fakePrompter({
-            password: "lm_test_key",
-            brokers: ["trade-republic"],
-            inputs: ["operator-a", '["12"]'],
-            selects: ["3"],
-          }),
-          filesystem: fakeFilesystem(),
-          runners: {},
-          nodeVersion: "v24.0.0",
-          createLunchMoneyClient: () => fakeLmClient(),
-        },
+        defaultRunSetupDeps({
+          prompter: trInteractivePrompter({ inputs: ["operator-a", '["12"]'] }),
+        }),
       ),
     ).rejects.toThrow();
   });
@@ -303,20 +263,13 @@ describe("runSetup", () => {
     await expect(
       runSetup(
         baseSetupOptions({ yes: false }),
-        {
-          prompter: fakePrompter({
-            password: "lm_test_key",
-            brokers: ["trade-republic"],
-            inputs: ["operator-a", "[]"],
-            selects: ["3"],
+        defaultRunSetupDeps({
+          prompter: trInteractivePrompter({
             confirms: (message) => !message.includes(".env"),
           }),
           filesystem: fs,
-          runners: {},
-          nodeVersion: "v24.0.0",
           runSync: vi.fn(),
-          createLunchMoneyClient: () => fakeLmClient(),
-        },
+        }),
       ),
     ).rejects.toThrow(/overwrite existing .env/);
   });
@@ -325,20 +278,14 @@ describe("runSetup", () => {
     const lm = fakeLmClient();
     const result = await runSetup(
       baseSetupOptions(),
-      {
-        prompter: fakePrompter({
-          password: "lm_test_key",
-          brokers: ["trade-republic"],
-          inputs: ["operator-a", "[]"],
+      defaultRunSetupDeps({
+        prompter: trInteractivePrompter({
           selects: ["__new__"],
           confirms: (message) => message.includes("Create a new"),
         }),
-        filesystem: fakeFilesystem(),
-        runners: {},
-        nodeVersion: "v24.0.0",
         runSync: vi.fn().mockResolvedValue(undefined),
         createLunchMoneyClient: () => lm,
-      },
+      }),
     );
     expect(result.kind).toBe("completed");
     expect(lm.manualAccounts.create).toHaveBeenCalled();
