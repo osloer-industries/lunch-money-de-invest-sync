@@ -8,7 +8,7 @@
 [![CodeQL](https://github.com/osloer-industries/lunch-money-de-invest-sync/actions/workflows/codeql.yml/badge.svg)](https://github.com/osloer-industries/lunch-money-de-invest-sync/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-24.x-339933?logo=node.js&logoColor=white)](.nvmrc)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue)](CHANGELOG.md)
 
 > **Pre-release (&lt;1.0.0).** APIs, configuration format, and behaviour may change without notice.
 > Not recommended for production or unattended automation you cannot afford to break.
@@ -63,10 +63,12 @@ Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com
 
 ## Requirements
 
-- **Node.js 24** (see [`.nvmrc`](.nvmrc) / [`.node-version`](.node-version))
-- A [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per brokerage profile
-- For Trade Republic: [pytr](https://github.com/pytr-org/pytr) installed locally per operator (`uvx pytr@0.4.10` recommended)
-- For Scalable Capital: [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) installed locally per operator
+- **Node.js 24** (see [`.nvmrc`](.nvmrc) / [`.node-version`](.node-version)); run `npm ci` after every clone
+- **macOS:** [Homebrew](https://brew.sh) for the Scalable tap (`eval "$(brew shellenv)"` so `brew` is on your PATH)
+- **[uv](https://github.com/astral-sh/uv)** (recommended) to run pytr with a supported Python (3.10+; macOS system Python 3.9 is too old)
+- [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per broker profile you sync
+- **Trade Republic:** [pytr](https://github.com/pytr-org/pytr) via `pytr`, `uvx pytr@0.4.10`, or `uv tool install pytr`
+- **Scalable Capital:** official CLI — `brew install ScalableCapital/tap/scalable-cli` (formula name `scalable-cli`, not `sc` alone) after enabling **Profile → Security → Agentic Investing** in the Scalable web app
 
 ## Quick start
 
@@ -74,13 +76,20 @@ Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com
 git clone https://github.com/osloer-industries/lunch-money-de-invest-sync.git
 cd lunch-money-de-invest-sync
 npm ci
-# Install pytr and/or sc locally, then:
-npm run setup
+npm run doctor          # prerequisites; prints fix commands for anything missing
+npm run setup           # interactive: .env (0600), config.json, broker login checks
 npm run sync -- --dry-run
 npm run sync
 ```
 
-`npm run setup` checks Node 24, verifies `sc` / `pytr` install and login (prompting for `sc login --local-read-only` or `pytr login` when needed), validates your Lunch Money API key with a read-only call, writes gitignored `.env` (mode `0600`) and `config.json`, and can run an optional dry-run sync.
+Store the Lunch Money API key in gitignored `.env` only (`npm run setup` writes it). Do not prefix `npm run sync` with `LUNCH_MONEY_API_KEY=...` on the command line (shell history).
+
+`npm run setup` runs `doctor`, validates your API key, detects `pytr` / `sc` launchers, walks broker login (including `pytr login --v2 --store_credentials` when you consent), writes incremental progress to `.env` and `config.json`, and can dry-run sync at the end.
+
+### Trade Republic privacy notes
+
+- `pytr login --store_credentials` (recommended for unattended sync) writes your **phone number and PIN in plain text** to `~/.pytr/credentials` (mode `0600`). Setup explains this and asks for explicit consent.
+- pytr also stores a session cookie file named `~/.pytr/cookies.<phone-number>.txt` (pytr behaviour). Treat `~/.pytr` as secrets; never commit it.
 
 Use `npm run sync -- --broker trade-republic --account operator-a --dry-run` to limit brokers/owners or preview inserts without POST requests.
 
@@ -136,30 +145,17 @@ Trade Republic remains an unofficial integration; Scalable uses the supported CL
 outputs are validated with `zod` at the boundary (see `types.ts` in each module) so a drifted
 field fails loudly with a clear error instead of silently inserting wrong amounts into Lunch Money.
 
-## Setup
+## Advanced / manual configuration
 
-1. `npm ci`
-2. Get a Lunch Money API key from **Settings → Developers** in the Lunch Money app.
-3. Create a **manual account** in Lunch Money per brokerage profile (e.g. `Trade Republic (operator-a)`,
-   `Scalable Capital (operator-b)`), and note each account's numeric id.
-4. Copy `config.example.json` to `config.json` and fill in:
-   - `sharedCardLast4`: last four digits of any shared card. Transactions whose payee/notes mention
-     one of these get tagged `shared` in Lunch Money — check this matches your real transaction text
-     (see `src/shared/tagging.ts`) and adjust the matcher if your bank formats it differently.
-   - `tradeRepublicProfiles`: one entry per operator with Lunch Money manual account id and optional `pytrCommand`.
-   - `scalableCapitalProfiles`: one entry per operator (and optionally per portfolio). Set `portfolioId` when
-     `sc broker portfolios` shows more than one portfolio for that operator.
-5. `LUNCH_MONEY_API_KEY=... npm run sync`
-
-`config.json` and `.env` are gitignored — they carry account ids, not broker secrets; do not commit them.
+Prefer [Quick start](#quick-start) (`npm run doctor`, then `npm run setup`). To edit files by hand, copy [`config.example.json`](config.example.json), set `LUNCH_MONEY_API_KEY` in `.env`, and run `npm run doctor` before sync. `config.json` and `.env` are gitignored — do not commit them.
 
 ### Trade Republic: pytr
 
 1. Install pytr per operator machine ([pytr](https://github.com/pytr-org/pytr); recommended:
    `uvx pytr@0.4.10` or pin via `pytrCommand` in config).
-2. Run `pytr login --v2 --store_credentials` once (interactive; credentials stay in `~/.pytr`, not in this repo).
+2. Run `pytr login --v2 --store_credentials` once (interactive; see privacy notes above; data stays in `~/.pytr`, not in this repo).
 3. Optional: set `pytrHome` when the pytr data dir is not `~/.pytr` (path must end with `/.pytr`).
-4. Run `npm run sync` with `LUNCH_MONEY_API_KEY` set. Re-run `pytr login` when pytr reports an expired session.
+4. Run `npm run sync` with `.env` present. Re-run pytr login when pytr reports an expired session.
 
 Adopting pytr is a **clean break** from the old npm WebSocket client: use a fresh Lunch Money manual account
 (or clean up legacy rows yourself). Re-running sync is safe because `external_id` values are stable TR ids
@@ -169,7 +165,7 @@ rules (income vs excluded is up to you — this tool does not pick a category).
 ### Scalable Capital: Scalable CLI (`sc`)
 
 1. Install `sc` per operator machine ([releases](https://github.com/ScalableCapital/scalable-cli/releases);
-   macOS: Homebrew tap `ScalableCapital/tap`; Linux: official tarballs require **glibc ≥ 2.38**).
+   macOS: `brew install ScalableCapital/tap/scalable-cli`; Linux: official tarballs require **glibc ≥ 2.38**).
 2. In the Scalable web app, enable **Profile → Security → Agentic Investing**.
 3. Run `sc login --local-read-only` and complete the browser device-code flow (do not automate login).
 4. If needed, run `sc broker portfolios` and either `sc broker context select --portfolio-id <ID>`
