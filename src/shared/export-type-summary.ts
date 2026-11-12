@@ -1,6 +1,4 @@
-import type { TypeGroup } from "./canonical-type.js";
-import { groupTypeObservations } from "./canonical-type.js";
-import type { TypeObservation } from "./canonical-type.js";
+import { groupTypeObservations, type TypeGroup, type TypeObservation } from "./canonical-type.js";
 import { anonymizeTypeExample } from "./anonymize.js";
 
 export interface TypeSummaryDocument {
@@ -15,33 +13,26 @@ export interface TypeSummaryDocument {
   }>;
 }
 
-export function buildTypeSummaryDocument(observations: readonly TypeObservation[]): TypeSummaryDocument {
-  const groups = groupTypeObservations(observations);
-  return {
-    version: 1,
-    generatedAt: new Date().toISOString(),
-    groups: groups.map((group) => ({
-      canonicalType: group.canonicalType,
-      brokerSubtype: group.brokerSubtype,
-      source: group.source,
-      count: group.count,
-      example: anonymizeTypeExample(group.sample),
-    })),
-  };
+function typeGroupsToSummaryRows(groups: readonly TypeGroup[]) {
+  return groups.map((group) => ({
+    canonicalType: group.canonicalType,
+    brokerSubtype: group.brokerSubtype,
+    source: group.source,
+    count: group.count,
+    example: anonymizeTypeExample(group.sample),
+  }));
 }
 
 export function buildTypeSummaryFromGroups(groups: readonly TypeGroup[]): TypeSummaryDocument {
   return {
     version: 1,
     generatedAt: new Date().toISOString(),
-    groups: groups.map((group) => ({
-      canonicalType: group.canonicalType,
-      brokerSubtype: group.brokerSubtype,
-      source: group.source,
-      count: group.count,
-      example: anonymizeTypeExample(group.sample),
-    })),
+    groups: typeGroupsToSummaryRows(groups),
   };
+}
+
+export function buildTypeSummaryDocument(observations: readonly TypeObservation[]): TypeSummaryDocument {
+  return buildTypeSummaryFromGroups(groupTypeObservations(observations));
 }
 
 export function serializeTypeSummaryFromGroups(groups: readonly TypeGroup[]): string {

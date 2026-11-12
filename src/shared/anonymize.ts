@@ -35,7 +35,7 @@ export function redactSensitiveText(text: string): string {
     .replace(IBAN_PATTERN, "[iban]")
     .replace(UUID_PATTERN, "[id]")
     .replace(/\b\d{10,}\b/g, "[id]")
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]");
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]");
 }
 
 export interface AnonymizedTypeExample {

@@ -1,4 +1,5 @@
 import type { CanonicalType, TypeObservation } from "../shared/canonical-type.js";
+import { includesAny } from "../shared/includes-any.js";
 import { utcCalendarDateFromIsoTimestamp } from "../shared/utc-calendar-date.js";
 import type { ScTransactionSummary } from "./types.js";
 
@@ -11,10 +12,6 @@ const CASH_KEYWORDS: ReadonlyArray<{ readonly needles: readonly string[]; readon
   { needles: ["fee", "gebühr", "commission"], type: "fee" },
   { needles: ["tax", "steuer", "soli"], type: "tax" },
 ];
-
-function includesAny(text: string, needles: readonly string[]): boolean {
-  return needles.some((needle) => text.includes(needle));
-}
 
 function classifyDescription(description: string, summaryType: string): CanonicalType {
   const text = description.toLowerCase();

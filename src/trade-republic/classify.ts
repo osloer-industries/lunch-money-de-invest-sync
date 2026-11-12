@@ -1,4 +1,5 @@
 import type { CanonicalType, TypeObservation } from "../shared/canonical-type.js";
+import { includesAny } from "../shared/includes-any.js";
 import {
   normalizeIsoOffsetWithoutColon,
   utcCalendarDateFromIsoTimestamp,
@@ -29,10 +30,6 @@ const EVENT_TYPE_RULES: ReadonlyArray<{ readonly needles: readonly string[]; rea
   { needles: ["FEE", "COMMISSION"], type: "fee" },
   { needles: ["TAX", "KAPITALERTRAG", "SOLI"], type: "tax" },
 ];
-
-function includesAny(text: string, needles: readonly string[]): boolean {
-  return needles.some((needle) => text.includes(needle));
-}
 
 function classifyEventType(eventType: string | null | undefined): CanonicalType {
   if (isSavebackEventType(eventType)) {

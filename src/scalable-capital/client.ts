@@ -165,17 +165,17 @@ function parseTransactionsData(envelope: ReturnType<typeof parseEnvelope>): {
   return { transactions, summaries, cursor: dataParsed.data.result.cursor };
 }
 
-/** Fetches every raw transaction summary row (all summary types) for type reporting. */
-export async function fetchAllScalableTransactionSummaries(
+async function paginateBrokerTransactionPages<T>(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
-): Promise<ScTransactionSummary[]> {
-  const all: ScTransactionSummary[] = [];
+  pick: (page: Awaited<ReturnType<typeof runTransactionsPage>>) => readonly T[],
+): Promise<T[]> {
+  const all: T[] = [];
   let cursor: string | undefined;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const result = await runTransactionsPage(runner, config, cursor);
-    all.push(...result.summaries);
+    all.push(...pick(result));
     if (!result.cursor) {
       return all;
     }
@@ -185,24 +185,20 @@ export async function fetchAllScalableTransactionSummaries(
   throw new Error(`Stopped after ${MAX_PAGES} pages — check for a cursor loop in the Scalable CLI response`);
 }
 
+/** Fetches every raw transaction summary row (all summary types) for type reporting. */
+export async function fetchAllScalableTransactionSummaries(
+  runner: ScCliRunner,
+  config: ScalableCapitalCliConfig,
+): Promise<ScTransactionSummary[]> {
+  return paginateBrokerTransactionPages(runner, config, (page) => page.summaries);
+}
+
 /** Fetches every page of broker cash transactions via `sc broker transactions --json`. */
 export async function fetchAllScalableCapitalTransactions(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
 ): Promise<ScalableCapitalTransaction[]> {
-  const all: ScalableCapitalTransaction[] = [];
-  let cursor: string | undefined;
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const result = await runTransactionsPage(runner, config, cursor);
-    all.push(...result.transactions);
-    if (!result.cursor) {
-      return all;
-    }
-    cursor = result.cursor;
-  }
-
-  throw new Error(`Stopped after ${MAX_PAGES} pages — check for a cursor loop in the Scalable CLI response`);
+  return paginateBrokerTransactionPages(runner, config, (page) => page.transactions);
 }
 
 export function createDefaultScCliRunner(config: ScalableCapitalCliConfig): ScCliRunner {
