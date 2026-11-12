@@ -1,25 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 
-const fetchTradeRepublicTimeline = vi.hoisted(() => vi.fn());
-const createDefaultPytrCliRunner = vi.hoisted(() => vi.fn());
-const fetchAllScalableTransactionSummaries = vi.hoisted(() => vi.fn());
-const createDefaultScCliRunner = vi.hoisted(() => vi.fn());
+const fetchTradeRepublicEventsForProfile = vi.hoisted(() => vi.fn());
+const fetchScalableSummariesForProfile = vi.hoisted(() => vi.fn());
 
-vi.mock("../trade-republic/client.js", () => ({
-  fetchTradeRepublicTimeline,
-  createDefaultPytrCliRunner,
+vi.mock("../trade-republic/profile-transport.js", () => ({
+  fetchTradeRepublicEventsForProfile,
 }));
 
-vi.mock("../scalable-capital/client.js", () => ({
-  fetchAllScalableTransactionSummaries,
-  createDefaultScCliRunner,
+vi.mock("../scalable-capital/profile-transport.js", () => ({
+  fetchScalableSummariesForProfile,
 }));
 
 import { collectTypeObservations } from "./collect-type-observations.js";
 
 describe("collectTypeObservations", () => {
   it("merges observations from configured brokers", async () => {
-    fetchTradeRepublicTimeline.mockResolvedValue([
+    fetchTradeRepublicEventsForProfile.mockResolvedValue([
       {
         id: "evt-1",
         timestamp: "2026-01-01T00:00:00Z",
@@ -28,7 +24,7 @@ describe("collectTypeObservations", () => {
         eventType: "TRADE_BUY",
       },
     ]);
-    fetchAllScalableTransactionSummaries.mockResolvedValue([
+    fetchScalableSummariesForProfile.mockResolvedValue([
       {
         id: "tx-1",
         summary_type: "BrokerCashTransactionSummary",

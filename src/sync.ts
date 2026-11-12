@@ -5,17 +5,13 @@ import type { BrokerSource, CanonicalTransaction } from "./shared/transaction.js
 import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-money/client.js";
 import { previewUpsert } from "./lunch-money/preview.js";
 import { upsertTransactions, type TransactionsApi } from "./lunch-money/upsert.js";
-import { createDefaultPytrCliRunner, fetchTradeRepublicTimeline } from "./trade-republic/client.js";
 import { mapTradeRepublicEvents } from "./trade-republic/mapper.js";
-import {
-  createDefaultScCliRunner,
-  fetchAllScalableCapitalTransactions,
-} from "./scalable-capital/client.js";
+import { fetchTradeRepublicEventsForProfile } from "./trade-republic/profile-transport.js";
+import { fetchScalableCashTransactionsForProfile } from "./scalable-capital/profile-transport.js";
 import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
 import { applyCategoryTagMappings } from "./shared/apply-mappings.js";
 import { groupTypeObservations } from "./shared/canonical-type.js";
 import { collectTypeObservations } from "./shared/collect-type-observations.js";
-import { pytrConfigFromProfile, scConfigFromProfile } from "./shared/profile-cli-config.js";
 import { serializeTypeSummaryFromGroups } from "./shared/export-type-summary.js";
 import {
   filterSyncConfig,
@@ -188,15 +184,11 @@ export function createLiveCollectors(): BrokerCollectors {
 
 const liveCollectors: BrokerCollectors = {
   async collectTradeRepublic(profile) {
-    const pytrConfig = pytrConfigFromProfile(profile);
-    const runner = createDefaultPytrCliRunner(pytrConfig);
-    const events = await fetchTradeRepublicTimeline(runner, pytrConfig);
+    const events = await fetchTradeRepublicEventsForProfile(profile);
     return mapTradeRepublicEvents(events);
   },
   async collectScalableCapital(profile) {
-    const cliConfig = scConfigFromProfile(profile);
-    const runner = createDefaultScCliRunner(cliConfig);
-    const transactions = await fetchAllScalableCapitalTransactions(runner, cliConfig);
+    const transactions = await fetchScalableCashTransactionsForProfile(profile);
     return mapScalableCapitalTransactions(transactions);
   },
 };
