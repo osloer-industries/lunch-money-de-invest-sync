@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { fetchAllScalableCapitalTransactions } from "./client.js";
-import type { ScCliRunner } from "./sc-cli.js";
+import type { ScCliRunner } from "../shared/subprocess-cli.js";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 

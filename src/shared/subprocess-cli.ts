@@ -66,6 +66,57 @@ export function createArgvPrefixCliRunner(
   };
 }
 
+/** Resolve the first pytr argv token to an absolute path so spawn does not consult PATH (Sonar S4036). */
+export function resolvePytrExecutable(command: readonly string[]): readonly string[] {
+  if (command.length === 0) {
+    throw new Error("pytrCommand must include at least one argv element (executable or launcher)");
+  }
+  const executable = command[0];
+  const rest = command.slice(1);
+  if (!executable) {
+    throw new Error("pytrCommand must include at least one argv element (executable or launcher)");
+  }
+  const resolved = resolveExecutableInTrustedDirs(
+    executable,
+    `pytr launcher "${executable}" was not found under trusted install paths — set pytrCommand to an absolute path (for example from \`which ${executable}\`)`,
+  );
+  return [resolved, ...rest];
+}
+
+/** Resolve `sc` to an absolute path so spawn does not consult PATH (Sonar S4036). */
+export function resolveScExecutable(binaryPath: string): string {
+  return resolveExecutableInTrustedDirs(
+    binaryPath,
+    `Scalable CLI executable "${binaryPath}" was not found under trusted install paths — set scBinaryPath to the absolute path from \`which sc\``,
+  );
+}
+
+export type PytrCliRunResult = SubprocessRunResult;
+export type ScCliRunResult = SubprocessRunResult;
+
+/** Injectable wrapper around a pytr argv prefix (e.g. `pytr` or `uvx` + `pytr`). */
+export interface PytrCliRunner {
+  run(argv: readonly string[], env?: Readonly<Record<string, string>>): Promise<PytrCliRunResult>;
+}
+
+/** Injectable wrapper around `sc` for unit tests. */
+export interface ScCliRunner {
+  run(argv: readonly string[], env?: Readonly<Record<string, string>>): Promise<ScCliRunResult>;
+}
+
+export function createPytrCliRunner(command: readonly string[]): PytrCliRunner {
+  return createArgvPrefixCliRunner(command, resolvePytrExecutable, runSubprocess);
+}
+
+export function createScCliRunner(binaryPath = "sc"): ScCliRunner {
+  return {
+    run(argv, extraEnv) {
+      const executable = resolveScExecutable(binaryPath);
+      return runSubprocess(executable, argv, extraEnv);
+    },
+  };
+}
+
 export function runSubprocess(
   executable: string,
   argv: readonly string[],

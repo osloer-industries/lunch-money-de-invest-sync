@@ -1,4 +1,3 @@
-import { utcCalendarDateFromIsoTimestamp } from "../shared/utc-calendar-date.js";
 import { toCurrency, type CanonicalTransaction } from "../shared/transaction.js";
 import type { ScalableCapitalTransaction } from "./types.js";
 
@@ -12,7 +11,11 @@ const CASH_TRANSACTION_TYPE = "BrokerCashTransaction";
 
 /** Lunch Money `date` uses the UTC calendar day of the broker event timestamp. */
 export function utcCalendarDateFromEventTimestamp(eventTimestamp: string): string {
-  return utcCalendarDateFromIsoTimestamp(eventTimestamp, "Scalable Capital event");
+  const parsedMs = Date.parse(eventTimestamp);
+  if (!Number.isFinite(parsedMs)) {
+    throw new TypeError(`Scalable Capital event timestamp is not valid ISO-8601: ${eventTimestamp}`);
+  }
+  return new Date(parsedMs).toISOString().slice(0, 10);
 }
 
 export function isCashMovement(transaction: ScalableCapitalTransaction): boolean {
