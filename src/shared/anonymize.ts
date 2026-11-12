@@ -25,6 +25,35 @@ export function bucketAmount(amount: number): string {
   return `${sign}-1000-plus`;
 }
 
+function isEmailToken(token: string): boolean {
+  if (token.length === 0) {
+    return false;
+  }
+  let at = -1;
+  for (let index = 0; index < token.length; index += 1) {
+    const char = token[index];
+    if (char === undefined) {
+      return false;
+    }
+    if (char === "@") {
+      if (at >= 0) {
+        return false;
+      }
+      at = index;
+      continue;
+    }
+    if (char <= " " || char === "\u007f") {
+      return false;
+    }
+  }
+  if (at <= 0) {
+    return false;
+  }
+  const domain = token.slice(at + 1);
+  const dot = domain.indexOf(".");
+  return dot > 0 && dot < domain.length - 1;
+}
+
 export function monthOnlyDate(isoDate: string): string {
   if (isoDate.length >= 7 && /^\d{4}-\d{2}/.test(isoDate)) {
     return isoDate.slice(0, 7);
@@ -43,7 +72,7 @@ export function redactSensitiveText(text: string): string {
     .replace(UUID_PATTERN, "[id]")
     .replace(/\b\d{10,}\b/g, "[id]")
     .split(/(\s+)/)
-    .map((part) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part) ? "[email]" : part))
+    .map((part) => (isEmailToken(part) ? "[email]" : part))
     .join("");
 }
 

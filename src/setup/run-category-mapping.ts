@@ -134,18 +134,23 @@ async function configureMapsForTypes(
   categoryMap: SyncConfig["categoryMap"],
   tagMap: SyncConfig["tagMap"],
 ): Promise<void> {
-  for (const canonicalType of [...seenTypes].toSorted((left, right) => left.localeCompare(right))) {
-    canonicalTypeSchema.parse(canonicalType);
-    if (await prompter.confirm(`Map Lunch Money category for type "${canonicalType}"?`, true)) {
-      const categoryId = await pickCategoryId(prompter, client, canonicalType);
-      if (categoryId !== undefined) {
-        categoryMap[canonicalType] = categoryId;
-      }
-    }
-    if (await prompter.confirm(`Configure tags for type "${canonicalType}"?`, true)) {
-      tagMap[canonicalType] = await pickTags(prompter, canonicalType);
-    }
-  }
+  const types = [...seenTypes].toSorted((left, right) => left.localeCompare(right));
+  await types.reduce(
+    (chain, canonicalType) =>
+      chain.then(async () => {
+        canonicalTypeSchema.parse(canonicalType);
+        if (await prompter.confirm(`Map Lunch Money category for type "${canonicalType}"?`, true)) {
+          const categoryId = await pickCategoryId(prompter, client, canonicalType);
+          if (categoryId !== undefined) {
+            categoryMap[canonicalType] = categoryId;
+          }
+        }
+        if (await prompter.confirm(`Configure tags for type "${canonicalType}"?`, true)) {
+          tagMap[canonicalType] = await pickTags(prompter, canonicalType);
+        }
+      }),
+    Promise.resolve(),
+  );
 }
 
 export async function runCategoryMappingSetup(
