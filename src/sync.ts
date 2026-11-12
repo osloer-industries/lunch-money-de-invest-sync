@@ -6,8 +6,10 @@ import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-mon
 import { previewUpsert } from "./lunch-money/preview.js";
 import { upsertTransactions, type TransactionsApi } from "./lunch-money/upsert.js";
 import { mapTradeRepublicEvents } from "./trade-republic/mapper.js";
-import { fetchTradeRepublicEventsForProfile } from "./trade-republic/profile-transport.js";
-import { fetchScalableCashTransactionsForProfile } from "./scalable-capital/profile-transport.js";
+import {
+  fetchScalableCashTransactionsForProfile,
+  fetchTradeRepublicEventsForProfile,
+} from "./shared/broker-profile-transport.js";
 import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
 import { applyCategoryTagMappings } from "./shared/apply-mappings.js";
 import { groupTypeObservations } from "./shared/canonical-type.js";

@@ -1,8 +1,10 @@
-import { fetchScalableSummariesForProfile } from "../scalable-capital/profile-transport.js";
 import { observeScalableSummaries } from "../scalable-capital/classify.js";
 import type { SyncConfig } from "./config.js";
 import type { TypeObservation } from "./canonical-type.js";
-import { fetchTradeRepublicEventsForProfile } from "../trade-republic/profile-transport.js";
+import {
+  fetchScalableSummariesForProfile,
+  fetchTradeRepublicEventsForProfile,
+} from "./broker-profile-transport.js";
 import { observeTradeRepublicEvents } from "../trade-republic/classify.js";
 
 /** Read-only broker fetch for type discovery (no Lunch Money writes). */

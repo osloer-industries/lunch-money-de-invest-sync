@@ -3,11 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 const fetchTradeRepublicEventsForProfile = vi.hoisted(() => vi.fn());
 const fetchScalableSummariesForProfile = vi.hoisted(() => vi.fn());
 
-vi.mock("../trade-republic/profile-transport.js", () => ({
+vi.mock("./broker-profile-transport.js", () => ({
   fetchTradeRepublicEventsForProfile,
-}));
-
-vi.mock("../scalable-capital/profile-transport.js", () => ({
   fetchScalableSummariesForProfile,
 }));
 
