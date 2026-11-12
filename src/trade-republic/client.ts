@@ -33,17 +33,61 @@ function pytrHomeEnv(pytrHome: string | undefined): Record<string, string> | und
   return { HOME: path.dirname(pytrHome) };
 }
 
+function parseDigits(
+  input: string,
+  start: number,
+): { readonly value: number; readonly end: number } | null {
+  if (start >= input.length) {
+    return null;
+  }
+  const first = input.charCodeAt(start);
+  if (first < 48 || first > 57) {
+    return null;
+  }
+  let end = start;
+  let value = 0;
+  while (end < input.length) {
+    const code = input.charCodeAt(end);
+    if (code < 48 || code > 57) {
+      break;
+    }
+    value = value * 10 + (code - 48);
+    end += 1;
+  }
+  return { value, end };
+}
+
+function tryParseSemverAt(input: string, start: number): [number, number, number] | null {
+  const major = parseDigits(input, start);
+  if (!major || input[major.end] !== ".") {
+    return null;
+  }
+  const minor = parseDigits(input, major.end + 1);
+  if (!minor || input[minor.end] !== ".") {
+    return null;
+  }
+  const patch = parseDigits(input, minor.end + 1);
+  if (!patch) {
+    return null;
+  }
+  if (patch.end < input.length) {
+    const next = input.charCodeAt(patch.end);
+    if (next >= 48 && next <= 57) {
+      return null;
+    }
+  }
+  return [major.value, minor.value, patch.value];
+}
+
 function parseSemver(version: string): [number, number, number] | null {
   const trimmed = version.trim();
-  const start = trimmed.search(/\d+\.\d+\.\d+/);
-  if (start < 0) {
-    return null;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const parsed = tryParseSemverAt(trimmed, index);
+    if (parsed) {
+      return parsed;
+    }
   }
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(trimmed.slice(start));
-  if (!match) {
-    return null;
-  }
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return null;
 }
 
 function assertMinVersion(actual: string, required: string): void {
