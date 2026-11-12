@@ -16,7 +16,11 @@ import { runSetupCli } from "./setup.js";
 
 function stubPrompter(): SetupPrompter {
   return {
-    question: vi.fn(),
+    password: vi.fn(),
+    input: vi.fn(),
+    select: vi.fn(),
+    checkbox: vi.fn(),
+    search: vi.fn(),
     confirm: vi.fn(),
     print: vi.fn(),
     waitForEnter: vi.fn(),
@@ -46,6 +50,7 @@ describe("runSetupCli", () => {
   });
 
   it("routes --categories to category mapping", async () => {
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
     await runSetupCli(["--categories"], {
       prompter: stubPrompter(),
       filesystem: stubFilesystem(),
@@ -55,6 +60,7 @@ describe("runSetupCli", () => {
   });
 
   it("runs full setup when --categories is omitted", async () => {
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
     await runSetupCli([], {
       prompter: stubPrompter(),
       filesystem: stubFilesystem(),
