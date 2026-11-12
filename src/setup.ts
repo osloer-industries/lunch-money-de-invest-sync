@@ -1,5 +1,7 @@
 import { chmod, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import { createPytrCliRunner, createScCliRunner } from "./shared/subprocess-cli.js";
 import { createInquirerPrompter } from "./setup/inquirer-prompter.js";
 import { parseSetupCliOptions, SETUP_HELP_TEXT, type SetupCliOptions } from "./setup/setup-options.js";
@@ -60,8 +62,9 @@ async function main(): Promise<void> {
   await runSetupCli(process.argv.slice(2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error: unknown) => {
+const entryScript = process.argv[1];
+if (entryScript !== undefined && fileURLToPath(import.meta.url) === nodePath.resolve(entryScript)) {
+  void main().catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
   });

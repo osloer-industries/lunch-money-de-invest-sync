@@ -34,6 +34,14 @@ export interface RunSyncSelection {
   readonly dryRun: boolean;
 }
 
+function createDefaultRunSyncSelection(): RunSyncSelection {
+  return {
+    includeBrokers: new Set<SyncBroker>(["trade-republic", "scalable-capital"]),
+    owners: [],
+    dryRun: false,
+  };
+}
+
 function uniqueTags(transactions: readonly CanonicalTransaction[]): string[] {
   return [...new Set(transactions.flatMap((tx) => tx.tags ?? []))];
 }
@@ -73,11 +81,7 @@ export async function runSync(
   client: LunchMoneySyncClient,
   collectors: BrokerCollectors,
   logger: SyncLogger = console.log,
-  selection: RunSyncSelection = {
-    includeBrokers: new Set<SyncBroker>(["trade-republic", "scalable-capital"]),
-    owners: [],
-    dryRun: false,
-  },
+  selection: RunSyncSelection = createDefaultRunSyncSelection(),
 ): Promise<void> {
   const tradeProfiles =
     selection.includeBrokers.has("trade-republic")

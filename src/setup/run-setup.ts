@@ -230,7 +230,7 @@ export async function runSetup(
         typeof client.manualAccounts?.getAll !== "function" ||
         typeof client.manualAccounts?.create !== "function"
       ) {
-        throw new Error("Lunch Money client is missing manualAccounts API");
+        throw new TypeError("Lunch Money client is missing manualAccounts API");
       }
       return client;
     });

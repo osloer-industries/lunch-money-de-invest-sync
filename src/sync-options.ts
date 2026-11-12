@@ -24,6 +24,43 @@ function isSyncBroker(value: string): value is SyncBroker {
   return value === "trade-republic" || value === "scalable-capital";
 }
 
+function parseArgsOrThrow(argv: readonly string[]): ReturnType<typeof parseArgs> {
+  try {
+    return parseArgs({ ...PARSE_CONFIG, args: [...argv] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid sync arguments: ${message}`, { cause: error });
+  }
+}
+
+function parseBrokerValues(raw: unknown): SyncBroker[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const brokers: SyncBroker[] = [];
+  for (const value of raw) {
+    if (typeof value !== "string" || !isSyncBroker(value)) {
+      throw new Error(`Unknown broker "${String(value)}" — use trade-republic or scalable-capital`);
+    }
+    brokers.push(value);
+  }
+  return brokers;
+}
+
+function parseOwnerValues(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const owners: string[] = [];
+  for (const value of raw) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new Error("--account requires a non-empty owner label");
+    }
+    owners.push(value.trim());
+  }
+  return owners;
+}
+
 export const SYNC_HELP_TEXT = `Usage: npm run sync -- [options]
 
   --broker <trade-republic|scalable-capital>  Limit sync to a broker (repeatable)
@@ -34,46 +71,14 @@ export const SYNC_HELP_TEXT = `Usage: npm run sync -- [options]
 Unknown flags or invalid broker names exit with an error. When no filters are set, all configured profiles run.`;
 
 export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
-  let parsed: ReturnType<typeof parseArgs>;
-  try {
-    parsed = parseArgs({ ...PARSE_CONFIG, args: [...argv] });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid sync arguments: ${message}`, { cause: error });
-  }
-
-  const values = parsed.values as Record<string, unknown>;
+  const values = parseArgsOrThrow(argv).values as Record<string, unknown>;
   if (values.help === true) {
     return { brokers: [], owners: [], dryRun: false, help: true };
   }
 
-  const rawBrokers = values.broker;
-  const brokers: SyncBroker[] = [];
-  if (Array.isArray(rawBrokers)) {
-    for (const value of rawBrokers) {
-      if (typeof value !== "string" || !isSyncBroker(value)) {
-        throw new Error(
-          `Unknown broker "${String(value)}" — use trade-republic or scalable-capital`,
-        );
-      }
-      brokers.push(value);
-    }
-  }
-
-  const rawOwners = values.account;
-  const owners: string[] = [];
-  if (Array.isArray(rawOwners)) {
-    for (const value of rawOwners) {
-      if (typeof value !== "string" || value.trim().length === 0) {
-        throw new Error("--account requires a non-empty owner label");
-      }
-      owners.push(value.trim());
-    }
-  }
-
   return {
-    brokers,
-    owners,
+    brokers: parseBrokerValues(values.broker),
+    owners: parseOwnerValues(values.account),
     dryRun: values["dry-run"] === true,
     help: false,
   };
