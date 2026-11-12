@@ -10,6 +10,7 @@ describe("anonymize", () => {
   it("redacts sensitive tokens", () => {
     expect(redactSensitiveText("Transfer to DE89370400440532013000")).toContain("[iban]");
     expect(redactSensitiveText("ISIN DE0005933931")).toContain("[isin]");
+    expect(redactSensitiveText("notify operator@example.com today")).toContain("[email]");
   });
 
   it("handles invalid dates in monthOnlyDate", () => {
