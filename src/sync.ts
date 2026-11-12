@@ -46,16 +46,20 @@ function uniqueTags(transactions: readonly CanonicalTransaction[]): string[] {
   return [...new Set(transactions.flatMap((tx) => tx.tags ?? []))];
 }
 
-async function syncOneAccount(
-  owner: string,
-  source: BrokerSource,
-  rawTransactions: CanonicalTransaction[],
-  lunchMoneyAssetId: number,
-  sharedCardLast4: readonly string[],
-  client: LunchMoneySyncClient,
-  logger: SyncLogger,
-  dryRun: boolean,
-): Promise<void> {
+interface SyncOneAccountParams {
+  readonly owner: string;
+  readonly source: BrokerSource;
+  readonly rawTransactions: readonly CanonicalTransaction[];
+  readonly lunchMoneyAssetId: number;
+  readonly sharedCardLast4: readonly string[];
+  readonly client: LunchMoneySyncClient;
+  readonly logger: SyncLogger;
+  readonly dryRun: boolean;
+}
+
+async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
+  const { owner, source, rawTransactions, lunchMoneyAssetId, sharedCardLast4, client, logger, dryRun } =
+    params;
   const transactions = tagSharedExpenses(rawTransactions, sharedCardLast4);
   if (dryRun) {
     const preview = await previewUpsert(client, transactions, lunchMoneyAssetId);
@@ -102,30 +106,30 @@ export async function runSync(
 
   for (const profile of tradeProfiles) {
     const transactions = await collectors.collectTradeRepublic(profile);
-    await syncOneAccount(
-      profile.owner,
-      "trade-republic",
-      transactions,
-      profile.lunchMoneyAssetId,
-      config.sharedCardLast4,
+    await syncOneAccount({
+      owner: profile.owner,
+      source: "trade-republic",
+      rawTransactions: transactions,
+      lunchMoneyAssetId: profile.lunchMoneyAssetId,
+      sharedCardLast4: config.sharedCardLast4,
       client,
       logger,
-      selection.dryRun,
-    );
+      dryRun: selection.dryRun,
+    });
   }
 
   for (const profile of scalableProfiles) {
     const transactions = await collectors.collectScalableCapital(profile);
-    await syncOneAccount(
-      profile.owner,
-      "scalable-capital",
-      transactions,
-      profile.lunchMoneyAssetId,
-      config.sharedCardLast4,
+    await syncOneAccount({
+      owner: profile.owner,
+      source: "scalable-capital",
+      rawTransactions: transactions,
+      lunchMoneyAssetId: profile.lunchMoneyAssetId,
+      sharedCardLast4: config.sharedCardLast4,
       client,
       logger,
-      selection.dryRun,
-    );
+      dryRun: selection.dryRun,
+    });
   }
 }
 
