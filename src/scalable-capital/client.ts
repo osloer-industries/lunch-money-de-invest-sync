@@ -186,5 +186,5 @@ export async function fetchAllScalableCapitalTransactions(
 }
 
 export function createDefaultScCliRunner(config: ScalableCapitalCliConfig): ScCliRunner {
-  return createScCliRunner(config.scBinaryPath ?? "sc");
+  return createScCliRunner(config.scBinaryPath ?? "sc", config.cliSubprocessTimeoutMs);
 }

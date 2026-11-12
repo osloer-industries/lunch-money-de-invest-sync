@@ -272,5 +272,5 @@ export async function fetchTradeRepublicTimeline(
 
 export function createDefaultPytrCliRunner(config: TradeRepublicPytrConfig): PytrCliRunner {
   const command = config.pytrCommand?.length ? config.pytrCommand : (["pytr"] as const);
-  return createPytrCliRunner(command);
+  return createPytrCliRunner(command, config.cliSubprocessTimeoutMs);
 }
