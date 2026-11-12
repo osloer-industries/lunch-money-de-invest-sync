@@ -1,0 +1,39 @@
+[
+  {
+    "id": "evt-card-1",
+    "timestamp": "2026-07-01T12:00:00.000+0000",
+    "title": "Test Merchant",
+    "subtitle": "Card payment",
+    "amount": {
+      "currency": "EUR",
+      "value": -12.5,
+      "fractionDigits": 2
+    },
+    "eventType": "CARD_TRANSACTION",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "836369c0-f623-4ad0-a259-8bd3807a6be6",
+    "timestamp": "2025-04-02T13:54:23.344+0000",
+    "title": "Example ETF (Acc)",
+    "subtitle": "Saveback",
+    "amount": {
+      "currency": "EUR",
+      "value": -15.0,
+      "fractionDigits": 2
+    },
+    "eventType": "benefits_saveback_execution",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-info-1",
+    "timestamp": "2024-09-13T14:58:01.873+0000",
+    "title": "Address",
+    "subtitle": "Changed",
+    "eventType": "ADDRESS_CHANGED",
+    "hidden": false,
+    "deleted": false
+  }
+]

@@ -29,6 +29,25 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Use strict TypeScript, ECMAScript modules, and explicit `.js` extensions for
   relative imports compiled with NodeNext.
 
+## Trade Republic (pytr)
+
+- Transport lives in `src/trade-republic/client.ts` and **must** spawn the operator's
+  [pytr](https://github.com/pytr-org/pytr) CLI (`export_transactions` → `all_events.json`),
+  never an in-process WebSocket client.
+- Validate pytr artifacts with `zod` at the boundary; keep the mapper pure.
+- Preserve dedup ids as `trade-republic:{id}` using the TR event id from pytr output.
+- Set each transaction **date** to the **UTC calendar day** of the ISO `timestamp`.
+- Credentials and sessions are **local-only** under the operator's pytr home (`~/.pytr` by default,
+  overridable per profile via `pytrHome`). Operators run `pytr login` locally. Never commit pytr
+  session files or operator config with secrets. CI uses fixtures and mocked `PytrCliRunner` only.
+- Optional profile fields: `pytrCommand` (argv prefix, e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`),
+  `pytrHome`, `loginV2`, `wafTokenMode`, `account`, `pytrMinVersion`.
+- **Saveback:** emit one Lunch Money row per saveback timeline event (tag `saveback`), not separate
+  deposit and buy rows. Do not hardcode an income/excluded category — document Lunch Money rule options.
+- **Clean break:** remove `trade-republic-api`, `phoneNumber`, and `pin` from config with no migration
+  shims. Assume a fresh Lunch Money manual account when adopting pytr; `external_id` format
+  `trade-republic:{id}` is for idempotent re-sync only.
+
 ## Scalable Capital (scalable-cli)
 
 - Transport lives in `src/scalable-capital/client.ts` and **must** call the official `sc`
@@ -50,7 +69,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 
 ## Tests and security
 
-- Unit tests use fakes for network and WebSocket I/O; no live broker or Lunch Money calls.
+- Unit tests use fakes for broker CLI and API I/O; no live broker or Lunch Money calls.
 - Keep branch, function, line, and statement coverage at or above 80%.
 - Do not log API keys, PINs, or full broker payloads in production paths.
 

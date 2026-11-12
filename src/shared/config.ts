@@ -3,12 +3,26 @@ import path from "node:path";
 import parseJson from "secure-json-parse";
 import { z } from "zod";
 
-const tradeRepublicProfileSchema = z.object({
-  owner: z.string().min(1),
-  phoneNumber: z.string().min(1),
-  pin: z.string().min(1),
-  lunchMoneyAssetId: z.number().int().positive(),
-});
+const tradeRepublicWafTokenModeSchema = z.enum(["default", "playwright", "awswaf", "no-waf"]);
+
+const tradeRepublicProfileSchema = z
+  .object({
+    owner: z.string().min(1),
+    lunchMoneyAssetId: z.number().int().positive(),
+    /** argv prefix to launch pytr (e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`). */
+    pytrCommand: z.array(z.string().min(1)).min(1).optional(),
+    /** Absolute path to the operator pytr home directory (`…/.pytr`). Overrides process HOME for the child only. */
+    pytrHome: z
+      .string()
+      .min(1)
+      .refine((value) => path.isAbsolute(value), { message: "pytrHome must be an absolute path" })
+      .optional(),
+    loginV2: z.boolean().optional(),
+    wafTokenMode: tradeRepublicWafTokenModeSchema.optional(),
+    account: z.string().min(1).optional(),
+    pytrMinVersion: z.string().min(1).optional(),
+  })
+  .strict();
 
 const scalableCapitalProfileSchema = z
   .object({

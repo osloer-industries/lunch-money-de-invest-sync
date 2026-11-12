@@ -3,15 +3,14 @@
   "tradeRepublicProfiles": [
     {
       "owner": "operator-a",
-      "phoneNumber": "+490000000001",
-      "pin": "0000",
-      "lunchMoneyAssetId": 1
+      "lunchMoneyAssetId": 1,
+      "pytrCommand": ["pytr"]
     },
     {
       "owner": "operator-b",
-      "phoneNumber": "+490000000002",
-      "pin": "0001",
-      "lunchMoneyAssetId": 2
+      "lunchMoneyAssetId": 2,
+      "pytrCommand": ["uvx", "pytr@0.4.10"],
+      "pytrMinVersion": "0.4.10"
     }
   ],
   "scalableCapitalProfiles": [

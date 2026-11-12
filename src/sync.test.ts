@@ -5,10 +5,17 @@ import { createLiveCollectors, runSync, type BrokerCollectors, type LunchMoneySy
 
 const fetchAllScalableCapitalTransactions = vi.hoisted(() => vi.fn());
 const createDefaultScCliRunner = vi.hoisted(() => vi.fn(() => ({})));
+const fetchTradeRepublicTimeline = vi.hoisted(() => vi.fn());
+const createDefaultPytrCliRunner = vi.hoisted(() => vi.fn(() => ({})));
 
 vi.mock("./scalable-capital/client.js", () => ({
   fetchAllScalableCapitalTransactions,
   createDefaultScCliRunner,
+}));
+
+vi.mock("./trade-republic/client.js", () => ({
+  fetchTradeRepublicTimeline,
+  createDefaultPytrCliRunner,
 }));
 
 function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction {
@@ -53,14 +60,7 @@ describe("runSync", () => {
       collectScalableCapital: vi.fn(),
     };
     const config = baseConfig({
-      tradeRepublicProfiles: [
-        {
-          owner: "operator-a",
-          phoneNumber: "+49123",
-          pin: "1234",
-          lunchMoneyAssetId: 1,
-        },
-      ],
+      tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
     });
 
     await runSync(config, client, collectors, () => {});
@@ -102,7 +102,7 @@ describe("runSync", () => {
     };
     const config = baseConfig({
       tradeRepublicProfiles: [
-        { owner: "operator-a", phoneNumber: "+1", pin: "1", lunchMoneyAssetId: 9 },
+        { owner: "operator-a", lunchMoneyAssetId: 9 },
       ],
     });
     const logger = vi.fn();
@@ -110,6 +110,47 @@ describe("runSync", () => {
     await runSync(config, client, collectors, logger);
 
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:operator-a"));
+  });
+
+  it("wires the live trade republic collector to the pytr CLI transport", async () => {
+    fetchTradeRepublicTimeline.mockResolvedValue([
+      {
+        id: "evt-1",
+        timestamp: "2026-07-01T12:00:00.000+0000",
+        title: "Merchant",
+        amount: { currency: "EUR", value: -5 },
+      },
+    ]);
+    const collectors = createLiveCollectors();
+    const mapped = await collectors.collectTradeRepublic({ owner: "operator-a", lunchMoneyAssetId: 1 });
+    expect(mapped[0]?.externalId).toBe("trade-republic:evt-1");
+    expect(fetchTradeRepublicTimeline).toHaveBeenCalled();
+  });
+
+  it("forwards optional pytr profile fields to the transport", async () => {
+    fetchTradeRepublicTimeline.mockResolvedValue([]);
+    const collectors = createLiveCollectors();
+    await collectors.collectTradeRepublic({
+      owner: "operator-a",
+      lunchMoneyAssetId: 1,
+      pytrCommand: ["uvx", "pytr"],
+      pytrHome: "/data/operator-a/.pytr",
+      loginV2: true,
+      wafTokenMode: "playwright",
+      account: "acct-1",
+      pytrMinVersion: "0.4.10",
+    });
+    expect(fetchTradeRepublicTimeline).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        pytrCommand: ["uvx", "pytr"],
+        pytrHome: "/data/operator-a/.pytr",
+        loginV2: true,
+        wafTokenMode: "playwright",
+        account: "acct-1",
+        pytrMinVersion: "0.4.10",
+      }),
+    );
   });
 
   it("wires the live scalable collector to the CLI transport", async () => {
