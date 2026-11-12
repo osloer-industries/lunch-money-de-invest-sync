@@ -136,18 +136,21 @@ export async function runSync(
     dryRun: selection.dryRun,
   };
 
-  await syncProfilesForBroker(
-    tradeProfiles,
-    "trade-republic",
-    collectors.collectTradeRepublic,
-    syncContext,
-  );
-  await syncProfilesForBroker(
-    scalableProfiles,
-    "scalable-capital",
-    collectors.collectScalableCapital,
-    syncContext,
-  );
+  const brokerSyncJobs = [
+    {
+      profiles: tradeProfiles,
+      source: "trade-republic" as const,
+      collect: collectors.collectTradeRepublic,
+    },
+    {
+      profiles: scalableProfiles,
+      source: "scalable-capital" as const,
+      collect: collectors.collectScalableCapital,
+    },
+  ] as const;
+  await forEachProfileSequentially(brokerSyncJobs, async (job) => {
+    await syncProfilesForBroker(job.profiles, job.source, job.collect, syncContext);
+  });
 }
 
 async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetId: number }>(
