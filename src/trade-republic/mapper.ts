@@ -1,6 +1,6 @@
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { PytrTimelineEvent } from "./types.js";
-import { classifyTradeRepublicEvent } from "./classify.js";
+import { classifyTradeRepublicEvent } from "../shared/broker-type-classification.js";
 import { tradeRepublicEventCalendarDate } from "./event-calendar-date.js";
 import { isSavebackEventType } from "./saveback.js";
 

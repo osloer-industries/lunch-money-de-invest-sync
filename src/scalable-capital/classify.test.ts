@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyScalableSummary } from "./classify.js";
+import { classifyScalableSummary } from "../shared/broker-type-classification.js";
 
 describe("classifyScalableSummary", () => {
   it("classifies security buys and cash deposits", () => {

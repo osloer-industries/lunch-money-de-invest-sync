@@ -1,11 +1,10 @@
-import { observeScalableSummaries } from "../scalable-capital/classify.js";
+import { observeScalableSummaries, observeTradeRepublicEvents } from "./broker-type-classification.js";
 import type { SyncConfig } from "./config.js";
 import type { TypeObservation } from "./canonical-type.js";
 import {
   fetchScalableSummariesForProfile,
   fetchTradeRepublicEventsForProfile,
 } from "./broker-profile-transport.js";
-import { observeTradeRepublicEvents } from "../trade-republic/classify.js";
 import type { PytrTimelineEvent } from "../trade-republic/types.js";
 import type { ScTransactionSummary } from "../scalable-capital/types.js";
 
