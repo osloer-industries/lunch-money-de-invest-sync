@@ -97,6 +97,8 @@ function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOpt
     scalableCapital: false,
     owner: null,
     lunchMoneyAssetId: null,
+    tradeRepublicAssetId: null,
+    scalableAssetId: null,
     portfolioId: null,
     categories: false,
     exportTypeSummary: null,

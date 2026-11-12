@@ -13,6 +13,8 @@ const options: SetupCliOptions = {
   scalableCapital: false,
   owner: null,
   lunchMoneyAssetId: null,
+  tradeRepublicAssetId: null,
+  scalableAssetId: null,
   portfolioId: null,
   categories: true,
   exportTypeSummary: null,
