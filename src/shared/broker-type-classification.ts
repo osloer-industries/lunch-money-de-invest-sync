@@ -20,26 +20,18 @@ const TR_EVENT_TYPE_RULES: readonly KeywordTypeRule[] = [
   { needles: ["TAX", "KAPITALERTRAG", "SOLI"], type: "tax" },
 ];
 
-function typeObservation(
-  canonicalType: CanonicalType,
-  brokerSubtype: string,
-  source: TypeObservation["source"],
-  amount: number,
-  currency: string,
-  payee: string,
-  date: string,
-  notes?: string,
-): TypeObservation {
-  return {
-    canonicalType,
-    brokerSubtype,
-    source,
-    amount,
-    currency,
-    payee,
-    date,
-    ...(notes ? { notes } : {}),
-  };
+function typeObservation(row: {
+  canonicalType: CanonicalType;
+  brokerSubtype: string;
+  source: TypeObservation["source"];
+  amount: number;
+  currency: string;
+  payee: string;
+  date: string;
+  notes?: string;
+}): TypeObservation {
+  const { notes, ...rest } = row;
+  return notes ? { ...rest, notes } : rest;
 }
 
 const SC_CASH_KEYWORDS: readonly KeywordTypeRule[] = [
@@ -71,16 +63,16 @@ export function classifyTradeRepublicEvent(event: PytrTimelineEvent): TypeObserv
   const eventType = event.eventType?.trim() || "unknown";
   const canonicalType = classifyTradeRepublicEventType(eventType);
   const subtitle = event.subtitle?.trim();
-  return typeObservation(
+  return typeObservation({
     canonicalType,
-    eventType,
-    "trade-republic",
+    brokerSubtype: eventType,
+    source: "trade-republic",
     amount,
-    event.amount?.currency?.toLowerCase() ?? "eur",
-    event.title,
-    tradeRepublicEventCalendarDate(event.timestamp),
-    subtitle && canonicalType !== "saveback" ? subtitle : undefined,
-  );
+    currency: event.amount?.currency?.toLowerCase() ?? "eur",
+    payee: event.title,
+    date: tradeRepublicEventCalendarDate(event.timestamp),
+    ...(subtitle && canonicalType !== "saveback" ? { notes: subtitle } : {}),
+  });
 }
 
 export function observeTradeRepublicEvents(events: readonly PytrTimelineEvent[]): TypeObservation[] {
@@ -127,15 +119,15 @@ export function classifyScalableSummary(item: ScTransactionSummary): TypeObserva
     return null;
   }
   const canonicalType = classifyScalableDescription(description, summaryType);
-  return typeObservation(
+  return typeObservation({
     canonicalType,
-    summaryType,
-    "scalable-capital",
+    brokerSubtype: summaryType,
+    source: "scalable-capital",
     amount,
-    (item.currency?.trim() || "EUR").toLowerCase(),
-    description || "Scalable Capital",
-    utcCalendarDateFromIsoTimestamp(item.last_event_datetime, "Scalable Capital event"),
-  );
+    currency: (item.currency?.trim() || "EUR").toLowerCase(),
+    payee: description || "Scalable Capital",
+    date: utcCalendarDateFromIsoTimestamp(item.last_event_datetime, "Scalable Capital event"),
+  });
 }
 
 export function observeScalableSummaries(items: readonly ScTransactionSummary[]): TypeObservation[] {

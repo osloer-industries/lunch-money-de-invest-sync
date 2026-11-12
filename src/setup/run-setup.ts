@@ -1,7 +1,7 @@
 import path from "node:path";
 import { z } from "zod";
-import { parseStoredMaps } from "../shared/config-maps.js";
-import { loadConfig, parseJsonText } from "../shared/config.js";
+import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
+import { loadConfig } from "../shared/config.js";
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import { createLunchMoneyClient } from "../lunch-money/client.js";
 import { runSyncCli } from "../sync.js";
@@ -133,18 +133,11 @@ async function writeConfigFile(
       throw new Error("Refusing to overwrite existing config.json");
     }
   }
-  let categoryMap: SyncConfig["categoryMap"] = {};
-  let tagMap: SyncConfig["tagMap"] = {};
-  if (filesystem.exists(configPath)) {
-    const existing = filesystem.readText(configPath);
-    if (existing) {
-      const stored = parseStoredMaps(parseJsonText(existing));
-      categoryMap = stored.categoryMap;
-      tagMap = stored.tagMap;
-    }
-  }
-  const json = `${JSON.stringify({ ...config, categoryMap, tagMap }, null, 2)}\n`;
-  await filesystem.writeText(configPath, json);
+  const parsed = filesystem.exists(configPath) ? readConfigJsonObject(filesystem, configPath) : {};
+  const stored = storedMapsFromConfigObject(parsed);
+  const categoryMap = stored.categoryMap;
+  const tagMap = stored.tagMap;
+  await writeConfigJsonObject(filesystem, configPath, { ...config, categoryMap, tagMap });
   return { path: configPath, categoryMap, tagMap };
 }
 
