@@ -1,5 +1,6 @@
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "./shared/config.js";
-import { readConfigFromDisk } from "./shared/config.js";
+import { readConfigFromDisk, readConfigFromDiskForCli } from "./shared/config.js";
+import { loadDotenvFromCwd } from "./shared/load-dotenv.js";
 import { tagSharedExpenses } from "./shared/tagging.js";
 import type { BrokerSource, CanonicalTransaction } from "./shared/transaction.js";
 import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-money/client.js";
@@ -230,7 +231,7 @@ export async function runSyncCli(
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return;
   }
-  const config = (deps.readConfig ?? readConfigFromDisk)();
+  const config = (deps.readConfig ?? readConfigFromDiskForCli)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
   if (cli.exportTypeSummary) {
     const observations = await collectTypeObservations(config);
@@ -250,5 +251,12 @@ export async function runSyncCli(
 }
 
 runCliModuleMain(async () => {
-  await runSyncCli(process.argv.slice(2));
-});
+  loadDotenvFromCwd();
+  try {
+    await runSyncCli(process.argv.slice(2));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exitCode = 1;
+  }
+}, import.meta.url);

@@ -3,6 +3,7 @@ import path from "node:path";
 import parseJson from "secure-json-parse";
 import { z } from "zod";
 import { categoryMapSchema, tagMapSchema } from "./canonical-type.js";
+import { formatConfigLoadError } from "./config-cli-errors.js";
 
 const tradeRepublicWafTokenModeSchema = z.enum(["default", "playwright", "awswaf", "no-waf"]);
 
@@ -123,4 +124,17 @@ export function readConfigFromDisk(configPath = CONFIG_BASENAME): SyncConfig {
     tagMap: fromFile.tagMap,
     lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
   });
+}
+
+/** Like `readConfigFromDisk`, but surfaces a friendly message when the API key is absent. */
+export function readConfigFromDiskForCli(configPath = CONFIG_BASENAME): SyncConfig {
+  try {
+    return readConfigFromDisk(configPath);
+  } catch (error) {
+    const friendly = formatConfigLoadError(error);
+    if (friendly) {
+      throw new Error(friendly, { cause: error });
+    }
+    throw error;
+  }
 }
