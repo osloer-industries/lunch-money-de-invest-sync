@@ -9,6 +9,7 @@ import { writeAnonymisedTypeSummaryToPath } from "../shared/export-type-summary.
 import { anonymizeTypeExample } from "../shared/anonymize.js";
 import { readConfigFromDisk, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
+import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
 import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
 import type { SetupCliOptions } from "./setup-options.js";
@@ -69,14 +70,10 @@ async function pickCategoryId(
     });
     return created.id;
   }
-  const id = Number(choice);
-  if (!Number.isInteger(id) || id <= 0) {
-    throw new Error("Category id must be a positive integer");
-  }
-  if (!categories.some((category) => category.id === id)) {
-    throw new Error(`Category id ${id} was not returned by the Lunch Money API`);
-  }
-  return id;
+  return parsePromptPositiveInt(choice, {
+    entityLabel: "Category id",
+    exists: (id) => categories.some((category) => category.id === id),
+  });
 }
 
 async function pickTags(prompter: SetupPrompter, canonicalType: CanonicalType): Promise<string[]> {

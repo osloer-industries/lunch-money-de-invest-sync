@@ -8,6 +8,28 @@ import {
 } from "@inquirer/prompts";
 import type { PromptChoice, SetupPrompter } from "./types.js";
 
+type InquirerChoice = { name: string; value: string; description?: string };
+
+function choiceValueFromPick<T extends string>(
+  picked: string,
+  choices: readonly PromptChoice<T>[],
+): T {
+  for (const choice of choices) {
+    if (choice.value === picked) {
+      return choice.value;
+    }
+  }
+  throw new Error("Invalid prompt selection");
+}
+
+function mapPromptChoices(choices: readonly PromptChoice[]): InquirerChoice[] {
+  return choices.map((choice) =>
+    choice.description === undefined
+      ? { name: choice.name, value: choice.value }
+      : { name: choice.name, value: choice.value, description: choice.description },
+  );
+}
+
 function filterChoices(choices: readonly PromptChoice[], term: string | undefined): PromptChoice[] {
   const q = (term ?? "").trim().toLowerCase();
   if (q.length === 0) {
@@ -26,25 +48,12 @@ export function createInquirerPrompter(): SetupPrompter {
     async input(message, defaultValue) {
       return inputPrompt({ message, default: defaultValue });
     },
-    async select(message, choices) {
-      return selectPrompt({
-        message,
-        choices: choices.map((choice) =>
-          choice.description === undefined
-            ? { name: choice.name, value: choice.value }
-            : { name: choice.name, value: choice.value, description: choice.description },
-        ),
-      });
+    async select<T extends string>(message: string, choices: readonly PromptChoice<T>[]) {
+      const picked = await selectPrompt({ message, choices: mapPromptChoices(choices) });
+      return choiceValueFromPick(picked, choices);
     },
     async checkbox(message, choices) {
-      return checkboxPrompt({
-        message,
-        choices: choices.map((choice) =>
-          choice.description === undefined
-            ? { name: choice.name, value: choice.value }
-            : { name: choice.name, value: choice.value, description: choice.description },
-        ),
-      });
+      return checkboxPrompt({ message, choices: mapPromptChoices(choices) });
     },
     async search(message, choices) {
       return searchPrompt({
