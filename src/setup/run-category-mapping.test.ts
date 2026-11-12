@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SyncConfig } from "../shared/config.js";
 import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import type { SetupCliOptions } from "./setup-options.js";
-import type { SetupFilesystem, SetupPrompter } from "./types.js";
+import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
 import type { TypeObservation } from "../shared/canonical-type.js";
 
 const options: SetupCliOptions = {
@@ -61,6 +62,43 @@ function prompter(config: {
 
 const SKIP_PLACEHOLDER = "__skip__";
 
+function readConfigFixture(overrides: Partial<SyncConfig> = {}): SyncConfig {
+  return {
+    lunchMoneyApiKey: "k",
+    sharedCardLast4: [],
+    tradeRepublicProfiles: [],
+    scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
+    categoryMap: {},
+    tagMap: {},
+    ...overrides,
+  };
+}
+
+function stubCategoryClient(
+  getAll: ReturnType<typeof vi.fn>,
+  create: ReturnType<typeof vi.fn> = vi.fn(),
+): CategoryMappingSetupClient {
+  return {
+    categories: {
+      getAll,
+      create,
+      get: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+  } as CategoryMappingSetupClient;
+}
+
+const buyObservation: TypeObservation = {
+  canonicalType: "buy",
+  brokerSubtype: "BrokerSecurityTransactionSummary",
+  source: "scalable-capital",
+  amount: -50,
+  currency: "eur",
+  payee: "Buy",
+  date: "2026-01-01",
+};
+
 describe("runCategoryMappingSetup", () => {
   it("rejects non-interactive mode", async () => {
     await expect(
@@ -69,8 +107,7 @@ describe("runCategoryMappingSetup", () => {
         {
           prompter: prompter({}),
           filesystem: fakeCategoryFilesystem(),
-          createClient: () =>
-            ({ categories: { getAll: vi.fn(), create: vi.fn(), get: vi.fn(), update: vi.fn(), delete: vi.fn() } }) as import("./types.js").CategoryMappingSetupClient,
+          createClient: () => stubCategoryClient(vi.fn()),
         },
       ),
     ).rejects.toThrow(/interactive/);
@@ -94,25 +131,8 @@ describe("runCategoryMappingSetup", () => {
         checkboxes: [[]],
       }),
       filesystem,
-      readConfig: () => ({
-        lunchMoneyApiKey: "k",
-        sharedCardLast4: [],
-        tradeRepublicProfiles: [],
-        scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
-        categoryMap: {},
-        tagMap: {},
-      }),
-      createClient: () =>
-        ({
-          categories: {
-            getAll: vi.fn().mockResolvedValue([{ id: 99, name: "Transfer" }]),
-            create: vi.fn(),
-            get: vi.fn(),
-            update: vi.fn(),
-            delete: vi.fn(),
-          },
-          manualAccounts: { getAll: vi.fn(), create: vi.fn() },
-        }) as import("./types.js").CategoryMappingSetupClient,
+      readConfig: () => readConfigFixture(),
+      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([{ id: 99, name: "Transfer" }])),
       collectObservations: async () => observations,
     });
     expect(result.categoryMap.deposit).toBe(99);
@@ -128,41 +148,10 @@ describe("runCategoryMappingSetup", () => {
         confirms: [true, true, true, false],
         searches: ["__new__"],
       }),
-      filesystem: {
-        exists: () => false,
-        readText: () => null,
-        writeText: async () => {},
-        chmod: async () => {},
-      },
-      readConfig: () => ({
-        lunchMoneyApiKey: "k",
-        sharedCardLast4: [],
-        tradeRepublicProfiles: [],
-        scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
-        categoryMap: {},
-        tagMap: {},
-      }),
-      createClient: () =>
-        ({
-          categories: {
-            getAll: vi.fn().mockResolvedValue([]),
-            create,
-            get: vi.fn(),
-            update: vi.fn(),
-            delete: vi.fn(),
-          },
-        }) as import("./types.js").CategoryMappingSetupClient,
-      collectObservations: async () => [
-        {
-          canonicalType: "buy",
-          brokerSubtype: "BrokerSecurityTransactionSummary",
-          source: "scalable-capital",
-          amount: -50,
-          currency: "eur",
-          payee: "Buy",
-          date: "2026-01-01",
-        },
-      ],
+      filesystem: fakeCategoryFilesystem(),
+      readConfig: () => readConfigFixture(),
+      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
+      collectObservations: async () => [buyObservation],
     });
     expect(create).toHaveBeenCalled();
     expect(result.categoryMap.buy).toBe(42);
@@ -175,18 +164,8 @@ describe("runCategoryMappingSetup", () => {
       runCategoryMappingSetup(options, {
         prompter: prompter({}),
         filesystem: fakeCategoryFilesystem(),
-        readConfig: () => ({
-          lunchMoneyApiKey: "k",
-          sharedCardLast4: [],
-          tradeRepublicProfiles: [],
-          scalableCapitalProfiles: [],
-          categoryMap: {},
-          tagMap: {},
-        }),
-        createClient: () =>
-          ({
-            categories: { getAll: vi.fn(), create: vi.fn(), get: vi.fn(), update: vi.fn(), delete: vi.fn() },
-          }) as import("./types.js").CategoryMappingSetupClient,
+        readConfig: () => readConfigFixture({ scalableCapitalProfiles: [] }),
+        createClient: () => stubCategoryClient(vi.fn()),
       }),
     ).rejects.toThrow(/no broker profiles/);
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -198,18 +177,9 @@ describe("runCategoryMappingSetup", () => {
       runCategoryMappingSetup(options, {
         prompter: prompter({}),
         filesystem: fakeCategoryFilesystem(),
-        readConfig: () => ({
-          lunchMoneyApiKey: "k",
-          sharedCardLast4: [],
-          tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
-          scalableCapitalProfiles: [],
-          categoryMap: {},
-          tagMap: {},
-        }),
-        createClient: () =>
-          ({
-            categories: { getAll: vi.fn(), create: vi.fn(), get: vi.fn(), update: vi.fn(), delete: vi.fn() },
-          }) as import("./types.js").CategoryMappingSetupClient,
+        readConfig: () =>
+          readConfigFixture({ scalableCapitalProfiles: [], tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+        createClient: () => stubCategoryClient(vi.fn()),
         collectObservations: async () => [],
       }),
     ).rejects.toThrow(/No classifiable/);
@@ -226,24 +196,9 @@ describe("runCategoryMappingSetup", () => {
           checkboxes: [["tag-one"]],
         }),
         filesystem: fakeCategoryFilesystem(),
-        readConfig: () => ({
-          lunchMoneyApiKey: "k",
-          sharedCardLast4: [],
-          tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
-          scalableCapitalProfiles: [],
-          categoryMap: {},
-          tagMap: {},
-        }),
-        createClient: () =>
-          ({
-            categories: {
-              getAll: vi.fn().mockResolvedValue([{ id: 1, name: "Transfer" }]),
-              create: vi.fn(),
-              get: vi.fn(),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-          }) as import("./types.js").CategoryMappingSetupClient,
+        readConfig: () =>
+          readConfigFixture({ scalableCapitalProfiles: [], tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+        createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([{ id: 1, name: "Transfer" }])),
         collectObservations: async () => observations,
       }),
     ).rejects.toThrow(/positive integer/);
@@ -268,24 +223,8 @@ describe("runCategoryMappingSetup", () => {
         },
         chmod: async () => {},
       },
-      readConfig: () => ({
-        lunchMoneyApiKey: "k",
-        sharedCardLast4: [],
-        tradeRepublicProfiles: [],
-        scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
-        categoryMap: { sell: 5 },
-        tagMap: { sell: ["invest"] },
-      }),
-      createClient: () =>
-        ({
-          categories: {
-            getAll: vi.fn().mockResolvedValue([{ id: 99, name: "Transfer" }]),
-            create: vi.fn(),
-            get: vi.fn(),
-            update: vi.fn(),
-            delete: vi.fn(),
-          },
-        }) as import("./types.js").CategoryMappingSetupClient,
+      readConfig: () => readConfigFixture({ categoryMap: { sell: 5 }, tagMap: { sell: ["invest"] } }),
+      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([{ id: 99, name: "Transfer" }])),
       collectObservations: async () => observations,
     });
     expect(result.categoryMap.deposit).toBe(99);
@@ -309,24 +248,9 @@ describe("runCategoryMappingSetup", () => {
           },
           chmod: async () => {},
         },
-        readConfig: () => ({
-          lunchMoneyApiKey: "k",
-          sharedCardLast4: [],
-          tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
-          scalableCapitalProfiles: [],
-          categoryMap: {},
-          tagMap: {},
-        }),
-        createClient: () =>
-          ({
-            categories: {
-              getAll: vi.fn().mockResolvedValue([]),
-              create: vi.fn(),
-              get: vi.fn(),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-          }) as import("./types.js").CategoryMappingSetupClient,
+        readConfig: () =>
+          readConfigFixture({ scalableCapitalProfiles: [], tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+        createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
         collectObservations: async () => observations,
       },
     );
