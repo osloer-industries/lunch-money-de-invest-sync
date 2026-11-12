@@ -4,7 +4,14 @@ const UUID_PATTERN =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 
 export function bucketAmount(amount: number): string {
-  const sign = amount < 0 ? "outflow" : amount > 0 ? "inflow" : "zero";
+  let sign: string;
+  if (amount < 0) {
+    sign = "outflow";
+  } else if (amount > 0) {
+    sign = "inflow";
+  } else {
+    sign = "zero";
+  }
   const magnitude = Math.abs(amount);
   if (magnitude < 10) {
     return `${sign}-under-10`;
@@ -35,7 +42,9 @@ export function redactSensitiveText(text: string): string {
     .replace(IBAN_PATTERN, "[iban]")
     .replace(UUID_PATTERN, "[id]")
     .replace(/\b\d{10,}\b/g, "[id]")
-    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]");
+    .split(/(\s+)/)
+    .map((part) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part) ? "[email]" : part))
+    .join("");
 }
 
 export interface AnonymizedTypeExample {

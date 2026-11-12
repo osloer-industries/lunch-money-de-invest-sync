@@ -1,4 +1,5 @@
 import type { CanonicalType, TypeObservation } from "../shared/canonical-type.js";
+import { flatMapClassified } from "../shared/flat-map-classified.js";
 import { includesAny } from "../shared/includes-any.js";
 import { utcCalendarDateFromIsoTimestamp } from "../shared/utc-calendar-date.js";
 import type { ScTransactionSummary } from "./types.js";
@@ -69,8 +70,5 @@ export function classifyScalableSummary(item: ScTransactionSummary): TypeObserva
 }
 
 export function observeScalableSummaries(items: readonly ScTransactionSummary[]): TypeObservation[] {
-  return items.flatMap((item) => {
-    const row = classifyScalableSummary(item);
-    return row ? [row] : [];
-  });
+  return flatMapClassified(items, classifyScalableSummary);
 }

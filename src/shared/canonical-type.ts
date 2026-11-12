@@ -21,17 +21,21 @@ function isCanonicalTypeKey(key: string): boolean {
   return canonicalTypeSchema.safeParse(key).success;
 }
 
-export const categoryMapSchema = z
-  .record(z.string(), z.number().int().positive())
-  .refine((record) => Object.keys(record).every(isCanonicalTypeKey), {
-    message: "categoryMap keys must be canonical broker types",
+function schemaWithCanonicalKeys<V extends z.ZodType>(valueSchema: V, message: string) {
+  return z.record(z.string(), valueSchema).refine((record) => Object.keys(record).every(isCanonicalTypeKey), {
+    message,
   });
+}
 
-export const tagMapSchema = z
-  .record(z.string(), z.array(z.string().min(1)))
-  .refine((record) => Object.keys(record).every(isCanonicalTypeKey), {
-    message: "tagMap keys must be canonical broker types",
-  });
+export const categoryMapSchema = schemaWithCanonicalKeys(
+  z.number().int().positive(),
+  "categoryMap keys must be canonical broker types",
+);
+
+export const tagMapSchema = schemaWithCanonicalKeys(
+  z.array(z.string().min(1)),
+  "tagMap keys must be canonical broker types",
+);
 
 export interface TypeObservation {
   readonly canonicalType: CanonicalType;
