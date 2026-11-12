@@ -1,4 +1,5 @@
 import type { Currency } from "@lunch-money/lunch-money-js-v2";
+import type { CanonicalType } from "./canonical-type.js";
 
 /** Canonical shape every broker mapper normalizes into before it reaches Lunch Money. */
 export interface CanonicalTransaction {
@@ -12,6 +13,10 @@ export interface CanonicalTransaction {
   payee: string;
   notes?: string;
   tags?: string[];
+  /** Canonical broker type for category/tag mapping (issue #16). */
+  canonicalType: CanonicalType;
+  /** Lunch Money category id from config.categoryMap, applied at sync time. */
+  categoryId?: number;
   source: BrokerSource;
 }
 

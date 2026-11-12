@@ -117,7 +117,11 @@ async function runTransactionsPage(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
   cursor?: string,
-): Promise<{ transactions: ScalableCapitalTransaction[]; cursor: string | null | undefined }> {
+): Promise<{
+  transactions: ScalableCapitalTransaction[];
+  summaries: ScTransactionSummary[];
+  cursor: string | null | undefined;
+}> {
   const argv = buildTransactionsArgv(config, cursor);
   const env = childEnv(config);
   let run: Awaited<ReturnType<ScCliRunner["run"]>>;
@@ -145,6 +149,7 @@ async function runTransactionsPage(
 
 function parseTransactionsData(envelope: ReturnType<typeof parseEnvelope>): {
   transactions: ScalableCapitalTransaction[];
+  summaries: ScTransactionSummary[];
   cursor: string | null | undefined;
 } {
   const dataParsed = scBrokerTransactionsDataSchema.safeParse(envelope.data);
@@ -153,10 +158,31 @@ function parseTransactionsData(envelope: ReturnType<typeof parseEnvelope>): {
       `Scalable CLI broker.transactions data didn't match the expected shape: ${dataParsed.error.message}`,
     );
   }
-  const transactions = dataParsed.data.result.items
+  const summaries = dataParsed.data.result.items;
+  const transactions = summaries
     .map((item) => normalizeCashItem(item))
     .filter((tx): tx is ScalableCapitalTransaction => tx !== null);
-  return { transactions, cursor: dataParsed.data.result.cursor };
+  return { transactions, summaries, cursor: dataParsed.data.result.cursor };
+}
+
+/** Fetches every raw transaction summary row (all summary types) for type reporting. */
+export async function fetchAllScalableTransactionSummaries(
+  runner: ScCliRunner,
+  config: ScalableCapitalCliConfig,
+): Promise<ScTransactionSummary[]> {
+  const all: ScTransactionSummary[] = [];
+  let cursor: string | undefined;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const result = await runTransactionsPage(runner, config, cursor);
+    all.push(...result.summaries);
+    if (!result.cursor) {
+      return all;
+    }
+    cursor = result.cursor;
+  }
+
+  throw new Error(`Stopped after ${MAX_PAGES} pages — check for a cursor loop in the Scalable CLI response`);
 }
 
 /** Fetches every page of broker cash transactions via `sc broker transactions --json`. */

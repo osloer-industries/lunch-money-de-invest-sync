@@ -9,6 +9,7 @@ function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction
     amount: -10,
     currency: "eur",
     payee: "Supermarket",
+    canonicalType: "unknown",
     source: "trade-republic",
     ...overrides,
   };

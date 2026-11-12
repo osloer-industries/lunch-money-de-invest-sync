@@ -10,6 +10,7 @@ function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction
     amount: -12.5,
     currency: "eur",
     payee: "Some Payee",
+    canonicalType: "unknown",
     source: "trade-republic",
     ...overrides,
   };
@@ -27,10 +28,16 @@ describe("toInsertPayload", () => {
         notes: null,
         manual_account_id: 42,
         external_id: "tr:evt-1",
+        category_id: null,
         tag_ids: [],
       },
     ]);
     expect(payload.skip_duplicates).toBe(false);
+  });
+
+  it("includes category_id when set on the canonical transaction", () => {
+    const payload = toInsertPayload([tx({ categoryId: 77 })], 42, new Map());
+    expect(payload.transactions[0]?.category_id).toBe(77);
   });
 
   it("resolves tag names to ids", () => {

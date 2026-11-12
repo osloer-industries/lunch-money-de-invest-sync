@@ -43,6 +43,11 @@ describe("parseSyncCliOptions", () => {
     const options = parseSyncCliOptions(["--help"]);
     expect(options.help).toBe(true);
   });
+
+  it("parses export-type-summary", () => {
+    const options = parseSyncCliOptions(["--export-type-summary", "types.json"]);
+    expect(options.exportTypeSummary).toBe("types.json");
+  });
 });
 
 describe("filterSyncConfig", () => {

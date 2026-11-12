@@ -12,12 +12,18 @@ import {
   fetchAllScalableCapitalTransactions,
 } from "./scalable-capital/client.js";
 import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
+import { applyCategoryTagMappings } from "./shared/apply-mappings.js";
+import { groupTypeObservations } from "./shared/canonical-type.js";
+import { collectTypeObservations } from "./shared/collect-type-observations.js";
+import { serializeTypeSummaryFromGroups } from "./shared/export-type-summary.js";
 import {
   filterSyncConfig,
   parseSyncCliOptions,
   SYNC_HELP_TEXT,
   type SyncBroker,
 } from "./sync-options.js";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 
 export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
@@ -33,6 +39,7 @@ export interface RunSyncSelection {
   readonly includeBrokers: ReadonlySet<SyncBroker>;
   readonly owners: readonly string[];
   readonly dryRun: boolean;
+  readonly exportTypeSummary?: string | null;
 }
 
 function createDefaultRunSyncSelection(): RunSyncSelection {
@@ -53,15 +60,30 @@ interface SyncOneAccountParams {
   readonly rawTransactions: readonly CanonicalTransaction[];
   readonly lunchMoneyAssetId: number;
   readonly sharedCardLast4: readonly string[];
+  readonly categoryMap: SyncConfig["categoryMap"];
+  readonly tagMap: SyncConfig["tagMap"];
   readonly client: LunchMoneySyncClient;
   readonly logger: SyncLogger;
   readonly dryRun: boolean;
 }
 
 async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
-  const { owner, source, rawTransactions, lunchMoneyAssetId, sharedCardLast4, client, logger, dryRun } =
-    params;
-  const transactions = tagSharedExpenses(rawTransactions, sharedCardLast4);
+  const {
+    owner,
+    source,
+    rawTransactions,
+    lunchMoneyAssetId,
+    sharedCardLast4,
+    categoryMap,
+    tagMap,
+    client,
+    logger,
+    dryRun,
+  } = params;
+  const transactions = tagSharedExpenses(
+    applyCategoryTagMappings(rawTransactions, categoryMap, tagMap),
+    sharedCardLast4,
+  );
   if (dryRun) {
     const preview = await previewUpsert(client, transactions, lunchMoneyAssetId);
     logger(
@@ -107,6 +129,8 @@ export async function runSync(
 
   const syncContext = {
     sharedCardLast4: config.sharedCardLast4,
+    categoryMap: config.categoryMap,
+    tagMap: config.tagMap,
     client,
     logger,
     dryRun: selection.dryRun,
@@ -132,6 +156,8 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
   collect: (profile: T) => Promise<CanonicalTransaction[]>,
   context: {
     sharedCardLast4: readonly string[];
+    categoryMap: SyncConfig["categoryMap"];
+    tagMap: SyncConfig["tagMap"];
     client: LunchMoneySyncClient;
     logger: SyncLogger;
     dryRun: boolean;
@@ -145,6 +171,8 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
       rawTransactions: transactions,
       lunchMoneyAssetId: profile.lunchMoneyAssetId,
       sharedCardLast4: context.sharedCardLast4,
+      categoryMap: context.categoryMap,
+      tagMap: context.tagMap,
       client: context.client,
       logger: context.logger,
       dryRun: context.dryRun,
@@ -189,7 +217,12 @@ function selectionFromCliOptions(
     cli.brokers.length === 0
       ? new Set<SyncBroker>(["trade-republic", "scalable-capital"])
       : new Set(cli.brokers);
-  return { includeBrokers, owners: cli.owners, dryRun: cli.dryRun };
+  return {
+    includeBrokers,
+    owners: cli.owners,
+    dryRun: cli.dryRun,
+    exportTypeSummary: cli.exportTypeSummary,
+  };
 }
 
 export async function runSyncCli(
@@ -208,6 +241,13 @@ export async function runSyncCli(
   }
   const config = (deps.readConfig ?? readConfigFromDisk)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
+  if (cli.exportTypeSummary) {
+    const observations = await collectTypeObservations(config);
+    const groups = groupTypeObservations(observations);
+    const target = path.resolve(process.cwd(), cli.exportTypeSummary);
+    await writeFile(target, serializeTypeSummaryFromGroups(groups), "utf8");
+    (deps.logger ?? console.log)(`Wrote anonymised type summary to ${target}`);
+  }
   await runSync(
     config,
     client,

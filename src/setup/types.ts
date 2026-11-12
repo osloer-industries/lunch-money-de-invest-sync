@@ -36,7 +36,9 @@ export interface ScPortfolioSummary {
   readonly name: string;
 }
 
-export type LunchMoneySetupClient = Pick<LunchMoneyClient, "manualAccounts">;
+export type CategoryMappingSetupClient = Pick<LunchMoneyClient, "categories">;
+
+export type LunchMoneySetupClient = Pick<LunchMoneyClient, "manualAccounts"> & CategoryMappingSetupClient;
 
 export interface SetupBrokerRunners {
   readonly sc?: ScCliRunner;
@@ -50,4 +52,8 @@ export interface WrittenSetupFiles {
 
 export type SetupResult =
   | { readonly kind: "cancelled" }
-  | { readonly kind: "completed"; readonly files: WrittenSetupFiles; readonly config: Omit<SyncConfig, "lunchMoneyApiKey"> };
+  | {
+      readonly kind: "completed";
+      readonly files: WrittenSetupFiles;
+      readonly config: Omit<SyncConfig, "lunchMoneyApiKey">;
+    };

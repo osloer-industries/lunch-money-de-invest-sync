@@ -9,6 +9,8 @@ export interface SetupCliOptions {
   readonly owner: string | null;
   readonly lunchMoneyAssetId: number | null;
   readonly portfolioId: string | null;
+  readonly categories: boolean;
+  readonly exportTypeSummary: string | null;
   readonly help: boolean;
 }
 
@@ -22,6 +24,8 @@ const PARSE_CONFIG: ParseArgsConfig = {
     owner: { type: "string" },
     "lunch-money-asset-id": { type: "string" },
     "portfolio-id": { type: "string" },
+    categories: { type: "boolean", default: false },
+    "export-type-summary": { type: "string" },
     help: { type: "boolean", default: false, short: "h" },
   },
   allowPositionals: false,
@@ -40,6 +44,8 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --portfolio-id <id>            Scalable portfolio id (optional)
   --skip-broker-check            Skip sc/pytr install+login probes
   --yes                          Overwrite config.json / .env without prompting
+  --categories                   Map broker types to Lunch Money categories/tags (standalone)
+  --export-type-summary <file>   Write anonymised type counts/examples (opt-in)
   -h, --help                     Show this help`;
 
 export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
@@ -66,6 +72,11 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     owner: typeof values.owner === "string" ? values.owner : null,
     lunchMoneyAssetId,
     portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
+    categories: values.categories === true,
+    exportTypeSummary:
+      typeof values["export-type-summary"] === "string" && values["export-type-summary"].length > 0
+        ? values["export-type-summary"]
+        : null,
     help: values.help === true,
   };
 }

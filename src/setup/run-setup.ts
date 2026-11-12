@@ -1,7 +1,8 @@
 import path from "node:path";
 import { z } from "zod";
-import { loadConfig } from "../shared/config.js";
-import type { ScalableCapitalProfile, TradeRepublicProfile } from "../shared/config.js";
+import { parseStoredMaps } from "../shared/config-maps.js";
+import { loadConfig, parseJsonText } from "../shared/config.js";
+import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import { createLunchMoneyClient } from "../lunch-money/client.js";
 import { runSyncCli } from "../sync.js";
 import {
@@ -124,7 +125,7 @@ async function writeConfigFile(
   },
   overwrite: boolean,
   prompter: SetupPrompter,
-): Promise<string> {
+): Promise<{ path: string; categoryMap: SyncConfig["categoryMap"]; tagMap: SyncConfig["tagMap"] }> {
   const configPath = path.join(process.cwd(), CONFIG_FILENAME);
   if (filesystem.exists(configPath) && !overwrite) {
     const ok = await prompter.confirm(`${CONFIG_FILENAME} exists — overwrite?`, false);
@@ -132,9 +133,19 @@ async function writeConfigFile(
       throw new Error("Refusing to overwrite existing config.json");
     }
   }
-  const json = `${JSON.stringify(config, null, 2)}\n`;
+  let categoryMap: SyncConfig["categoryMap"] = {};
+  let tagMap: SyncConfig["tagMap"] = {};
+  if (filesystem.exists(configPath)) {
+    const existing = filesystem.readText(configPath);
+    if (existing) {
+      const stored = parseStoredMaps(parseJsonText(existing));
+      categoryMap = stored.categoryMap;
+      tagMap = stored.tagMap;
+    }
+  }
+  const json = `${JSON.stringify({ ...config, categoryMap, tagMap }, null, 2)}\n`;
   await filesystem.writeText(configPath, json);
-  return configPath;
+  return { path: configPath, categoryMap, tagMap };
 }
 
 async function interactiveProfiles(
@@ -228,9 +239,10 @@ export async function runSetup(
       const client = createLunchMoneyClient(apiKey);
       if (
         typeof client.manualAccounts?.getAll !== "function" ||
-        typeof client.manualAccounts?.create !== "function"
+        typeof client.manualAccounts?.create !== "function" ||
+        typeof client.categories?.getAll !== "function"
       ) {
-        throw new TypeError("Lunch Money client is missing manualAccounts API");
+        throw new TypeError("Lunch Money client is missing manualAccounts/categories API");
       }
       return client;
     });
@@ -271,12 +283,13 @@ export async function runSetup(
   });
 
   const envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
-  const configPath = await writeConfigFile(
+  const written = await writeConfigFile(
     deps.filesystem,
     { sharedCardLast4, ...profiles },
     options.yes,
     deps.prompter,
   );
+  const configPath = written.path;
 
   process.env["LUNCH_MONEY_API_KEY"] = apiKey;
 
@@ -289,6 +302,11 @@ export async function runSetup(
   return {
     kind: "completed",
     files: { configPath, envPath },
-    config: { sharedCardLast4, ...profiles },
+    config: {
+      sharedCardLast4,
+      ...profiles,
+      categoryMap: written.categoryMap,
+      tagMap: written.tagMap,
+    },
   };
 }

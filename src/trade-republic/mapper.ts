@@ -4,6 +4,7 @@ import {
 } from "../shared/utc-calendar-date.js";
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { PytrTimelineEvent } from "./types.js";
+import { classifyTradeRepublicEvent } from "./classify.js";
 
 const SAVEBACK_TAG = "saveback";
 
@@ -52,18 +53,19 @@ function buildNotes(event: PytrTimelineEvent): string | undefined {
 }
 
 export function mapTradeRepublicEvent(event: PytrTimelineEvent): CanonicalTransaction | null {
-  if (!isCashMovement(event)) {
+  const observed = classifyTradeRepublicEvent(event);
+  if (!observed || !isCashMovement(event)) {
     return null;
   }
-  const amount = event.amount!.value;
   const tags = isSavebackEventType(event.eventType) ? [SAVEBACK_TAG] : undefined;
   const notes = buildNotes(event);
   return {
     externalId: `trade-republic:${event.id}`,
     date: parseUtcCalendarDate(event.timestamp),
-    amount,
+    amount: observed.amount,
     currency: "eur",
     payee: event.title,
+    canonicalType: observed.canonicalType,
     ...(notes ? { notes } : {}),
     ...(tags ? { tags } : {}),
     source: "trade-republic",

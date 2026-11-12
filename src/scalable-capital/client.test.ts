@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { fetchAllScalableCapitalTransactions } from "./client.js";
+import { fetchAllScalableCapitalTransactions, fetchAllScalableTransactionSummaries } from "./client.js";
 import type { ScCliRunner } from "../shared/subprocess-cli.js";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -47,6 +47,16 @@ describe("fetchAllScalableCapitalTransactions", () => {
     const secondArgs = (runner.run as ReturnType<typeof vi.fn>).mock.calls[1]?.[0] as string[];
     expect(secondArgs).toContain("--cursor");
     expect(secondArgs).toContain("page-2");
+  });
+
+  it("fetchAllScalableTransactionSummaries returns raw items including security rows", async () => {
+    const runner = runnerFromResponses([
+      loadFixture("broker-transactions-page-1.json"),
+      loadFixture("broker-transactions-page-2.json"),
+    ]);
+    const summaries = await fetchAllScalableTransactionSummaries(runner, {});
+    expect(summaries.map((row) => row.id)).toEqual(["tx-cash-1", "tx-security-1", "tx-cash-2"]);
+    expect(runner.run).toHaveBeenCalledTimes(2);
   });
 
   it("passes portfolio id and SC_CONFIG_DIR when configured", async () => {

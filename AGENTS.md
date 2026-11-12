@@ -25,7 +25,9 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 
 - `src/shared/` holds the canonical transaction model, config loading, and tagging.
 - Each broker lives under `src/<broker>/` with transport (I/O) and mapper (pure).
-- `src/sync.ts` orchestrates fetch → map → tag → upsert per configured profile.
+- `src/sync.ts` orchestrates fetch → map → apply category/tag maps → shared-card tag → upsert.
+- `categoryMap` and `tagMap` in config map canonical broker types to Lunch Money `category_id`
+  and tag names; unknown types always get `needs-review` at sync time.
 - Use strict TypeScript, ECMAScript modules, and explicit `.js` extensions for
   relative imports compiled with NodeNext.
 

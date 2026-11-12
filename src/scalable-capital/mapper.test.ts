@@ -48,6 +48,7 @@ describe("mapScalableCapitalTransaction", () => {
       amount: -100,
       currency: "eur",
       payee: "SEPA transfer",
+      canonicalType: "transfer",
       source: "scalable-capital",
     });
   });
