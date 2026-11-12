@@ -7,10 +7,17 @@ import { createLunchMoneyClient } from "../lunch-money/client.js";
 import { runSyncCli } from "../sync.js";
 import {
   assertNodeMajorVersion,
+  confirmPytrCredentialStorage,
   ensurePytrReady,
   ensureScCliReady,
   parseScPortfolios,
+  promptPytrLoginPreferences,
+  pytrProfileFlagsFromLogin,
 } from "./broker-preflight.js";
+import { detectPytrLauncher } from "./detect-pytr-command.js";
+import { detectScBinaryPath } from "./detect-sc-binary.js";
+import { formatPytrLoginCommand } from "./pytr-session.js";
+import { createPytrCliRunner, createScCliRunner } from "../shared/subprocess-cli.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
@@ -172,7 +179,7 @@ async function promptOwnerAndManualAccount(
 async function interactiveProfiles(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
-  runners: SetupBrokerRunners,
+  _runners: SetupBrokerRunners,
   options: SetupCliOptions,
 ): Promise<{
   tradeRepublicProfiles: TradeRepublicProfile[];
@@ -187,18 +194,35 @@ async function interactiveProfiles(
   ]);
 
   if (brokers.includes("trade-republic")) {
-    await ensurePytrReady(runners.pytr, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
+    const detected = detectPytrLauncher();
+    const loginPrefs = await promptPytrLoginPreferences(prompter);
+    const loginCommand = formatPytrLoginCommand(detected.pytrCommand, loginPrefs);
+    await confirmPytrCredentialStorage(prompter, loginCommand);
+    const pytrRunner = createPytrCliRunner(detected.pytrCommand);
+    await ensurePytrReady(
+      pytrRunner,
+      prompter,
+      { enabled: true, skipCheck: options.skipBrokerCheck },
+      { login: loginPrefs, pytrCommand: detected.pytrCommand },
+    );
     const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
       prompter,
       client,
       "Trade Republic",
       "operator-a",
     );
-    tradeRepublicProfiles.push({ owner, lunchMoneyAssetId, pytrCommand: ["pytr"] });
+    tradeRepublicProfiles.push({
+      owner,
+      lunchMoneyAssetId,
+      pytrCommand: [...detected.pytrCommand],
+      ...pytrProfileFlagsFromLogin(loginPrefs),
+    });
   }
 
   if (brokers.includes("scalable-capital")) {
-    await ensureScCliReady(runners.sc, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
+    const scPath = _runners.sc ? undefined : detectScBinaryPath(undefined);
+    const scRunner = _runners.sc ?? createScCliRunner(detectScBinaryPath(undefined));
+    await ensureScCliReady(scRunner, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
     const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
       prompter,
       client,
@@ -206,14 +230,16 @@ async function interactiveProfiles(
       "operator-b",
     );
     let portfolioId: string | undefined;
-    if (runners.sc) {
-      const listed = await runners.sc.run(["broker", "portfolios", "--json"]);
+    if (scRunner) {
+      const listed = await scRunner.run(["broker", "portfolios", "--json"]);
       const portfolios = parseScPortfolios(listed.stdout);
       portfolioId = await chooseScPortfolio(prompter, portfolios);
     }
+    const resolvedScPath = scPath ?? detectScBinaryPath(undefined);
     scalableCapitalProfiles.push({
       owner,
       lunchMoneyAssetId,
+      ...(resolvedScPath !== "sc" ? { scBinaryPath: resolvedScPath } : {}),
       ...(portfolioId ? { portfolioId } : {}),
     });
   }
