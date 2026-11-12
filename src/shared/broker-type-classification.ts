@@ -1,24 +1,24 @@
 import type { CanonicalType, TypeObservation } from "./canonical-type.js";
 import { flatMapClassified } from "./flat-map-classified.js";
-import { matchCanonicalTypeFromRules, type KeywordTypeRule } from "./keyword-type-rules.js";
+import { keywordTypeRule, matchCanonicalTypeFromRules } from "./keyword-type-rules.js";
 import { utcCalendarDateFromIsoTimestamp } from "./utc-calendar-date.js";
 import { tradeRepublicEventCalendarDate } from "../trade-republic/event-calendar-date.js";
 import { isSavebackEventType } from "../trade-republic/saveback.js";
 import type { PytrTimelineEvent } from "../trade-republic/types.js";
 import type { ScTransactionSummary } from "../scalable-capital/types.js";
 
-const TR_EVENT_TYPE_RULES: readonly KeywordTypeRule[] = [
-  { needles: ["DIVIDEND"], type: "dividend" },
-  { needles: ["INTEREST"], type: "interest" },
-  { needles: ["SAVINGS_PLAN", "SPARPLAN"], type: "savings-plan" },
-  { needles: ["BUY", "PURCHASE"], type: "buy" },
-  { needles: ["SELL"], type: "sell" },
-  { needles: ["DEPOSIT", "INCOMING_TRANSFER"], type: "deposit" },
-  { needles: ["WITHDRAW", "OUTGOING_TRANSFER"], type: "withdrawal" },
-  { needles: ["TRANSFER"], type: "transfer" },
-  { needles: ["FEE", "COMMISSION"], type: "fee" },
-  { needles: ["TAX", "KAPITALERTRAG", "SOLI"], type: "tax" },
-];
+const TR_EVENT_TYPE_RULES = [
+  keywordTypeRule(["DIVIDEND"], "dividend"),
+  keywordTypeRule(["INTEREST"], "interest"),
+  keywordTypeRule(["SAVINGS_PLAN", "SPARPLAN"], "savings-plan"),
+  keywordTypeRule(["BUY", "PURCHASE"], "buy"),
+  keywordTypeRule(["SELL"], "sell"),
+  keywordTypeRule(["DEPOSIT", "INCOMING_TRANSFER"], "deposit"),
+  keywordTypeRule(["WITHDRAW", "OUTGOING_TRANSFER"], "withdrawal"),
+  keywordTypeRule(["TRANSFER"], "transfer"),
+  keywordTypeRule(["FEE", "COMMISSION"], "fee"),
+  keywordTypeRule(["TAX", "KAPITALERTRAG", "SOLI"], "tax"),
+] as const;
 
 function typeObservation(row: {
   canonicalType: CanonicalType;
@@ -34,15 +34,15 @@ function typeObservation(row: {
   return notes ? { ...rest, notes } : rest;
 }
 
-const SC_CASH_KEYWORDS: readonly KeywordTypeRule[] = [
-  { needles: ["dividend"], type: "dividend" },
-  { needles: ["interest", "zins"], type: "interest" },
-  { needles: ["deposit", "einzahl"], type: "deposit" },
-  { needles: ["withdraw", "auszahl"], type: "withdrawal" },
-  { needles: ["transfer"], type: "transfer" },
-  { needles: ["fee", "gebühr", "commission"], type: "fee" },
-  { needles: ["tax", "steuer", "soli"], type: "tax" },
-];
+const SC_CASH_KEYWORDS = [
+  keywordTypeRule(["dividend"], "dividend"),
+  keywordTypeRule(["interest", "zins"], "interest"),
+  keywordTypeRule(["deposit", "einzahl"], "deposit"),
+  keywordTypeRule(["withdraw", "auszahl"], "withdrawal"),
+  keywordTypeRule(["transfer"], "transfer"),
+  keywordTypeRule(["fee", "gebühr", "commission"], "fee"),
+  keywordTypeRule(["tax", "steuer", "soli"], "tax"),
+] as const;
 
 function classifyTradeRepublicEventType(eventType: string | null | undefined): CanonicalType {
   if (isSavebackEventType(eventType)) {
@@ -85,7 +85,7 @@ function classifyScalableDescription(description: string, summaryType: string): 
     if (text.includes("sell")) {
       return "sell";
     }
-    const savings = matchCanonicalTypeFromRules(text, [{ needles: ["savings", "sparplan"], type: "savings-plan" }]);
+    const savings = matchCanonicalTypeFromRules(text, [keywordTypeRule(["savings", "sparplan"], "savings-plan")]);
     if (savings) {
       return savings;
     }

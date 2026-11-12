@@ -3,6 +3,10 @@ import { includesAny } from "./includes-any.js";
 
 export type KeywordTypeRule = { readonly needles: readonly string[]; readonly type: CanonicalType };
 
+export function keywordTypeRule(needles: readonly string[], type: CanonicalType): KeywordTypeRule {
+  return { needles, type };
+}
+
 export function matchCanonicalTypeFromRules(
   text: string,
   rules: readonly KeywordTypeRule[],

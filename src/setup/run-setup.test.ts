@@ -43,6 +43,25 @@ function fakeFilesystem(): SetupFilesystem {
   };
 }
 
+function defaultRunSetupDeps(
+  overrides: Partial<{
+    prompter: SetupPrompter;
+    filesystem: SetupFilesystem;
+    runners: import("./types.js").SetupBrokerRunners;
+    runSync: typeof import("../sync.js").runSyncCli;
+    createLunchMoneyClient: () => LunchMoneySetupClient;
+  }> = {},
+) {
+  return {
+    prompter: fakePrompter({}),
+    filesystem: fakeFilesystem(),
+    runners: {},
+    nodeVersion: "v24.0.0",
+    createLunchMoneyClient: () => fakeLmClient(),
+    ...overrides,
+  };
+}
+
 function fakeLmClient(): LunchMoneySetupClient {
   return {
     manualAccounts: {
@@ -88,13 +107,7 @@ describe("runSetup", () => {
           owner: "operator-a",
           lunchMoneyAssetId: 3,
         }),
-        {
-          prompter: fakePrompter({}),
-          filesystem: fakeFilesystem(),
-          runners: {},
-          nodeVersion: "v24.0.0",
-          createLunchMoneyClient: () => fakeLmClient(),
-        },
+        defaultRunSetupDeps(),
       ),
     ).rejects.toThrow(/requires --trade-republic/);
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -109,13 +122,7 @@ describe("runSetup", () => {
           tradeRepublic: true,
           lunchMoneyAssetId: 3,
         }),
-        {
-          prompter: fakePrompter({}),
-          filesystem: fakeFilesystem(),
-          runners: {},
-          nodeVersion: "v24.0.0",
-          createLunchMoneyClient: () => fakeLmClient(),
-        },
+        defaultRunSetupDeps(),
       ),
     ).rejects.toThrow(/requires --owner/);
     delete process.env["LUNCH_MONEY_API_KEY"];
