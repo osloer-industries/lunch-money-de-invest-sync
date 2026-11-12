@@ -23,8 +23,9 @@ function fakePrompter(options: FakePrompterOptions): SetupPrompter {
       return value as T;
     },
     search: vi.fn<() => Promise<string>>(async () => ""),
-    confirm: vi.fn<(message: string) => Promise<boolean>>(async (message: string) =>
-      options.confirms ? options.confirms(message) : true,
+    confirm: vi.fn<(message: string, defaultValue?: boolean) => Promise<boolean>>(
+      async (message: string, defaultValue?: boolean) =>
+        options.confirms ? options.confirms(message) : (defaultValue ?? true),
     ),
     print: vi.fn<(line: string) => void>(),
     waitForEnter: vi.fn<() => Promise<void>>(async () => undefined),
@@ -62,6 +63,10 @@ function defaultRunSetupDeps(
   };
 }
 
+function pytrCredentialStorageAccepted(message: string): boolean {
+  return message.includes("login command") || message.includes("Accept and run");
+}
+
 function fakeLmClient(): LunchMoneySetupClient {
   return {
     manualAccounts: {
@@ -79,12 +84,22 @@ function fakeLmClient(): LunchMoneySetupClient {
 }
 
 function trInteractivePrompter(overrides: Partial<FakePrompterOptions> = {}): SetupPrompter {
+  const userConfirms = overrides.confirms;
   return fakePrompter({
     password: "lm_test_key",
     brokers: ["trade-republic"],
     inputs: ["operator-a", "[]"],
     selects: ["3"],
     ...overrides,
+    confirms: (message) => {
+      if (pytrCredentialStorageAccepted(message)) {
+        return true;
+      }
+      if (userConfirms) {
+        return userConfirms(message);
+      }
+      return false;
+    },
   });
 }
 
