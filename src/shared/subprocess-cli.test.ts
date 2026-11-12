@@ -108,6 +108,11 @@ describe("createPytrCliRunner", () => {
     expect(() => resolvePytrExecutable([])).toThrow(/at least one argv/);
   });
 
+  it("throws when the launcher cannot be resolved", () => {
+    existsSyncMock.mockReturnValue(false);
+    expect(() => resolvePytrExecutable(["missing-launcher"])).toThrow(/not found/);
+  });
+
   it("resolves a relative binary name to an absolute path under trusted dirs", () => {
     existsSyncMock.mockImplementation((p) => p === "/usr/bin/pytr");
     expect(resolvePytrExecutable(["pytr"])).toEqual(["/usr/bin/pytr"]);

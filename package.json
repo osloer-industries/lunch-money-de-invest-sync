@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.build.json",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "lint": "oxlint -c .oxlintrc.json src",
+    "setup": "tsx src/setup.ts",
     "sync": "tsx src/sync.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
