@@ -1,4 +1,3 @@
-import path from "node:path";
 import {
   canonicalTypeSchema,
   groupTypeObservations,
@@ -6,7 +5,7 @@ import {
   type TypeGroup,
 } from "../shared/canonical-type.js";
 import { collectTypeObservations } from "../shared/collect-type-observations.js";
-import { serializeTypeSummaryFromGroups } from "../shared/export-type-summary.js";
+import { writeAnonymisedTypeSummaryToPath } from "../shared/export-type-summary.js";
 import { anonymizeTypeExample } from "../shared/anonymize.js";
 import { readConfigFromDisk, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
@@ -195,8 +194,9 @@ export async function runCategoryMappingSetup(
 
   let exportPath: string | undefined;
   if (options.exportTypeSummary) {
-    const resolved = path.resolve(process.cwd(), options.exportTypeSummary);
-    await deps.filesystem.writeText(resolved, serializeTypeSummaryFromGroups(groups));
+    const resolved = await writeAnonymisedTypeSummaryToPath(options.exportTypeSummary, groups, {
+      write: (absolutePath, body) => deps.filesystem.writeText(absolutePath, body),
+    });
     exportPath = resolved;
     deps.prompter.print(`Wrote anonymised type summary to ${resolved}`);
   }
