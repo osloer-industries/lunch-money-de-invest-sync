@@ -40,15 +40,15 @@ function parseDigits(
   if (start >= input.length) {
     return null;
   }
-  const first = input.charCodeAt(start);
-  if (first < 48 || first > 57) {
+  const first = input.codePointAt(start);
+  if (first === undefined || first < 48 || first > 57) {
     return null;
   }
   let end = start;
   let value = 0;
   while (end < input.length) {
-    const code = input.charCodeAt(end);
-    if (code < 48 || code > 57) {
+    const code = input.codePointAt(end);
+    if (code === undefined || code < 48 || code > 57) {
       break;
     }
     value = value * 10 + (code - 48);
@@ -71,8 +71,8 @@ function tryParseSemverAt(input: string, start: number): [number, number, number
     return null;
   }
   if (patch.end < input.length) {
-    const next = input.charCodeAt(patch.end);
-    if (next >= 48 && next <= 57) {
+    const next = input.codePointAt(patch.end);
+    if (next !== undefined && next >= 48 && next <= 57) {
       return null;
     }
   }
