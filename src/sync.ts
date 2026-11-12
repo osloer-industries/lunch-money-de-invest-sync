@@ -35,6 +35,10 @@ export interface BrokerCollectors {
 
 export type SyncLogger = (message: string) => void;
 
+export function defaultSyncLogger(message: string): void {
+  console.log(message);
+}
+
 export interface RunSyncSelection {
   readonly includeBrokers: ReadonlySet<SyncBroker>;
   readonly owners: readonly string[];
@@ -107,7 +111,7 @@ export async function runSync(
   config: SyncConfig,
   client: LunchMoneySyncClient,
   collectors: BrokerCollectors,
-  logger: SyncLogger = console.log,
+  logger: SyncLogger = defaultSyncLogger,
   selection: RunSyncSelection = createDefaultRunSyncSelection(),
 ): Promise<void> {
   const tradeProfiles =
@@ -224,7 +228,7 @@ export async function runSyncCli(
 ): Promise<void> {
   const cli = parseSyncCliOptions(argv);
   if (cli.help) {
-    (deps.logger ?? console.log)(SYNC_HELP_TEXT);
+    (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return;
   }
   const config = (deps.readConfig ?? readConfigFromDisk)();
@@ -235,13 +239,13 @@ export async function runSyncCli(
     const target = await writeAnonymisedTypeSummaryToPath(cli.exportTypeSummary, groups, {
       write: (absolutePath, body) => writeFile(absolutePath, body, "utf8"),
     });
-    (deps.logger ?? console.log)(`Wrote anonymised type summary to ${target}`);
+    (deps.logger ?? defaultSyncLogger)(`Wrote anonymised type summary to ${target}`);
   }
   await runSync(
     config,
     client,
     deps.collectors ?? liveCollectors,
-    deps.logger ?? console.log,
+    deps.logger ?? defaultSyncLogger,
     selectionFromCliOptions(cli),
   );
 }
