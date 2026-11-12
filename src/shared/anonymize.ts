@@ -54,6 +54,11 @@ function isEmailToken(token: string): boolean {
   return dot > 0 && dot < domain.length - 1;
 }
 
+function hasExplicitUtcOffset(dateText: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateText.trimEnd());
+}
+
+/** YYYY-MM for anonymised exports; calendar month is derived in UTC, not the host timezone. */
 export function monthOnlyDate(isoDate: string): string {
   if (isoDate.length >= 7 && /^\d{4}-\d{2}/.test(isoDate)) {
     return isoDate.slice(0, 7);
@@ -62,7 +67,12 @@ export function monthOnlyDate(isoDate: string): string {
   if (!Number.isFinite(parsed)) {
     return "unknown-month";
   }
-  return new Date(parsed).toISOString().slice(0, 7);
+  const instant = new Date(parsed);
+  if (hasExplicitUtcOffset(isoDate)) {
+    return instant.toISOString().slice(0, 7);
+  }
+  const utcMillis = Date.UTC(instant.getFullYear(), instant.getMonth(), instant.getDate());
+  return new Date(utcMillis).toISOString().slice(0, 7);
 }
 
 export function redactSensitiveText(text: string): string {
