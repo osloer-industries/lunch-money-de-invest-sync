@@ -21,7 +21,6 @@ import {
   SYNC_HELP_TEXT,
   type SyncBroker,
 } from "./sync-options.js";
-import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { runCliModuleMain } from "./shared/cli-main.js";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
