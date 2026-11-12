@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking (clean break — no backwards compatibility)
 
+- **Trade Republic:** remove the in-process [`trade-republic-api`](https://www.npmjs.com/package/trade-republic-api)
+  WebSocket client. Sync now shells out to [pytr](https://github.com/pytr-org/pytr)
+  (`export_transactions` → `all_events.json`). Operators install pytr, run `pytr login` locally,
+  and must drop `phoneNumber` / `pin` from `config.json` (use `pytrCommand`, optional `pytrHome`,
+  and other pytr profile fields instead). No migration from proxy-era or npm-client `external_id`
+  rows — use a fresh Lunch Money manual account before the first pytr sync.
 - **Scalable Capital:** remove the HTTP proxy integration completely (`proxyUrl`, `proxyToken`,
   gateway client, related tests/docs). Scalable sync now requires the official
   [Scalable CLI](https://github.com/ScalableCapital/scalable-cli) only. Operators install `sc`,
@@ -20,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Trade Republic pytr transport (`PytrCliRunner`), saveback single-row tagging, and fixture-based tests.
 - `sc broker transactions --json` transport with fixture-based tests and cursor pagination.
 - Operator docs for Linux glibc ≥ 2.38 prerequisite and recommended `sc login --local-read-only`.
 - Public readiness documentation, generic operator placeholders in examples, and SECURITY/issue templates

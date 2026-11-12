@@ -11,9 +11,8 @@ const validRaw = {
   tradeRepublicProfiles: [
     {
       owner: "operator-a",
-      phoneNumber: "+490000000000",
-      pin: "sync-test-pin",
       lunchMoneyAssetId: 1,
+      pytrCommand: ["pytr"],
     },
   ],
   scalableCapitalProfiles: [
@@ -47,12 +46,37 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...validRaw, sharedCardLast4: ["12"] })).toThrow();
   });
 
-  it("rejects a trade republic profile missing a pin", () => {
-    const { pin: _pin, ...profileWithoutPin } = validRaw.tradeRepublicProfiles[0]!;
+  it("accepts optional trade republic pytr profile fields", () => {
+    const config = loadConfig({
+      ...validRaw,
+      tradeRepublicProfiles: [
+        {
+          owner: "operator-a",
+          lunchMoneyAssetId: 1,
+          pytrCommand: ["uvx", "pytr"],
+          pytrHome: "/tmp/operator-a/.pytr",
+          loginV2: true,
+          wafTokenMode: "playwright",
+          account: "acct-1",
+          pytrMinVersion: "0.4.10",
+        },
+      ],
+    });
+    expect(config.tradeRepublicProfiles[0]?.pytrMinVersion).toBe("0.4.10");
+  });
+
+  it("rejects removed trade republic credential fields", () => {
     expect(() =>
       loadConfig({
         ...validRaw,
-        tradeRepublicProfiles: [profileWithoutPin],
+        tradeRepublicProfiles: [
+          {
+            owner: "operator-a",
+            phoneNumber: "+490000000000",
+            pin: "sync-test-pin",
+            lunchMoneyAssetId: 1,
+          },
+        ],
       }),
     ).toThrow();
   });
