@@ -21,6 +21,14 @@ const TRANSFER_CATEGORY: SuggestedCategory = {
   exclude_from_totals: true,
 };
 
+function budgetIncomeCategory(name: string): SuggestedCategory {
+  return { name, is_income: true, exclude_from_budget: false, exclude_from_totals: false };
+}
+
+function budgetExpenseCategory(name: string): SuggestedCategory {
+  return { name, is_income: false, exclude_from_budget: false, exclude_from_totals: false };
+}
+
 export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCategory>> = {
   buy: INVESTMENTS_CATEGORY,
   sell: INVESTMENTS_CATEGORY,
@@ -28,30 +36,10 @@ export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCatego
   deposit: TRANSFER_CATEGORY,
   withdrawal: TRANSFER_CATEGORY,
   transfer: TRANSFER_CATEGORY,
-  dividend: {
-    name: "Investment income",
-    is_income: true,
-    exclude_from_budget: false,
-    exclude_from_totals: false,
-  },
-  interest: {
-    name: "Investment income",
-    is_income: true,
-    exclude_from_budget: false,
-    exclude_from_totals: false,
-  },
-  fee: {
-    name: "Bank fees",
-    is_income: false,
-    exclude_from_budget: false,
-    exclude_from_totals: false,
-  },
-  tax: {
-    name: "Taxes",
-    is_income: false,
-    exclude_from_budget: false,
-    exclude_from_totals: false,
-  },
+  dividend: budgetIncomeCategory("Investment income"),
+  interest: budgetIncomeCategory("Investment income"),
+  fee: budgetExpenseCategory("Bank fees"),
+  tax: budgetExpenseCategory("Taxes"),
 };
 
 export const SUGGESTED_TAGS: Partial<Record<CanonicalType, readonly string[]>> = {
