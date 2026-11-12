@@ -29,6 +29,7 @@
   "homepage": "https://github.com/osloer-industries/lunch-money-de-invest-sync#readme",
   "license": "MIT",
   "dependencies": {
+    "@inquirer/prompts": "8.8.0",
     "@lunch-money/lunch-money-js-v2": "2.11.1",
     "secure-json-parse": "4.1.1",
     "zod": "4.6.7"
