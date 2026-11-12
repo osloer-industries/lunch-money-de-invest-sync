@@ -7,6 +7,8 @@ const fetchAllScalableCapitalTransactions = vi.hoisted(() => vi.fn());
 const createDefaultScCliRunner = vi.hoisted(() => vi.fn(() => ({})));
 const fetchTradeRepublicTimeline = vi.hoisted(() => vi.fn());
 const createDefaultPytrCliRunner = vi.hoisted(() => vi.fn(() => ({})));
+const collectTypeObservations = vi.hoisted(() => vi.fn());
+const writeFileMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./scalable-capital/client.js", () => ({
   fetchAllScalableCapitalTransactions,
@@ -18,6 +20,14 @@ vi.mock("./trade-republic/client.js", () => ({
   createDefaultPytrCliRunner,
 }));
 
+vi.mock("./shared/collect-type-observations.js", () => ({
+  collectTypeObservations,
+}));
+
+vi.mock("node:fs/promises", () => ({
+  writeFile: writeFileMock,
+}));
+
 function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction {
   return {
     externalId: "id-1",
@@ -25,16 +35,21 @@ function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction
     amount: -10,
     currency: "eur",
     payee: "Supermarket",
+    canonicalType: "unknown",
     source: "trade-republic",
     ...overrides,
   };
 }
 
 function fakeClient(): LunchMoneySyncClient {
+  let nextTagId = 1;
   return {
     tags: {
       getAll: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 1, name: "shared" }),
+      create: vi.fn().mockImplementation(async ({ name }: { name: string }) => ({
+        id: nextTagId++,
+        name,
+      })),
     },
     transactions: {
       create: vi.fn().mockResolvedValue({ transactions: [{ id: 1 }], skipped_duplicates: [] }),
@@ -46,6 +61,8 @@ function baseConfig(overrides: Partial<SyncConfig> = {}): SyncConfig {
   return {
     lunchMoneyApiKey: "lm_test",
     sharedCardLast4: ["1234"],
+    categoryMap: {},
+    tagMap: {},
     tradeRepublicProfiles: [],
     scalableCapitalProfiles: [],
     ...overrides,
@@ -69,7 +86,33 @@ describe("runSync", () => {
     expect(collectors.collectScalableCapital).not.toHaveBeenCalled();
     expect(client.transactions.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        transactions: [expect.objectContaining({ manual_account_id: 1, tag_ids: [1] })],
+        transactions: [
+          expect.objectContaining({ manual_account_id: 1, tag_ids: [1, 2], category_id: null }),
+        ],
+      }),
+    );
+  });
+
+  it("applies categoryMap and tagMap before upserting", async () => {
+    const client = fakeClient();
+    const collectors: BrokerCollectors = {
+      collectTradeRepublic: vi.fn().mockResolvedValue([tx({ canonicalType: "deposit" })]),
+      collectScalableCapital: vi.fn(),
+    };
+    const config = baseConfig({
+      tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
+      categoryMap: { deposit: 55 },
+      tagMap: { deposit: ["investment"] },
+    });
+    await runSync(config, client, collectors, () => {});
+    expect(client.transactions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactions: [
+          expect.objectContaining({
+            category_id: 55,
+            tag_ids: [1],
+          }),
+        ],
       }),
     );
   });
@@ -213,6 +256,24 @@ describe("runSync", () => {
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("="));
   });
 
+  it("throws when --account matches no profiles for the selected broker", async () => {
+    const client = fakeClient();
+    await expect(
+      runSyncCli(
+        ["--broker", "scalable-capital", "--account", "operator-a"],
+        {
+          readConfig: () =>
+            baseConfig({
+              tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
+              scalableCapitalProfiles: [],
+            }),
+          createClient: () => client as never,
+          collectors: { collectTradeRepublic: vi.fn(), collectScalableCapital: vi.fn() },
+        },
+      ),
+    ).rejects.toThrow(/No profiles matched/);
+  });
+
   it("throws when --account matches no configured profiles", async () => {
     const client = fakeClient();
     await expect(
@@ -274,6 +335,32 @@ describe("runSync", () => {
     const logger = vi.fn();
     await runSyncCli(["--help"], { logger, readConfig: () => baseConfig() });
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("--dry-run"));
+  });
+
+  it("writes export-type-summary before syncing when requested", async () => {
+    collectTypeObservations.mockResolvedValue([
+      {
+        canonicalType: "deposit",
+        brokerSubtype: "BrokerCashTransactionSummary",
+        source: "scalable-capital",
+        amount: 1,
+        currency: "eur",
+        payee: "Deposit",
+        date: "2026-01-01",
+      },
+    ]);
+    writeFileMock.mockResolvedValue(undefined);
+    const client = fakeClient();
+    const logger = vi.fn();
+    await runSyncCli(["--export-type-summary", "types.json"], {
+      readConfig: () =>
+        baseConfig({ scalableCapitalProfiles: [{ owner: "operator-b", lunchMoneyAssetId: 2 }] }),
+      createClient: () => client as never,
+      collectors: { collectTradeRepublic: vi.fn().mockResolvedValue([]), collectScalableCapital: vi.fn().mockResolvedValue([]) },
+      logger,
+    });
+    expect(writeFileMock).toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("types.json"));
   });
 
   it("runSyncCli rejects unknown flags", async () => {

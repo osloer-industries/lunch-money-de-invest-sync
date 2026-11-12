@@ -1,4 +1,5 @@
 import { toCurrency, type CanonicalTransaction } from "../shared/transaction.js";
+import { classifyScalableSummary } from "./classify.js";
 import type { ScalableCapitalTransaction } from "./types.js";
 
 /**
@@ -28,12 +29,25 @@ export function mapScalableCapitalTransaction(
   if (!isCashMovement(transaction)) {
     return null;
   }
+  const observed = classifyScalableSummary({
+    id: transaction.id,
+    summary_type: "BrokerCashTransactionSummary",
+    description: transaction.description,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    last_event_datetime: transaction.date,
+    is_cancellation: false,
+  });
+  if (!observed) {
+    return null;
+  }
   return {
     externalId: `scalable-capital:${transaction.id}`,
     date: utcCalendarDateFromEventTimestamp(transaction.date),
     amount: transaction.amount,
     currency: toCurrency(transaction.currency),
     payee: transaction.description || "Scalable Capital",
+    canonicalType: observed.canonicalType,
     source: "scalable-capital",
   };
 }

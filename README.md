@@ -84,6 +84,22 @@ npm run sync
 
 Use `npm run sync -- --broker trade-republic --account operator-a --dry-run` to limit brokers/owners or preview inserts without POST requests.
 
+### Categories and tags (issue [#16](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/16))
+
+After profiles exist in `config.json`, run `npm run setup -- --categories` to map canonical broker
+types to Lunch Money categories and tags using **read-only** broker fetches. The step shows
+**anonymised** examples (bucketed amounts, redacted ISINs/IBANs/IDs, month-only dates). New
+Lunch Money categories are created only after an explicit **y/N** confirmation, with exclude flags
+shown up front. Results are stored as `categoryMap` and `tagMap` in `config.json`.
+
+Optional: `npm run setup -- --categories --export-type-summary types-summary.json` or
+`npm run sync -- --export-type-summary types-summary.json` writes counts and anonymised examples only
+(never written by default).
+
+Lunch Money **categories** are created via the v2 API ([docs](https://lunchmoney.dev/docs),
+[`categories.create`](https://github.com/lunch-money/lunch-money-js-v2#categories)). The tool does
+**not** create transaction rules; categorisation applies only to rows this sync inserts.
+
 ## Configuration
 
 Copy [`config.example.json`](config.example.json) to `config.json` in the repo root (gitignored). Fields:
@@ -93,6 +109,8 @@ Copy [`config.example.json`](config.example.json) to `config.json` in the repo r
 | `sharedCardLast4` | Last four digits of cards whose spend should receive the `shared` tag (matched in payee/notes text) |
 | `tradeRepublicProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `pytrCommand`, `pytrHome`, `loginV2`, `wafTokenMode`, `account`, `pytrMinVersion` |
 | `scalableCapitalProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `portfolioId`, `scBinaryPath`, `scConfigDir` |
+| `categoryMap` | Canonical type → Lunch Money `category_id` (see `npm run setup -- --categories`) |
+| `tagMap` | Canonical type → extra tag names applied at sync (unknown types always get `needs-review`) |
 
 The `owner` string is a **local label** for logs only (e.g. `operator-a`, `operator-b`). It is not sent to brokers.
 

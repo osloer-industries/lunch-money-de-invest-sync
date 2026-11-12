@@ -46,6 +46,7 @@ export function toInsertPayload(
       notes: tx.notes ?? null,
       manual_account_id: manualAccountId,
       external_id: tx.externalId,
+      category_id: tx.categoryId ?? null,
       tag_ids: (tx.tags ?? []).map((name) => {
         const id = tagIdsByName.get(name);
         if (id === undefined) {

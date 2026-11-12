@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { createPytrCliRunner, createScCliRunner } from "./shared/subprocess-cli.js";
 import { createInquirerPrompter } from "./setup/inquirer-prompter.js";
 import { parseSetupCliOptions, SETUP_HELP_TEXT, type SetupCliOptions } from "./setup/setup-options.js";
+import { runCategoryMappingSetup } from "./setup/run-category-mapping.js";
 import { runSetup } from "./setup/run-setup.js";
+import { createLunchMoneyClient } from "./lunch-money/client.js";
 import type { SetupFilesystem, SetupPrompter } from "./setup/types.js";
 
 export function assertInteractiveSetupAllowed(options: SetupCliOptions): void {
@@ -48,9 +50,18 @@ export async function runSetupCli(
   }
   assertInteractiveSetupAllowed(cli);
   const prompter = deps.prompter ?? createInquirerPrompter();
+  const filesystem = deps.filesystem ?? liveFilesystem;
+  if (cli.categories) {
+    await runCategoryMappingSetup(cli, {
+      prompter,
+      filesystem,
+      createClient: (apiKey) => createLunchMoneyClient(apiKey),
+    });
+    return;
+  }
   await runSetup(cli, {
     prompter,
-    filesystem: deps.filesystem ?? liveFilesystem,
+    filesystem,
     runners: deps.runners ?? {
       sc: createScCliRunner("sc"),
       pytr: createPytrCliRunner(["pytr"]),

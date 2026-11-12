@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Category and tag mapping: `categoryMap` / `tagMap` in `config.json`, applied on insert
+  (`category_id` + tags). `npm run setup -- --categories` fetches broker history read-only,
+  groups by canonical type, shows anonymised examples, maps to Lunch Money categories (create
+  only after explicit confirmation), and optional `--export-type-summary <file>`.
+- `npm run sync -- --export-type-summary <file>` for opt-in anonymised type reports.
+- Lunch Money categories via API v2 (`categories.getAll`, `categories.create`) — see
+  [Lunch Money v2 API docs](https://lunchmoney.dev/docs) and
+  [`lunch-money-js-v2` categories](https://github.com/lunch-money/lunch-money-js-v2#categories).
+  Transaction **rules** are not created by this tool (`apply_rules` on insert only; no rules CRUD in v2 client).
 - `npm run sync` CLI flags: `--broker`, `--account`, `--dry-run`, `--help` (Node `parseArgs`).
 - `npm run setup` interactive onboarding with injectable I/O for tests; `--non-interactive` for scripted installs.
 - Trade Republic pytr transport (`PytrCliRunner`), saveback single-row tagging, and fixture-based tests.

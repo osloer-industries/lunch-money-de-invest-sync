@@ -13,6 +13,14 @@
       "pytrMinVersion": "0.4.10"
     }
   ],
+  "categoryMap": {
+    "deposit": 10,
+    "saveback": 11
+  },
+  "tagMap": {
+    "saveback": ["saveback"],
+    "buy": ["investment"]
+  },
   "scalableCapitalProfiles": [
     {
       "owner": "operator-a",

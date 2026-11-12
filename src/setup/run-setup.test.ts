@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runSetup } from "./run-setup.js";
+import type { SetupCliOptions } from "./setup-options.js";
 import type { LunchMoneySetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
 
 interface FakePrompterOptions {
@@ -48,32 +49,66 @@ function fakeLmClient(): LunchMoneySetupClient {
       getAll: vi.fn().mockResolvedValue([{ id: 3, name: "TR operator-a" }]),
       create: vi.fn().mockResolvedValue({ id: 99, name: "Broker (operator-a)" }),
     },
+    categories: {
+      getAll: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
+      get: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
   } as unknown as LunchMoneySetupClient;
 }
 
-const baseOptions = {
-  nonInteractive: false,
-  skipBrokerCheck: true,
-  yes: true,
-  tradeRepublic: false,
-  scalableCapital: false,
-  owner: null,
-  lunchMoneyAssetId: null,
-  portfolioId: null,
-  help: false,
-} as const;
+function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOptions {
+  return {
+    nonInteractive: false,
+    skipBrokerCheck: true,
+    yes: true,
+    tradeRepublic: false,
+    scalableCapital: false,
+    owner: null,
+    lunchMoneyAssetId: null,
+    portfolioId: null,
+    categories: false,
+    exportTypeSummary: null,
+    help: false,
+    ...overrides,
+  };
+}
 
 describe("runSetup", () => {
+  it("rejects non-interactive mode without a broker flag", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    await expect(
+      runSetup(
+        baseSetupOptions({
+          nonInteractive: true,
+          tradeRepublic: false,
+          scalableCapital: false,
+          owner: "operator-a",
+          lunchMoneyAssetId: 3,
+        }),
+        {
+          prompter: fakePrompter({}),
+          filesystem: fakeFilesystem(),
+          runners: {},
+          nodeVersion: "v24.0.0",
+          createLunchMoneyClient: () => fakeLmClient(),
+        },
+      ),
+    ).rejects.toThrow(/requires --trade-republic/);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
   it("rejects incomplete non-interactive flags", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     await expect(
       runSetup(
-        {
-          ...baseOptions,
+        baseSetupOptions({
           nonInteractive: true,
           tradeRepublic: true,
           lunchMoneyAssetId: 3,
-        },
+        }),
         {
           prompter: fakePrompter({}),
           filesystem: fakeFilesystem(),
@@ -90,13 +125,12 @@ describe("runSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
     await expect(
       runSetup(
-        {
-          ...baseOptions,
+        baseSetupOptions({
           nonInteractive: true,
           tradeRepublic: true,
           owner: "operator-a",
           lunchMoneyAssetId: 1,
-        },
+        }),
         {
           prompter: fakePrompter({}),
           filesystem: fakeFilesystem(),
@@ -111,13 +145,12 @@ describe("runSetup", () => {
   it("writes .env and config.json in non-interactive mode", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const result = await runSetup(
-      {
-        ...baseOptions,
+      baseSetupOptions({
         nonInteractive: true,
         tradeRepublic: true,
         owner: "operator-a",
         lunchMoneyAssetId: 3,
-      },
+      }),
       {
         prompter: fakePrompter({}),
         filesystem: fakeFilesystem(),
@@ -143,7 +176,7 @@ describe("runSetup", () => {
       selects: ["3"],
     });
     const result = await runSetup(
-      { ...baseOptions },
+      baseSetupOptions(),
       {
         prompter: prompt,
         filesystem: fakeFilesystem(),
@@ -159,14 +192,13 @@ describe("runSetup", () => {
   it("supports scalable capital in non-interactive mode", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const result = await runSetup(
-      {
-        ...baseOptions,
+      baseSetupOptions({
         nonInteractive: true,
         scalableCapital: true,
         owner: "operator-b",
         lunchMoneyAssetId: 4,
         portfolioId: "portfolio-operator-b",
-      },
+      }),
       {
         prompter: fakePrompter({}),
         filesystem: fakeFilesystem(),
@@ -197,7 +229,7 @@ describe("runSetup", () => {
       }),
     };
     const result = await runSetup(
-      { ...baseOptions },
+      baseSetupOptions(),
       {
         prompter: fakePrompter({
           password: "lm_test_key",
@@ -221,7 +253,7 @@ describe("runSetup", () => {
   it("rejects an unknown manual account id", async () => {
     await expect(
       runSetup(
-        { ...baseOptions },
+        baseSetupOptions(),
         {
           prompter: fakePrompter({
             password: "lm_test_key",
@@ -241,7 +273,7 @@ describe("runSetup", () => {
   it("validates sharedCardLast4 JSON", async () => {
     await expect(
       runSetup(
-        { ...baseOptions },
+        baseSetupOptions(),
         {
           prompter: fakePrompter({
             password: "lm_test_key",
@@ -263,7 +295,7 @@ describe("runSetup", () => {
     (fs.exists as ReturnType<typeof vi.fn>).mockImplementation((path) => String(path).endsWith(".env"));
     await expect(
       runSetup(
-        { ...baseOptions, yes: false },
+        baseSetupOptions({ yes: false }),
         {
           prompter: fakePrompter({
             password: "lm_test_key",
@@ -285,7 +317,7 @@ describe("runSetup", () => {
   it("creates a Lunch Money manual account when the operator selects new", async () => {
     const lm = fakeLmClient();
     const result = await runSetup(
-      { ...baseOptions },
+      baseSetupOptions(),
       {
         prompter: fakePrompter({
           password: "lm_test_key",

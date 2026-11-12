@@ -21,6 +21,12 @@ describe("parseSetupCliOptions", () => {
     expect(parseSetupCliOptions(["-h"]).help).toBe(true);
   });
 
+  it("parses categories and export-type-summary flags", () => {
+    const options = parseSetupCliOptions(["--categories", "--export-type-summary", "out.json"]);
+    expect(options.categories).toBe(true);
+    expect(options.exportTypeSummary).toBe("out.json");
+  });
+
   it("rejects a non-integer lunch money asset id", () => {
     expect(() => parseSetupCliOptions(["--lunch-money-asset-id", "nope"])).toThrow(/integer/);
   });
