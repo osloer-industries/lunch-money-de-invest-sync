@@ -20,6 +20,28 @@ const TR_EVENT_TYPE_RULES: readonly KeywordTypeRule[] = [
   { needles: ["TAX", "KAPITALERTRAG", "SOLI"], type: "tax" },
 ];
 
+function typeObservation(
+  canonicalType: CanonicalType,
+  brokerSubtype: string,
+  source: TypeObservation["source"],
+  amount: number,
+  currency: string,
+  payee: string,
+  date: string,
+  notes?: string,
+): TypeObservation {
+  return {
+    canonicalType,
+    brokerSubtype,
+    source,
+    amount,
+    currency,
+    payee,
+    date,
+    ...(notes ? { notes } : {}),
+  };
+}
+
 const SC_CASH_KEYWORDS: readonly KeywordTypeRule[] = [
   { needles: ["dividend"], type: "dividend" },
   { needles: ["interest", "zins"], type: "interest" },
@@ -49,16 +71,16 @@ export function classifyTradeRepublicEvent(event: PytrTimelineEvent): TypeObserv
   const eventType = event.eventType?.trim() || "unknown";
   const canonicalType = classifyTradeRepublicEventType(eventType);
   const subtitle = event.subtitle?.trim();
-  return {
+  return typeObservation(
     canonicalType,
-    brokerSubtype: eventType,
-    source: "trade-republic",
+    eventType,
+    "trade-republic",
     amount,
-    currency: event.amount?.currency?.toLowerCase() ?? "eur",
-    payee: event.title,
-    ...(subtitle && canonicalType !== "saveback" ? { notes: subtitle } : {}),
-    date: tradeRepublicEventCalendarDate(event.timestamp),
-  };
+    event.amount?.currency?.toLowerCase() ?? "eur",
+    event.title,
+    tradeRepublicEventCalendarDate(event.timestamp),
+    subtitle && canonicalType !== "saveback" ? subtitle : undefined,
+  );
 }
 
 export function observeTradeRepublicEvents(events: readonly PytrTimelineEvent[]): TypeObservation[] {
@@ -105,15 +127,15 @@ export function classifyScalableSummary(item: ScTransactionSummary): TypeObserva
     return null;
   }
   const canonicalType = classifyScalableDescription(description, summaryType);
-  return {
+  return typeObservation(
     canonicalType,
-    brokerSubtype: summaryType,
-    source: "scalable-capital",
+    summaryType,
+    "scalable-capital",
     amount,
-    currency: (item.currency?.trim() || "EUR").toLowerCase(),
-    payee: description || "Scalable Capital",
-    date: utcCalendarDateFromIsoTimestamp(item.last_event_datetime, "Scalable Capital event"),
-  };
+    (item.currency?.trim() || "EUR").toLowerCase(),
+    description || "Scalable Capital",
+    utcCalendarDateFromIsoTimestamp(item.last_event_datetime, "Scalable Capital event"),
+  );
 }
 
 export function observeScalableSummaries(items: readonly ScTransactionSummary[]): TypeObservation[] {
