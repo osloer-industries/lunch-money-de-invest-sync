@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.1.0...v0.1.1) (2026-11-12)
+
+
+### Features
+
+* add sync CLI flags and interactive setup ([#18](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/18)) ([15e01d8](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/15e01d83b0e4d36121cfdd614aed2304b538b310))
+* category and tag mapping in setup ([#16](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/16)) ([#20](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/20)) ([b919f00](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/b919f00af88a8bf780f5b04f3299d99ca8dab6f8))
+* migrate Scalable Capital sync to official scalable-cli ([12963cb](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/12963cb7810c32c4ee931e8874ce59b706786650))
+* migrate Trade Republic sync to pytr CLI ([#17](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/17)) ([0667c73](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/0667c739e14726111466b2132f514b082023b091))
+
+
+### Bug Fixes
+
+* harden sc spawn env for Sonar security rating ([16e0ca2](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/16e0ca2822950479ac60bf173b51ad8867866a4f))
+* resolve absolute sc path for secure spawn ([04d54c2](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/04d54c2ffab5dff97be2d53f58c63049ac885e2e))
+
 ## [Unreleased]
 
 ### Breaking (clean break — no backwards compatibility)
