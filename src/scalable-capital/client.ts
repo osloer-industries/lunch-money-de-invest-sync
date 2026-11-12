@@ -6,7 +6,7 @@ import {
   type ScalableCapitalTransaction,
   type ScTransactionSummary,
 } from "./types.js";
-import { createScCliRunner, type ScCliRunner } from "./sc-cli.js";
+import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
 
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;

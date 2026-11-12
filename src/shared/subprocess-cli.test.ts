@@ -16,7 +16,12 @@ vi.mock("node:fs", async (importOriginal) => {
   };
 });
 
-import { createPytrCliRunner, resolvePytrExecutable } from "./pytr-cli.js";
+import {
+  createPytrCliRunner,
+  createScCliRunner,
+  resolvePytrExecutable,
+  resolveScExecutable,
+} from "./subprocess-cli.js";
 
 function mockStreams() {
   return Object.assign(new EventEmitter(), { setEncoding: vi.fn() });
@@ -34,6 +39,44 @@ function mockChild(stdoutText: string, stderrText: string, exitCode: number) {
   });
   return child;
 }
+
+describe("createScCliRunner", () => {
+  afterEach(() => {
+    spawnMock.mockReset();
+    existsSyncMock.mockReset();
+  });
+
+  it("spawns the binary with argv and returns stdout", async () => {
+    mockChild('{"ok":true}', "", 0);
+    const runner = createScCliRunner("/usr/bin/sc");
+    const result = await runner.run(["broker", "transactions", "--json"], { SC_CONFIG_DIR: "/tmp/sc" });
+    expect(result).toEqual({ stdout: '{"ok":true}', stderr: "", exitCode: 0 });
+    const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env: Record<string, string> };
+    expect(spawnMock).toHaveBeenCalledWith("/usr/bin/sc", ["broker", "transactions", "--json"], expect.any(Object));
+    expect(spawnOptions.env.SC_CONFIG_DIR).toBe("/tmp/sc");
+    expect(spawnOptions.env.PATH).toBeUndefined();
+  });
+
+  it("resolves a relative binary name to an absolute path under trusted dirs", () => {
+    existsSyncMock.mockImplementation((p) => p === "/usr/bin/sc");
+    expect(resolveScExecutable("sc")).toBe("/usr/bin/sc");
+    expect(resolveScExecutable("/opt/custom/sc")).toBe("/opt/custom/sc");
+  });
+
+  it("surfaces spawn failures to the caller", async () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: mockStreams(),
+      stderr: mockStreams(),
+    });
+    spawnMock.mockReturnValueOnce(child);
+    const spawnError = Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    queueMicrotask(() => {
+      child.emit("error", spawnError);
+    });
+    const runner = createScCliRunner("/usr/bin/sc");
+    await expect(runner.run(["broker", "transactions", "--json"])).rejects.toBe(spawnError);
+  });
+});
 
 describe("createPytrCliRunner", () => {
   afterEach(() => {

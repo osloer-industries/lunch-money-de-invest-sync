@@ -3,7 +3,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pytrAllEventsSchema, type TradeRepublicPytrConfig } from "./types.js";
-import { createPytrCliRunner, type PytrCliRunner } from "./pytr-cli.js";
+import { isErrnoCode } from "../shared/errno.js";
+import { createPytrCliRunner, type PytrCliRunner } from "../shared/subprocess-cli.js";
 
 const PYTR_DOC = "https://github.com/pytr-org/pytr";
 
@@ -18,13 +19,6 @@ const defaultPytrFilesystem: PytrFilesystem = {
   readFile: (filePath, encoding) => readFile(filePath, encoding),
   rm,
 };
-
-function isErrnoCode(error: unknown, code: string): boolean {
-  if (typeof error !== "object" || error === null) {
-    return false;
-  }
-  return Reflect.get(error, "code") === code;
-}
 
 function pytrHomeEnv(pytrHome: string | undefined): Record<string, string> | undefined {
   if (!pytrHome) {

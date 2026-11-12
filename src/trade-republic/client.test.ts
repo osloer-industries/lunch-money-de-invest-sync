@@ -8,7 +8,7 @@ import {
   fetchTradeRepublicTimeline,
   type PytrFilesystem,
 } from "./client.js";
-import type { PytrCliRunner } from "./pytr-cli.js";
+import type { PytrCliRunner } from "../shared/subprocess-cli.js";
 
 const fixtureDir = path.dirname(fileURLToPath(import.meta.url));
 
