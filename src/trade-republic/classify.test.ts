@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PytrTimelineEvent } from "./types.js";
-import { classifyTradeRepublicEvent, observeTradeRepublicEvents } from "./classify.js";
+import { classifyTradeRepublicEvent, observeTradeRepublicEvents } from "../shared/broker-type-classification.js";
 
 function event(overrides: Partial<PytrTimelineEvent> = {}): PytrTimelineEvent {
   return {

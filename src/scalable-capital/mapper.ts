@@ -1,5 +1,5 @@
 import { toCurrency, type CanonicalTransaction } from "../shared/transaction.js";
-import { classifyScalableSummary } from "./classify.js";
+import { classifyScalableSummary } from "../shared/broker-type-classification.js";
 import type { ScalableCapitalTransaction } from "./types.js";
 
 /**
