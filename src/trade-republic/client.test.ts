@@ -202,4 +202,11 @@ describe("assertPytrMinVersion", () => {
       /Could not parse pytr version/,
     );
   });
+
+  it("rejects truncated semver segments in pytr output", async () => {
+    const runner = fakeRunner([{ exitCode: 0, stdout: "pytr 1.2.\n" }]);
+    await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.1.0" })).rejects.toThrow(
+      /Could not parse pytr version/,
+    );
+  });
 });
