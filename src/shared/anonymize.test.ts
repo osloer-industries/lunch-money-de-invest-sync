@@ -17,6 +17,7 @@ describe("anonymize", () => {
     expect(monthOnlyDate("2026-03")).toBe("2026-03");
     expect(monthOnlyDate("not-a-date")).toBe("unknown-month");
     expect(monthOnlyDate("February 1, 2026")).toBe("2026-02");
+    expect(monthOnlyDate("1 Feb 2026 00:30:00Z")).toBe("2026-02");
   });
 
   it("anonymises example rows for export", () => {
