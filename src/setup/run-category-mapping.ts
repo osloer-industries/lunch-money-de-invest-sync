@@ -8,7 +8,9 @@ import { collectTypeObservations } from "../shared/collect-type-observations.js"
 import { forEachSequentially } from "../shared/sequential-profiles.js";
 import { writeAnonymisedTypeSummaryToPath } from "../shared/export-type-summary.js";
 import { anonymizeTypeExample } from "../shared/anonymize.js";
-import { readConfigFromDisk, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
+import { readConfigFromDisk, readConfigFromDiskForCli, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
+import { loadDotenvFromCwd } from "../shared/load-dotenv.js";
+import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
@@ -163,16 +165,17 @@ export async function runCategoryMappingSetup(
   if (options.nonInteractive) {
     throw new Error("Category mapping requires an interactive terminal (omit --non-interactive)");
   }
+  loadDotenvFromCwd();
   const apiKey = process.env["LUNCH_MONEY_API_KEY"]?.trim() ?? "";
   if (apiKey.length === 0) {
-    throw new Error("LUNCH_MONEY_API_KEY must be set for category mapping");
+    throw new Error(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
   }
   const createClient = deps.createClient;
   if (!createClient) {
     throw new Error("Category mapping requires a Lunch Money client factory");
   }
   const client = createClient(apiKey);
-  const config = (deps.readConfig ?? readConfigFromDisk)();
+  const config = (deps.readConfig ?? readConfigFromDiskForCli)();
   if (config.tradeRepublicProfiles.length === 0 && config.scalableCapitalProfiles.length === 0) {
     throw new Error("config.json has no broker profiles — run full setup first");
   }
