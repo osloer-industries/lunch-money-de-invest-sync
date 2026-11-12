@@ -8,6 +8,24 @@ import type { SetupPrompter } from "./types.js";
 const SC_LOGIN_COMMAND = "sc login --local-read-only";
 const PYTR_LOGIN_COMMAND = "pytr login";
 
+function brokerCheckRequested(options: { enabled: boolean; skipCheck: boolean }): boolean {
+  return options.enabled && !options.skipCheck;
+}
+
+async function promptBrokerLogin(
+  prompter: SetupPrompter,
+  instructions: string,
+  waitMessage: string,
+  isReady: () => Promise<boolean>,
+  failureMessage: string,
+): Promise<void> {
+  prompter.print(instructions);
+  await prompter.waitForEnter(waitMessage);
+  if (!(await isReady())) {
+    throw new Error(failureMessage);
+  }
+}
+
 export function assertNodeMajorVersion(processVersion: string, requiredMajor = 24): void {
   const match = /^v(\d+)/.exec(processVersion);
   const major = match ? Number(match[1]) : Number.NaN;
@@ -23,10 +41,7 @@ export async function ensureScCliReady(
   prompter: SetupPrompter,
   options: { enabled: boolean; skipCheck: boolean },
 ): Promise<void> {
-  if (!options.enabled) {
-    return;
-  }
-  if (options.skipCheck) {
+  if (!brokerCheckRequested(options)) {
     return;
   }
   if (!runner) {
@@ -49,12 +64,16 @@ export async function ensureScCliReady(
   if (loggedIn) {
     return;
   }
-  prompter.print(`Scalable CLI session is missing or expired. Run:\n\n  ${SC_LOGIN_COMMAND}\n`);
-  await prompter.waitForEnter("Press Enter after `sc login` succeeds...");
-  const retry = await runner.run(["broker", "portfolios", "--json"]);
-  if (!isScSessionActive(retry.stdout)) {
-    throw new Error("Scalable CLI still has no active session after login");
-  }
+  await promptBrokerLogin(
+    prompter,
+    `Scalable CLI session is missing or expired. Run:\n\n  ${SC_LOGIN_COMMAND}\n`,
+    "Press Enter after `sc login` succeeds...",
+    async () => {
+      const retry = await runner.run(["broker", "portfolios", "--json"]);
+      return isScSessionActive(retry.stdout);
+    },
+    "Scalable CLI still has no active session after login",
+  );
 }
 
 function isScSessionActive(stdout: string): boolean {
@@ -73,10 +92,7 @@ export async function ensurePytrReady(
   prompter: SetupPrompter,
   options: { enabled: boolean; skipCheck: boolean },
 ): Promise<void> {
-  if (!options.enabled) {
-    return;
-  }
-  if (options.skipCheck) {
+  if (!brokerCheckRequested(options)) {
     return;
   }
   if (!runner) {
@@ -102,13 +118,17 @@ export async function ensurePytrReady(
   if (!lower.includes("credential") && !lower.includes("login")) {
     throw new Error("pytr session check failed — inspect pytr output locally");
   }
-  prompter.print(`pytr session is missing or expired. Run:\n\n  ${PYTR_LOGIN_COMMAND}\n`);
-  await prompter.waitForEnter("Press Enter after `pytr login` succeeds...");
-  const retryDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
-  const retry = await runner.run(["export_transactions", "--last_days", "1", "--outputdir", retryDir]);
-  if (retry.exitCode !== 0) {
-    throw new Error("pytr still cannot export transactions after login");
-  }
+  await promptBrokerLogin(
+    prompter,
+    `pytr session is missing or expired. Run:\n\n  ${PYTR_LOGIN_COMMAND}\n`,
+    "Press Enter after `pytr login` succeeds...",
+    async () => {
+      const retryDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
+      const retry = await runner.run(["export_transactions", "--last_days", "1", "--outputdir", retryDir]);
+      return retry.exitCode === 0;
+    },
+    "pytr still cannot export transactions after login",
+  );
 }
 
 export function parseScPortfolios(stdout: string): Array<{ id: string; name: string }> {
