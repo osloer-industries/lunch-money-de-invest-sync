@@ -102,6 +102,11 @@ describe("fetchTradeRepublicTimeline", () => {
     await expect(fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(""))).rejects.toThrow(/WAF/);
   });
 
+  it("includes exit code when stderr is empty", async () => {
+    const runner = fakeRunner([{ exitCode: 9, stderr: "" }]);
+    await expect(fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(""))).rejects.toThrow(/exit code 9/);
+  });
+
   it("surfaces HTTP 426 guidance from stderr", async () => {
     const runner = fakeRunner([{ exitCode: 1, stderr: "CLIENT_VERSION_OUTDATED" }]);
     await expect(fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(""))).rejects.toThrow(/426/);
@@ -166,9 +171,30 @@ describe("createDefaultPytrCliRunner", () => {
 });
 
 describe("assertPytrMinVersion", () => {
+  it("fails when pytr does not report a version", async () => {
+    const runner = fakeRunner([
+      { exitCode: 1 },
+      { exitCode: 1 },
+    ]);
+    await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.4.10" })).rejects.toThrow(
+      /Could not determine pytr version/,
+    );
+  });
   it("compares semver strings from pytr -V", async () => {
     const runner = fakeRunner([{ exitCode: 0, stdout: "pytr 0.4.10\n" }]);
     await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.4.9" })).resolves.toBeUndefined();
+  });
+
+  it("accepts an exact minimum version match", async () => {
+    const runner = fakeRunner([{ exitCode: 0, stdout: "pytr 0.4.10\n" }]);
+    await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.4.10" })).resolves.toBeUndefined();
+  });
+
+  it("fails when version strings cannot be parsed", async () => {
+    const runner = fakeRunner([{ exitCode: 0, stdout: "pytr unknown\n" }]);
+    await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.4.10" })).rejects.toThrow(
+      /Could not parse pytr version/,
+    );
   });
 
   it("fails when pytr is below the configured minimum", async () => {
