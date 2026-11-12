@@ -5,8 +5,6 @@ import {
   fetchScalableSummariesForProfile,
   fetchTradeRepublicEventsForProfile,
 } from "./broker-profile-transport.js";
-import type { PytrTimelineEvent } from "../trade-republic/types.js";
-import type { ScTransactionSummary } from "../scalable-capital/types.js";
 import { forEachProfileSequentially } from "./sequential-profiles.js";
 
 async function observationsForProfiles<TProfile, TRaw>(
