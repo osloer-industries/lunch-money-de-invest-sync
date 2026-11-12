@@ -179,8 +179,7 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; c
   const statFn = deps.stat ?? ((p) => stat(p));
   const checks: DoctorCheck[] = [];
 
-  checks.push(nodeMajorOk(deps.nodeVersion ?? process.version));
-  checks.push(npmCiCheck(exists, cwd));
+  checks.push(nodeMajorOk(deps.nodeVersion ?? process.version), npmCiCheck(exists, cwd));
 
   const brew = homebrewCheck(deps.platform ?? process.platform, exists);
   if (brew) {
