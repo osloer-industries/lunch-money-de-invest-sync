@@ -54,6 +54,13 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Keep branch, function, line, and statement coverage at or above 80%.
 - Do not log API keys, PINs, or full broker payloads in production paths.
 
+## Releases and versioning
+
+- Stay **below 1.0.0** until the maintainer explicitly decides otherwise (`package.json` must remain `0.x.y`).
+- `release-please-config.json` must keep `bump-minor-pre-major` and `bump-patch-for-minor-pre-major` on the root package
+  so `feat!` / `BREAKING CHANGE` commits do not jump straight from `0.1.0` to `1.0.0`.
+- Do not bump the major version to `1` or drop those flags in a drive-by change.
+
 ## Pull requests
 
 - Use Conventional Commit prefixes in pull request titles (`feat:`, `fix:`, `chore:`).
