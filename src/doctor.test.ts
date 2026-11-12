@@ -43,5 +43,6 @@ describe("runDoctor", () => {
         createScRunner: () => ({ run: vi.fn().mockResolvedValue({ stdout: "", stderr: "", exitCode: 1 }) }),
       }),
     ).rejects.toThrow(/doctor found issues/);
+    expect(logger).toHaveBeenCalledWith(expect.stringMatching(/^ {2}→ /));
   });
 });
