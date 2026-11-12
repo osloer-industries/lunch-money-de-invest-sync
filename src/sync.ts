@@ -24,6 +24,7 @@ import {
   type SyncBroker,
 } from "./sync-options.js";
 import { writeFile } from "node:fs/promises";
+import { runCliModuleMain } from "./shared/cli-main.js";
 import path from "node:path";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 
@@ -247,13 +248,6 @@ export async function runSyncCli(
   );
 }
 
-async function main(): Promise<void> {
+runCliModuleMain(async () => {
   await runSyncCli(process.argv.slice(2));
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
-}
+});

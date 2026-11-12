@@ -1,4 +1,5 @@
-import { parseArgs, type ParseArgsConfig } from "node:util";
+import type { ParseArgsConfig } from "node:util";
+import { exportTypeSummaryPath, parseCliArgv } from "../shared/cli-args.js";
 
 export interface SetupCliOptions {
   readonly nonInteractive: boolean;
@@ -49,13 +50,7 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   -h, --help                     Show this help`;
 
 export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
-  let parsed: ReturnType<typeof parseArgs>;
-  try {
-    parsed = parseArgs({ ...PARSE_CONFIG, args: [...argv] });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid setup arguments: ${message}`, { cause: error });
-  }
+  const parsed = parseCliArgv(argv, PARSE_CONFIG, "Invalid setup arguments");
   const values = parsed.values as Record<string, unknown>;
   const assetRaw = values["lunch-money-asset-id"];
   const lunchMoneyAssetId =
@@ -73,10 +68,7 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     lunchMoneyAssetId,
     portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
     categories: values.categories === true,
-    exportTypeSummary:
-      typeof values["export-type-summary"] === "string" && values["export-type-summary"].length > 0
-        ? values["export-type-summary"]
-        : null,
+    exportTypeSummary: exportTypeSummaryPath(values),
     help: values.help === true,
   };
 }
