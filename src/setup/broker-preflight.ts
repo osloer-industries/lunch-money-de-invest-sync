@@ -2,8 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { scMachineEnvelopeSchema } from "../scalable-capital/types.js";
-import type { ScCliRunner } from "../scalable-capital/sc-cli.js";
-import type { PytrCliRunner } from "../trade-republic/pytr-cli.js";
+import type { PytrCliRunner, ScCliRunner } from "../shared/subprocess-cli.js";
 import type { SetupPrompter } from "./types.js";
 
 const SC_LOGIN_COMMAND = "sc login --local-read-only";
