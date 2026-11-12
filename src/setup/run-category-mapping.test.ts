@@ -39,19 +39,27 @@ const observations: TypeObservation[] = [
   },
 ];
 
-function prompter(confirms: boolean[]): SetupPrompter {
+function prompter(config: {
+  confirms?: boolean[];
+  searches?: string[];
+  checkboxes?: string[][];
+}): SetupPrompter {
   let confirmIndex = 0;
-  let questionIndex = 0;
+  let searchIndex = 0;
+  let checkboxIndex = 0;
   return {
-    question: vi.fn(async () => {
-      const answers = ["99", ""];
-      return answers[questionIndex++] ?? "";
-    }),
-    confirm: vi.fn(async () => confirms[confirmIndex++] ?? false),
+    password: vi.fn(),
+    input: vi.fn(),
+    select: vi.fn(),
+    search: vi.fn(async () => config.searches?.[searchIndex++] ?? SKIP_PLACEHOLDER),
+    checkbox: vi.fn(async () => config.checkboxes?.[checkboxIndex++] ?? []),
+    confirm: vi.fn(async () => config.confirms?.[confirmIndex++] ?? false),
     print: vi.fn(),
     waitForEnter: vi.fn(),
   };
 }
+
+const SKIP_PLACEHOLDER = "__skip__";
 
 describe("runCategoryMappingSetup", () => {
   it("rejects non-interactive mode", async () => {
@@ -59,7 +67,7 @@ describe("runCategoryMappingSetup", () => {
       runCategoryMappingSetup(
         { ...options, nonInteractive: true },
         {
-          prompter: prompter([]),
+          prompter: prompter({}),
           filesystem: fakeCategoryFilesystem(),
           createClient: () =>
             ({ categories: { getAll: vi.fn(), create: vi.fn(), get: vi.fn(), update: vi.fn(), delete: vi.fn() } }) as import("./types.js").CategoryMappingSetupClient,
@@ -80,7 +88,11 @@ describe("runCategoryMappingSetup", () => {
       chmod: async () => {},
     };
     const result = await runCategoryMappingSetup(options, {
-      prompter: prompter([true, true, false]),
+      prompter: prompter({
+        confirms: [true, true, false],
+        searches: ["99"],
+        checkboxes: [[]],
+      }),
       filesystem,
       readConfig: () => ({
         lunchMoneyApiKey: "k",
@@ -111,14 +123,11 @@ describe("runCategoryMappingSetup", () => {
   it("creates a category when the operator confirms new", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 42, name: "Investments" });
-    let questionIndex = 0;
-    const prompt = prompter([true, true, false]);
-    prompt.question = vi.fn(async () => {
-      const answers = ["new", "investment"];
-      return answers[questionIndex++] ?? "";
-    });
     const result = await runCategoryMappingSetup(options, {
-      prompter: prompt,
+      prompter: prompter({
+        confirms: [true, true, true, false],
+        searches: ["__new__"],
+      }),
       filesystem: {
         exists: () => false,
         readText: () => null,
@@ -164,7 +173,7 @@ describe("runCategoryMappingSetup", () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     await expect(
       runCategoryMappingSetup(options, {
-        prompter: prompter([]),
+        prompter: prompter({}),
         filesystem: fakeCategoryFilesystem(),
         readConfig: () => ({
           lunchMoneyApiKey: "k",
@@ -187,7 +196,7 @@ describe("runCategoryMappingSetup", () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     await expect(
       runCategoryMappingSetup(options, {
-        prompter: prompter([]),
+        prompter: prompter({}),
         filesystem: fakeCategoryFilesystem(),
         readConfig: () => ({
           lunchMoneyApiKey: "k",
@@ -209,15 +218,13 @@ describe("runCategoryMappingSetup", () => {
 
   it("rejects invalid category ids", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    let questionIndex = 0;
-    const prompt = prompter([true, true, false]);
-    prompt.question = vi.fn(async () => {
-      const answers = ["nope", "tag-one"];
-      return answers[questionIndex++] ?? "";
-    });
     await expect(
       runCategoryMappingSetup(options, {
-        prompter: prompt,
+        prompter: prompter({
+          confirms: [true, true, false],
+          searches: ["nope"],
+          checkboxes: [["tag-one"]],
+        }),
         filesystem: fakeCategoryFilesystem(),
         readConfig: () => ({
           lunchMoneyApiKey: "k",
@@ -247,7 +254,11 @@ describe("runCategoryMappingSetup", () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const writes: string[] = [];
     const result = await runCategoryMappingSetup(options, {
-      prompter: prompter([true, true, false]),
+      prompter: prompter({
+        confirms: [true, true, false],
+        searches: ["99"],
+        checkboxes: [[]],
+      }),
       filesystem: {
         exists: () => true,
         readText: () =>
@@ -289,7 +300,7 @@ describe("runCategoryMappingSetup", () => {
     const result = await runCategoryMappingSetup(
       { ...options, exportTypeSummary: "summary.json" },
       {
-        prompter: prompter([false, false, false]),
+        prompter: prompter({ confirms: [false, false, false] }),
         filesystem: {
           exists: () => false,
           readText: () => null,

@@ -14,6 +14,8 @@ import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
 import type { SetupCliOptions } from "./setup-options.js";
 
 const CONFIG_FILENAME = "config.json";
+const SKIP_CATEGORY = "__skip__";
+const NEW_CATEGORY = "__new__";
 
 async function pickCategoryId(
   prompter: SetupPrompter,
@@ -34,17 +36,18 @@ async function pickCategoryId(
       );
     }
   }
-  for (const category of categories) {
-    prompter.print(`    [${category.id}] ${category.name}`);
-  }
-  const raw = await prompter.question(
-    `Category id for type "${canonicalType}" (blank=skip, new=create): `,
-  );
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
+  const choice = await prompter.search(`Category for type "${canonicalType}"`, [
+    { name: "Skip (no mapping)", value: SKIP_CATEGORY },
+    { name: "Create new category", value: NEW_CATEGORY },
+    ...categories.map((category) => ({
+      name: `[${category.id}] ${category.name}`,
+      value: String(category.id),
+    })),
+  ]);
+  if (choice === SKIP_CATEGORY) {
     return undefined;
   }
-  if (trimmed.toLowerCase() === "new") {
+  if (choice === NEW_CATEGORY) {
     if (!suggestion) {
       throw new Error(`No default category template for type "${canonicalType}"`);
     }
@@ -66,7 +69,7 @@ async function pickCategoryId(
     });
     return created.id;
   }
-  const id = Number(trimmed);
+  const id = Number(choice);
   if (!Number.isInteger(id) || id <= 0) {
     throw new Error("Category id must be a positive integer");
   }
@@ -78,16 +81,15 @@ async function pickCategoryId(
 
 async function pickTags(prompter: SetupPrompter, canonicalType: CanonicalType): Promise<string[]> {
   const defaults = [...(SUGGESTED_TAGS[canonicalType] ?? [])];
-  const raw = await prompter.question(
-    `Tags for "${canonicalType}" (comma-separated) [${defaults.join(", ")}]: `,
+  const tagChoices = [...new Set(defaults)];
+  const selected = await prompter.checkbox(
+    `Tags for "${canonicalType}"`,
+    tagChoices.map((tag) => ({ name: tag, value: tag })),
   );
-  if (raw.trim().length === 0) {
+  if (selected.length === 0) {
     return defaults;
   }
-  return raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
+  return selected;
 }
 
 async function mergeConfigOnDisk(
