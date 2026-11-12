@@ -1,6 +1,5 @@
 import type { LunchMoneyClient } from "@lunch-money/lunch-money-js-v2";
-import type { ScCliRunner } from "../scalable-capital/sc-cli.js";
-import type { PytrCliRunner } from "../trade-republic/pytr-cli.js";
+import type { PytrCliRunner, ScCliRunner } from "../shared/subprocess-cli.js";
 import type { SyncConfig } from "../shared/config.js";
 
 export interface SetupPrompter {
