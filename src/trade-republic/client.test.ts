@@ -189,4 +189,17 @@ describe("assertPytrMinVersion", () => {
     ]);
     await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.4.10" })).resolves.toBeUndefined();
   });
+
+  it("parses semver after a very long non-version prefix", async () => {
+    const prefix = `noise${".".repeat(5_000)}`;
+    const runner = fakeRunner([{ exitCode: 0, stdout: `${prefix}9.8.7\n` }]);
+    await expect(assertPytrMinVersion(runner, { pytrMinVersion: "9.8.7" })).resolves.toBeUndefined();
+  });
+
+  it("rejects versions that cannot be parsed", async () => {
+    const runner = fakeRunner([{ exitCode: 0, stdout: "pytr not-a-version\n" }]);
+    await expect(assertPytrMinVersion(runner, { pytrMinVersion: "0.4.10" })).rejects.toThrow(
+      /Could not parse pytr version/,
+    );
+  });
 });

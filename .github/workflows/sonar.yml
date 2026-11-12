@@ -1,0 +1,35 @@
+# Tooling rationale: ADR 0009 (docs/adr/0009-tooling-and-quality-gate-stack.md)
+name: SonarQube Cloud
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: sonar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      - if: env.SONAR_TOKEN != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - if: env.SONAR_TOKEN != ''
+        run: npm ci --ignore-scripts
+      - if: env.SONAR_TOKEN != ''
+        run: npm run test:coverage
+      - if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - if: env.SONAR_TOKEN == ''
+        run: echo "SonarQube Cloud analysis skipped because SONAR_TOKEN is not configured."
