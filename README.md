@@ -217,7 +217,10 @@ Lunch Money.
 
 ## Versioning and stability
 
-This project is **pre-1.0.0** (`0.1.0` in [`package.json`](package.json)). Until `1.0.0`:
+This project is **pre-1.0.0** (`0.1.0` in [`package.json`](package.json)). Releases stay on **0.x.y** until the
+maintainer explicitly promotes **1.0.0** — even when pull requests ship breaking changes (`feat!` or a `BREAKING CHANGE`
+footer). Release Please is configured with `bump-minor-pre-major` so those breaking commits advance the **minor** 0.x
+version (not jump to 1.0.0). Until `1.0.0`:
 
 - **APIs, config schema, and sync behaviour may change** without a deprecation period.
 - **Broker integrations may break** when brokers change unofficial clients or CLI behaviour.
