@@ -20,7 +20,8 @@ describe("runDoctor", () => {
     const result = await runDoctor({
       nodeVersion: "v24.0.0",
       platform: "linux",
-      exists: (p) => p.includes("node_modules"),
+      exists: (p) =>
+        p.includes("node_modules") || p.endsWith("/uv") || p.endsWith("/pytr") || p.endsWith("/uvx"),
       createPytrRunner: () => ({
         run: vi.fn().mockResolvedValue({ stdout: "pytr 0.4.10", stderr: "", exitCode: 0 }),
       }),
