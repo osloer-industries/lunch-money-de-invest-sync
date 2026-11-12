@@ -2,8 +2,18 @@ import type { LunchMoneyClient } from "@lunch-money/lunch-money-js-v2";
 import type { PytrCliRunner, ScCliRunner } from "../shared/subprocess-cli.js";
 import type { SyncConfig } from "../shared/config.js";
 
+export interface PromptChoice<T extends string = string> {
+  readonly name: string;
+  readonly value: T;
+  readonly description?: string;
+}
+
 export interface SetupPrompter {
-  question(prompt: string, options?: { hidden?: boolean }): Promise<string>;
+  password(message: string): Promise<string>;
+  input(message: string, defaultValue?: string): Promise<string>;
+  select<T extends string>(message: string, choices: readonly PromptChoice<T>[]): Promise<T>;
+  checkbox(message: string, choices: readonly PromptChoice[]): Promise<string[]>;
+  search(message: string, choices: readonly PromptChoice[]): Promise<string>;
   confirm(prompt: string, defaultYes?: boolean): Promise<boolean>;
   print(line: string): void;
   waitForEnter(message: string): Promise<void>;

@@ -1,14 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 import { runSetup } from "./run-setup.js";
-import type { LunchMoneySetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
+import type { LunchMoneySetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
 
-function fakePrompter(answers: string[]): SetupPrompter {
-  let index = 0;
+interface FakePrompterOptions {
+  readonly password?: string;
+  readonly brokers?: string[];
+  readonly inputs?: string[];
+  readonly selects?: string[];
+  readonly confirms?: (message: string) => boolean;
+}
+
+function fakePrompter(options: FakePrompterOptions): SetupPrompter {
+  let inputIndex = 0;
+  let selectIndex = 0;
   return {
-    question: vi.fn(async () => answers[index++] ?? ""),
-    confirm: vi.fn(async () => true),
-    print: vi.fn(),
-    waitForEnter: vi.fn(async () => undefined),
+    password: vi.fn<() => Promise<string>>(async () => options.password ?? ""),
+    input: vi.fn<() => Promise<string>>(async () => options.inputs?.[inputIndex++] ?? ""),
+    checkbox: vi.fn<() => Promise<string[]>>(async () => options.brokers ?? []),
+    async select<T extends string>(_message: string, _choices: readonly PromptChoice<T>[]): Promise<T> {
+      const value = options.selects?.[selectIndex++] ?? "";
+      return value as T;
+    },
+    search: vi.fn<() => Promise<string>>(async () => ""),
+    confirm: vi.fn<(message: string) => Promise<boolean>>(async (message: string) =>
+      options.confirms ? options.confirms(message) : true,
+    ),
+    print: vi.fn<(line: string) => void>(),
+    waitForEnter: vi.fn<() => Promise<void>>(async () => undefined),
   };
 }
 
@@ -33,24 +51,31 @@ function fakeLmClient(): LunchMoneySetupClient {
   } as unknown as LunchMoneySetupClient;
 }
 
+const baseOptions = {
+  nonInteractive: false,
+  skipBrokerCheck: true,
+  yes: true,
+  tradeRepublic: false,
+  scalableCapital: false,
+  owner: null,
+  lunchMoneyAssetId: null,
+  portfolioId: null,
+  help: false,
+} as const;
+
 describe("runSetup", () => {
   it("rejects incomplete non-interactive flags", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     await expect(
       runSetup(
         {
+          ...baseOptions,
           nonInteractive: true,
-          skipBrokerCheck: true,
-          yes: true,
           tradeRepublic: true,
-          scalableCapital: false,
-          owner: null,
           lunchMoneyAssetId: 3,
-          portfolioId: null,
-          help: false,
         },
         {
-          prompter: fakePrompter([]),
+          prompter: fakePrompter({}),
           filesystem: fakeFilesystem(),
           runners: {},
           nodeVersion: "v24.0.0",
@@ -66,18 +91,14 @@ describe("runSetup", () => {
     await expect(
       runSetup(
         {
+          ...baseOptions,
           nonInteractive: true,
-          skipBrokerCheck: true,
-          yes: true,
           tradeRepublic: true,
-          scalableCapital: false,
           owner: "operator-a",
           lunchMoneyAssetId: 1,
-          portfolioId: null,
-          help: false,
         },
         {
-          prompter: fakePrompter([]),
+          prompter: fakePrompter({}),
           filesystem: fakeFilesystem(),
           runners: {},
           nodeVersion: "v24.0.0",
@@ -86,22 +107,19 @@ describe("runSetup", () => {
       ),
     ).rejects.toThrow(/LUNCH_MONEY_API_KEY/);
   });
+
   it("writes .env and config.json in non-interactive mode", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const result = await runSetup(
       {
+        ...baseOptions,
         nonInteractive: true,
-        skipBrokerCheck: true,
-        yes: true,
         tradeRepublic: true,
-        scalableCapital: false,
         owner: "operator-a",
         lunchMoneyAssetId: 3,
-        portfolioId: null,
-        help: false,
       },
       {
-        prompter: fakePrompter([]),
+        prompter: fakePrompter({}),
         filesystem: fakeFilesystem(),
         runners: {},
         nodeVersion: "v24.0.0",
@@ -118,20 +136,14 @@ describe("runSetup", () => {
   });
 
   it("runs the interactive Trade Republic flow", async () => {
-  const prompt = fakePrompter(["lm_test_key", "operator-a", "3", "[]"]);
-  prompt.confirm = vi.fn(async (message: string) => !message.includes("Scalable"));
+    const prompt = fakePrompter({
+      password: "lm_test_key",
+      brokers: ["trade-republic"],
+      inputs: ["operator-a", "[]"],
+      selects: ["3"],
+    });
     const result = await runSetup(
-      {
-        nonInteractive: false,
-        skipBrokerCheck: true,
-        yes: true,
-        tradeRepublic: false,
-        scalableCapital: false,
-        owner: null,
-        lunchMoneyAssetId: null,
-        portfolioId: null,
-        help: false,
-      },
+      { ...baseOptions },
       {
         prompter: prompt,
         filesystem: fakeFilesystem(),
@@ -148,18 +160,15 @@ describe("runSetup", () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const result = await runSetup(
       {
+        ...baseOptions,
         nonInteractive: true,
-        skipBrokerCheck: true,
-        yes: true,
-        tradeRepublic: false,
         scalableCapital: true,
         owner: "operator-b",
         lunchMoneyAssetId: 4,
         portfolioId: "portfolio-operator-b",
-        help: false,
       },
       {
-        prompter: fakePrompter([]),
+        prompter: fakePrompter({}),
         filesystem: fakeFilesystem(),
         runners: {},
         nodeVersion: "v24.0.0",
@@ -171,8 +180,6 @@ describe("runSetup", () => {
   });
 
   it("configures scalable capital interactively with portfolio selection", async () => {
-    const prompt = fakePrompter(["lm_test_key", "operator-b", "3", "portfolio-operator-b", "[]"]);
-    prompt.confirm = vi.fn(async (message: string) => message.includes("Scalable"));
     const scRunner = {
       run: vi.fn().mockResolvedValue({
         stdout: JSON.stringify({
@@ -190,19 +197,14 @@ describe("runSetup", () => {
       }),
     };
     const result = await runSetup(
+      { ...baseOptions },
       {
-        nonInteractive: false,
-        skipBrokerCheck: true,
-        yes: true,
-        tradeRepublic: false,
-        scalableCapital: false,
-        owner: null,
-        lunchMoneyAssetId: null,
-        portfolioId: null,
-        help: false,
-      },
-      {
-        prompter: prompt,
+        prompter: fakePrompter({
+          password: "lm_test_key",
+          brokers: ["scalable-capital"],
+          inputs: ["operator-b", "[]"],
+          selects: ["3", "portfolio-operator-b"],
+        }),
         filesystem: fakeFilesystem(),
         runners: { sc: scRunner },
         nodeVersion: "v24.0.0",
@@ -217,23 +219,16 @@ describe("runSetup", () => {
   });
 
   it("rejects an unknown manual account id", async () => {
-    const prompt = fakePrompter(["lm_test_key", "operator-a", "999", "[]"]);
-    prompt.confirm = vi.fn(async (message: string) => !message.includes("Scalable"));
     await expect(
       runSetup(
+        { ...baseOptions },
         {
-          nonInteractive: false,
-          skipBrokerCheck: true,
-          yes: true,
-          tradeRepublic: false,
-          scalableCapital: false,
-          owner: null,
-          lunchMoneyAssetId: null,
-          portfolioId: null,
-          help: false,
-        },
-        {
-          prompter: prompt,
+          prompter: fakePrompter({
+            password: "lm_test_key",
+            brokers: ["trade-republic"],
+            inputs: ["operator-a", "[]"],
+            selects: ["999"],
+          }),
           filesystem: fakeFilesystem(),
           runners: {},
           nodeVersion: "v24.0.0",
@@ -244,23 +239,16 @@ describe("runSetup", () => {
   });
 
   it("validates sharedCardLast4 JSON", async () => {
-    const prompt = fakePrompter(["lm_test_key", "operator-a", "3", '["12"]']);
-    prompt.confirm = vi.fn(async (message: string) => !message.includes("Scalable"));
     await expect(
       runSetup(
+        { ...baseOptions },
         {
-          nonInteractive: false,
-          skipBrokerCheck: true,
-          yes: true,
-          tradeRepublic: false,
-          scalableCapital: false,
-          owner: null,
-          lunchMoneyAssetId: null,
-          portfolioId: null,
-          help: false,
-        },
-        {
-          prompter: prompt,
+          prompter: fakePrompter({
+            password: "lm_test_key",
+            brokers: ["trade-republic"],
+            inputs: ["operator-a", '["12"]'],
+            selects: ["3"],
+          }),
           filesystem: fakeFilesystem(),
           runners: {},
           nodeVersion: "v24.0.0",
@@ -273,28 +261,17 @@ describe("runSetup", () => {
   it("refuses to overwrite an existing .env without confirmation", async () => {
     const fs = fakeFilesystem();
     (fs.exists as ReturnType<typeof vi.fn>).mockImplementation((path) => String(path).endsWith(".env"));
-    const prompt = fakePrompter(["lm_test_key", "operator-a", "3", "[]"]);
-    prompt.confirm = vi.fn(async (message: string) => {
-      if (message.includes(".env")) {
-        return false;
-      }
-      return !message.includes("Scalable");
-    });
     await expect(
       runSetup(
+        { ...baseOptions, yes: false },
         {
-          nonInteractive: false,
-          skipBrokerCheck: true,
-          yes: false,
-          tradeRepublic: false,
-          scalableCapital: false,
-          owner: null,
-          lunchMoneyAssetId: null,
-          portfolioId: null,
-          help: false,
-        },
-        {
-          prompter: prompt,
+          prompter: fakePrompter({
+            password: "lm_test_key",
+            brokers: ["trade-republic"],
+            inputs: ["operator-a", "[]"],
+            selects: ["3"],
+            confirms: (message) => !message.includes(".env"),
+          }),
           filesystem: fs,
           runners: {},
           nodeVersion: "v24.0.0",
@@ -305,29 +282,18 @@ describe("runSetup", () => {
     ).rejects.toThrow(/overwrite existing .env/);
   });
 
-  it("creates a Lunch Money manual account when the operator types new", async () => {
-    const prompt = fakePrompter(["lm_test_key", "operator-a", "new", "[]"]);
-    prompt.confirm = vi.fn(async (message: string) => {
-      if (message.includes("Create a new")) {
-        return true;
-      }
-      return !message.includes("Scalable");
-    });
+  it("creates a Lunch Money manual account when the operator selects new", async () => {
     const lm = fakeLmClient();
     const result = await runSetup(
+      { ...baseOptions },
       {
-        nonInteractive: false,
-        skipBrokerCheck: true,
-        yes: true,
-        tradeRepublic: false,
-        scalableCapital: false,
-        owner: null,
-        lunchMoneyAssetId: null,
-        portfolioId: null,
-        help: false,
-      },
-      {
-        prompter: prompt,
+        prompter: fakePrompter({
+          password: "lm_test_key",
+          brokers: ["trade-republic"],
+          inputs: ["operator-a", "[]"],
+          selects: ["__new__"],
+          confirms: (message) => message.includes("Create a new"),
+        }),
         filesystem: fakeFilesystem(),
         runners: {},
         nodeVersion: "v24.0.0",

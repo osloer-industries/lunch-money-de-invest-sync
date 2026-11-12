@@ -4,7 +4,11 @@ import type { SetupPrompter } from "./types.js";
 
 function prompter(): SetupPrompter {
   return {
-    question: vi.fn(),
+    password: vi.fn(),
+    input: vi.fn(),
+    select: vi.fn(),
+    checkbox: vi.fn(),
+    search: vi.fn(),
     confirm: vi.fn(),
     print: vi.fn(),
     waitForEnter: vi.fn(async () => undefined),

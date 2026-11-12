@@ -30,7 +30,7 @@ async function promptApiKeyWithFactory(
   prompter: SetupPrompter,
   createClient: (apiKey: string) => LunchMoneySetupClient,
 ): Promise<string> {
-  const key = await prompter.question("Lunch Money API key: ", { hidden: true });
+  const key = await prompter.password("Lunch Money API key");
   if (key.trim().length === 0) {
     throw new Error("Lunch Money API key is required");
   }
@@ -38,22 +38,25 @@ async function promptApiKeyWithFactory(
   return key.trim();
 }
 
+const NEW_MANUAL_ACCOUNT = "__new__";
+
 async function chooseManualAccount(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
   label: string,
 ): Promise<number> {
   const accounts = await client.manualAccounts.getAll();
-  if (accounts.length > 0) {
-    prompter.print(`Lunch Money manual accounts for ${label}:`);
-    for (const account of accounts) {
-      prompter.print(`  [${account.id}] ${account.name}`);
-    }
-  }
-  const raw = await prompter.question(
-    `Enter Lunch Money manual account id for ${label} (or type 'new'): `,
+  const choice = await prompter.select(
+    `Lunch Money manual account for ${label}`,
+    [
+      ...accounts.map((account) => ({
+        name: `[${account.id}] ${account.name}`,
+        value: String(account.id),
+      })),
+      { name: "Create new manual account", value: NEW_MANUAL_ACCOUNT },
+    ],
   );
-  if (raw.trim().toLowerCase() === "new") {
+  if (choice === NEW_MANUAL_ACCOUNT) {
     const create = await prompter.confirm("Create a new Lunch Money manual account?", false);
     if (!create) {
       throw new Error("Manual account mapping cancelled");
@@ -67,7 +70,7 @@ async function chooseManualAccount(
     });
     return created.id;
   }
-  const id = Number(raw.trim());
+  const id = Number(choice);
   if (!Number.isInteger(id) || id <= 0) {
     throw new Error("Manual account id must be a positive integer");
   }
@@ -75,6 +78,23 @@ async function chooseManualAccount(
     throw new Error(`Manual account id ${id} was not returned by the Lunch Money API`);
   }
   return id;
+}
+
+async function chooseScPortfolio(
+  prompter: SetupPrompter,
+  portfolios: Array<{ id: string; name: string }>,
+): Promise<string | undefined> {
+  if (portfolios.length <= 1) {
+    return portfolios[0]?.id;
+  }
+  const selected = await prompter.select("Scalable Capital portfolio", [
+    { name: "Skip (no portfolioId)", value: "" },
+    ...portfolios.map((portfolio) => ({
+      name: `${portfolio.name} (${portfolio.id})`,
+      value: portfolio.id,
+    })),
+  ]);
+  return selected.length > 0 ? selected : undefined;
 }
 
 async function writeEnvFile(
@@ -129,30 +149,29 @@ async function interactiveProfiles(
   const tradeRepublicProfiles: TradeRepublicProfile[] = [];
   const scalableCapitalProfiles: ScalableCapitalProfile[] = [];
 
-  if (await prompter.confirm("Configure Trade Republic (pytr)?", true)) {
+  const brokers = await prompter.checkbox("Which brokers should this config include?", [
+    { name: "Trade Republic (pytr)", value: "trade-republic" },
+    { name: "Scalable Capital (sc)", value: "scalable-capital" },
+  ]);
+
+  if (brokers.includes("trade-republic")) {
     await ensurePytrReady(runners.pytr, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
-    const owner = (await prompter.question("Trade Republic owner label [operator-a]: ")) || "operator-a";
+    const owner =
+      (await prompter.input("Trade Republic owner label", "operator-a")).trim() || "operator-a";
     const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
     tradeRepublicProfiles.push({ owner, lunchMoneyAssetId, pytrCommand: ["pytr"] });
   }
 
-  if (await prompter.confirm("Configure Scalable Capital (sc)?", true)) {
+  if (brokers.includes("scalable-capital")) {
     await ensureScCliReady(runners.sc, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
-    const owner = (await prompter.question("Scalable Capital owner label [operator-b]: ")) || "operator-b";
+    const owner =
+      (await prompter.input("Scalable Capital owner label", "operator-b")).trim() || "operator-b";
     const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
     let portfolioId: string | undefined;
     if (runners.sc) {
       const listed = await runners.sc.run(["broker", "portfolios", "--json"]);
       const portfolios = parseScPortfolios(listed.stdout);
-      if (portfolios.length > 1) {
-        for (const portfolio of portfolios) {
-          prompter.print(`  ${portfolio.id} — ${portfolio.name}`);
-        }
-        const raw = await prompter.question("portfolioId (optional): ");
-        if (raw.trim().length > 0) {
-          portfolioId = raw.trim();
-        }
-      }
+      portfolioId = await chooseScPortfolio(prompter, portfolios);
     }
     scalableCapitalProfiles.push({
       owner,
@@ -242,7 +261,7 @@ export async function runSetup(
 
   const sharedRaw = options.nonInteractive
     ? "[]"
-    : await deps.prompter.question('sharedCardLast4 JSON array (e.g. ["0000"]) [[]]: ');
+    : await deps.prompter.input('sharedCardLast4 JSON array (e.g. ["0000"])', "[]");
   const sharedParsed: unknown = JSON.parse(sharedRaw.trim().length > 0 ? sharedRaw : "[]");
   const sharedCardLast4 = z.array(z.string().length(4)).parse(sharedParsed);
   loadConfig({
