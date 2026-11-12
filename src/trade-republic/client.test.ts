@@ -80,12 +80,12 @@ describe("fetchTradeRepublicTimeline", () => {
 
     await fetchTradeRepublicTimeline(
       runner,
-      { pytrHome: "/data/operator-a/.pytr", loginV2: true, wafTokenMode: "no-waf", account: "acct-1" },
+      { pytrHome: "/data/operator-a/.pytr", account: "acct-1" },
       filesystem,
     );
 
     expect(runner.run).toHaveBeenCalledWith(
-      expect.arrayContaining(["--v2", "--no-waf-token", "--account", "acct-1"]),
+      expect.arrayContaining(["--v2", "--account", "acct-1"]),
       { HOME: "/data/operator-a" },
     );
   });
@@ -97,9 +97,9 @@ describe("fetchTradeRepublicTimeline", () => {
     ).rejects.toThrow(/pytrHome must be the absolute path/);
   });
 
-  it("surfaces WAF hints from stderr", async () => {
+  it("surfaces app-approval login guidance when pytr mentions playwright", async () => {
     const runner = fakeRunner([{ exitCode: 2, stderr: "playwright missing" }]);
-    await expect(fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(""))).rejects.toThrow(/WAF/);
+    await expect(fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(""))).rejects.toThrow(/login --v2/);
   });
 
   it("includes exit code when stderr is empty", async () => {
@@ -139,15 +139,12 @@ describe("fetchTradeRepublicTimeline", () => {
     await expect(fetchTradeRepublicTimeline(runner, {}, filesystem)).rejects.toThrow(/all_events\.json/);
   });
 
-  it("passes playwright and awswaf flags", async () => {
+  it("always passes --v2 to export_transactions", async () => {
     const fixture = await loadFixture();
     const runner = fakeRunner([{ exitCode: 0 }]);
     const filesystem = fakeFilesystem(fixture);
-    await fetchTradeRepublicTimeline(runner, { wafTokenMode: "playwright" }, filesystem);
-    expect(runner.run).toHaveBeenCalledWith(expect.arrayContaining(["--waf-token", "playwright"]), undefined);
-    const runner2 = fakeRunner([{ exitCode: 0 }]);
-    await fetchTradeRepublicTimeline(runner2, { wafTokenMode: "awswaf" }, filesystem);
-    expect(runner2.run).toHaveBeenCalledWith(expect.arrayContaining(["--waf-token", "awswaf"]), undefined);
+    await fetchTradeRepublicTimeline(runner, {}, filesystem);
+    expect(runner.run).toHaveBeenCalledWith(expect.arrayContaining(["--v2"]), undefined);
   });
 
   it("checks pytrMinVersion before exporting", async () => {

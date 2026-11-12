@@ -4,8 +4,6 @@ export function pytrConfigFromProfile(profile: SyncConfig["tradeRepublicProfiles
   return {
     ...(profile.pytrCommand ? { pytrCommand: profile.pytrCommand } : {}),
     ...(profile.pytrHome ? { pytrHome: profile.pytrHome } : {}),
-    ...(profile.loginV2 !== undefined ? { loginV2: profile.loginV2 } : {}),
-    ...(profile.wafTokenMode ? { wafTokenMode: profile.wafTokenMode } : {}),
     ...(profile.account ? { account: profile.account } : {}),
     ...(profile.pytrMinVersion ? { pytrMinVersion: profile.pytrMinVersion } : {}),
     ...(profile.cliSubprocessTimeoutMs !== undefined

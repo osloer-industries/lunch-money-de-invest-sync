@@ -8,9 +8,9 @@ import {
 import { isErrnoCode } from "../shared/errno.js";
 import type { PytrCliRunner, ScCliRunner } from "../shared/subprocess-cli.js";
 import type { SetupPrompter } from "./types.js";
+import { buildPytrExportProbeArgv, formatPytrLoginCommand, isPytrSessionMissing } from "./pytr-session.js";
 
 const SC_LOGIN_COMMAND = "sc login --local-read-only";
-const PYTR_LOGIN_COMMAND = "pytr login";
 
 function brokerCheckRequested(options: { enabled: boolean; skipCheck: boolean }): boolean {
   return options.enabled && !options.skipCheck;
@@ -86,15 +86,35 @@ function isScSessionActive(stdout: string): boolean {
   return envelope !== null && envelope.ok;
 }
 
+export async function confirmPytrCredentialStorage(prompter: SetupPrompter, loginCommand: string): Promise<void> {
+  prompter.print(
+    [
+      "pytr must store credentials on disk for unattended exports.",
+      "The login command below passes --store_credentials, which writes your phone number and Trade Republic PIN",
+      "in plain text to ~/.pytr/credentials (file mode 0600).",
+    ].join("\n"),
+  );
+  const ok = await prompter.confirm(`Accept and run this login command later if needed?\n\n  ${loginCommand}`, false);
+  if (!ok) {
+    throw new Error("Trade Republic setup cancelled — credential storage was not accepted");
+  }
+}
+
+export interface EnsurePytrReadyContext {
+  readonly pytrCommand: readonly string[];
+}
+
 export async function ensurePytrReady(
   runner: PytrCliRunner | undefined,
   prompter: SetupPrompter,
   options: { enabled: boolean; skipCheck: boolean },
+  context?: EnsurePytrReadyContext,
 ): Promise<void> {
   if (!brokerCheckRequested(options)) {
     return;
   }
   const pytr = requireBrokerRunner(runner, "Trade Republic");
+  const pytrCommand = context?.pytrCommand ?? (["pytr"] as const);
   let versionRun: Awaited<ReturnType<PytrCliRunner["run"]>>;
   try {
     versionRun = await pytr.run(["-V"]);
@@ -108,22 +128,22 @@ export async function ensurePytrReady(
     throw new Error("pytr is installed but `-V` failed — check your pytrCommand");
   }
   const probeDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
-  const probe = await pytr.run(["export_transactions", "--last_days", "1", "--outputdir", probeDir]);
-  const loggedIn = probe.exitCode === 0;
-  if (loggedIn) {
+  const probeArgv = buildPytrExportProbeArgv(probeDir);
+  const probe = await pytr.run(probeArgv);
+  if (probe.exitCode === 0) {
     return;
   }
-  const lower = probe.stderr.toLowerCase();
-  if (!lower.includes("credential") && !lower.includes("login")) {
+  if (!isPytrSessionMissing(probe)) {
     throw new Error("pytr session check failed — inspect pytr output locally");
   }
+  const loginCommand = formatPytrLoginCommand(pytrCommand);
   await promptBrokerLogin(
     prompter,
-    `pytr session is missing or expired. Run:\n\n  ${PYTR_LOGIN_COMMAND}\n`,
-    "Press Enter after `pytr login` succeeds...",
+    `pytr session is missing or expired. Run:\n\n  ${loginCommand}\n`,
+    "Press Enter after pytr login succeeds...",
     async () => {
       const retryDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
-      const retry = await pytr.run(["export_transactions", "--last_days", "1", "--outputdir", retryDir]);
+      const retry = await pytr.run(buildPytrExportProbeArgv(retryDir));
       return retry.exitCode === 0;
     },
     "pytr still cannot export transactions after login",

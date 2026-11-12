@@ -281,7 +281,10 @@ describe("runSetup", () => {
       defaultRunSetupDeps({
         prompter: trInteractivePrompter({
           selects: ["__new__"],
-          confirms: (message) => message.includes("Create Lunch Money manual account"),
+          confirms: (message) =>
+            message.includes("Create Lunch Money manual account") ||
+            message.includes("credential") ||
+            message.includes("login command"),
         }),
         runSync: vi.fn().mockResolvedValue(undefined),
         createLunchMoneyClient: () => lm,

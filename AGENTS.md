@@ -43,7 +43,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   overridable per profile via `pytrHome`). Operators run `pytr login` locally. Never commit pytr
   session files or operator config with secrets. CI uses fixtures and mocked `PytrCliRunner` only.
 - Optional profile fields: `pytrCommand` (argv prefix, e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`),
-  `pytrHome`, `loginV2`, `wafTokenMode`, `account`, `pytrMinVersion`.
+  `pytrHome`, `account`, `pytrMinVersion`. pytr login always uses `--v2` (app approval); do not add WAF or Playwright login paths.
 - **Saveback:** emit one Lunch Money row per saveback timeline event (tag `saveback`), not separate
   deposit and buy rows. Do not hardcode an income/excluded category — document Lunch Money rule options.
 - **Clean break:** remove `trade-republic-api`, `phoneNumber`, and `pin` from config with no migration

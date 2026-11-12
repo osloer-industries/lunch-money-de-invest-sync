@@ -178,8 +178,6 @@ describe("runSync", () => {
       lunchMoneyAssetId: 1,
       pytrCommand: ["uvx", "pytr"],
       pytrHome: "/data/operator-a/.pytr",
-      loginV2: true,
-      wafTokenMode: "playwright",
       account: "acct-1",
       pytrMinVersion: "0.4.10",
     });
@@ -188,8 +186,6 @@ describe("runSync", () => {
       expect.objectContaining({
         pytrCommand: ["uvx", "pytr"],
         pytrHome: "/data/operator-a/.pytr",
-        loginV2: true,
-        wafTokenMode: "playwright",
         account: "acct-1",
         pytrMinVersion: "0.4.10",
       }),
