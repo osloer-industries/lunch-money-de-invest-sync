@@ -1,29 +1,28 @@
 import path from "node:path";
-import type { CanonicalType } from "../shared/canonical-type.js";
-import { canonicalTypeSchema, groupTypeObservations } from "../shared/canonical-type.js";
+import {
+  canonicalTypeSchema,
+  groupTypeObservations,
+  type CanonicalType,
+  type TypeGroup,
+} from "../shared/canonical-type.js";
 import { collectTypeObservations } from "../shared/collect-type-observations.js";
 import { serializeTypeSummaryFromGroups } from "../shared/export-type-summary.js";
 import { anonymizeTypeExample } from "../shared/anonymize.js";
 import { parseStoredMaps } from "../shared/config-maps.js";
 import { readConfigFromDisk, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
 import { parseJsonText } from "../shared/config.js";
-import type { TypeGroup } from "../shared/canonical-type.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
 import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
 import type { SetupCliOptions } from "./setup-options.js";
 
 const CONFIG_FILENAME = "config.json";
 
-async function listCategories(client: CategoryMappingSetupClient) {
-  return client.categories.getAll();
-}
-
 async function pickCategoryId(
   prompter: SetupPrompter,
   client: CategoryMappingSetupClient,
   canonicalType: CanonicalType,
 ): Promise<number | undefined> {
-  const categories = await listCategories(client);
+  const categories = await client.categories.getAll();
   const suggestion = SUGGESTED_CATEGORIES[canonicalType];
   if (suggestion) {
     const match = categories.find(
@@ -144,7 +143,7 @@ async function configureMapsForTypes(
   categoryMap: SyncConfig["categoryMap"],
   tagMap: SyncConfig["tagMap"],
 ): Promise<void> {
-  for (const canonicalType of [...seenTypes].toSorted()) {
+  for (const canonicalType of [...seenTypes].toSorted((left, right) => left.localeCompare(right))) {
     canonicalTypeSchema.parse(canonicalType);
     if (await prompter.confirm(`Map Lunch Money category for type "${canonicalType}"?`, true)) {
       const categoryId = await pickCategoryId(prompter, client, canonicalType);

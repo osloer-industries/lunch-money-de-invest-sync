@@ -15,6 +15,7 @@ import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
 import { applyCategoryTagMappings } from "./shared/apply-mappings.js";
 import { groupTypeObservations } from "./shared/canonical-type.js";
 import { collectTypeObservations } from "./shared/collect-type-observations.js";
+import { pytrConfigFromProfile, scConfigFromProfile } from "./shared/profile-cli-config.js";
 import { serializeTypeSummaryFromGroups } from "./shared/export-type-summary.js";
 import {
   filterSyncConfig,
@@ -186,24 +187,13 @@ export function createLiveCollectors(): BrokerCollectors {
 
 const liveCollectors: BrokerCollectors = {
   async collectTradeRepublic(profile) {
-    const pytrConfig = {
-      ...(profile.pytrCommand ? { pytrCommand: profile.pytrCommand } : {}),
-      ...(profile.pytrHome ? { pytrHome: profile.pytrHome } : {}),
-      ...(profile.loginV2 !== undefined ? { loginV2: profile.loginV2 } : {}),
-      ...(profile.wafTokenMode ? { wafTokenMode: profile.wafTokenMode } : {}),
-      ...(profile.account ? { account: profile.account } : {}),
-      ...(profile.pytrMinVersion ? { pytrMinVersion: profile.pytrMinVersion } : {}),
-    };
+    const pytrConfig = pytrConfigFromProfile(profile);
     const runner = createDefaultPytrCliRunner(pytrConfig);
     const events = await fetchTradeRepublicTimeline(runner, pytrConfig);
     return mapTradeRepublicEvents(events);
   },
   async collectScalableCapital(profile) {
-    const cliConfig = {
-      ...(profile.scBinaryPath ? { scBinaryPath: profile.scBinaryPath } : {}),
-      ...(profile.scConfigDir ? { scConfigDir: profile.scConfigDir } : {}),
-      ...(profile.portfolioId ? { portfolioId: profile.portfolioId } : {}),
-    };
+    const cliConfig = scConfigFromProfile(profile);
     const runner = createDefaultScCliRunner(cliConfig);
     const transactions = await fetchAllScalableCapitalTransactions(runner, cliConfig);
     return mapScalableCapitalTransactions(transactions);
