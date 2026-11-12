@@ -4,10 +4,19 @@ import type {
 } from "@lunch-money/lunch-money-js-v2";
 import type { CanonicalTransaction } from "../shared/transaction.js";
 
+export interface TransactionListItem {
+  readonly external_id?: string | null;
+}
+
 /** Narrow slice of the client that upserting needs, so tests can pass a stub instead of a real client. */
 export interface TransactionsApi {
   transactions: {
     create: (data: CreateTransactionsBody) => Promise<InsertTransactionsResponse>;
+    getAll?: (params: {
+      manual_account_id?: number;
+      limit?: number;
+      offset?: number;
+    }) => Promise<{ transactions: TransactionListItem[]; hasMore: boolean }>;
   };
 }
 
