@@ -5,6 +5,7 @@ import {
   type TypeGroup,
 } from "../shared/canonical-type.js";
 import { collectTypeObservations } from "../shared/collect-type-observations.js";
+import { forEachSequentially } from "../shared/sequential-profiles.js";
 import { writeAnonymisedTypeSummaryToPath } from "../shared/export-type-summary.js";
 import { anonymizeTypeExample } from "../shared/anonymize.js";
 import { readConfigFromDisk, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
@@ -135,22 +136,18 @@ async function configureMapsForTypes(
   tagMap: SyncConfig["tagMap"],
 ): Promise<void> {
   const types = [...seenTypes].toSorted((left, right) => left.localeCompare(right));
-  await types.reduce(
-    (chain, canonicalType) =>
-      chain.then(async () => {
-        canonicalTypeSchema.parse(canonicalType);
-        if (await prompter.confirm(`Map Lunch Money category for type "${canonicalType}"?`, true)) {
-          const categoryId = await pickCategoryId(prompter, client, canonicalType);
-          if (categoryId !== undefined) {
-            categoryMap[canonicalType] = categoryId;
-          }
-        }
-        if (await prompter.confirm(`Configure tags for type "${canonicalType}"?`, true)) {
-          tagMap[canonicalType] = await pickTags(prompter, canonicalType);
-        }
-      }),
-    Promise.resolve(),
-  );
+  await forEachSequentially(types, async (canonicalType) => {
+    canonicalTypeSchema.parse(canonicalType);
+    if (await prompter.confirm(`Map Lunch Money category for type "${canonicalType}"?`, true)) {
+      const categoryId = await pickCategoryId(prompter, client, canonicalType);
+      if (categoryId !== undefined) {
+        categoryMap[canonicalType] = categoryId;
+      }
+    }
+    if (await prompter.confirm(`Configure tags for type "${canonicalType}"?`, true)) {
+      tagMap[canonicalType] = await pickTags(prompter, canonicalType);
+    }
+  });
 }
 
 export async function runCategoryMappingSetup(

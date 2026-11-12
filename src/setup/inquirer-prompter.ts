@@ -67,8 +67,8 @@ export function createInquirerPrompter(): SetupPrompter {
     print(line) {
       process.stdout.write(`${line}\n`);
     },
-    async waitForEnter(message) {
-      await inputPrompt({ message });
+    waitForEnter(message) {
+      return inputPrompt({ message }).then(() => undefined);
     },
   };
 }
