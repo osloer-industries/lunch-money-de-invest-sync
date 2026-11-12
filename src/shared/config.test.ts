@@ -31,6 +31,25 @@ describe("loadConfig", () => {
     expect(config.scalableCapitalProfiles[0]?.owner).toBe("operator-b");
   });
 
+  it("accepts category and tag maps keyed by canonical types", () => {
+    const config = loadConfig({
+      ...validRaw,
+      categoryMap: { deposit: 12 },
+      tagMap: { deposit: ["investment"] },
+    });
+    expect(config.categoryMap.deposit).toBe(12);
+    expect(config.tagMap.deposit).toEqual(["investment"]);
+  });
+
+  it("rejects invalid categoryMap keys", () => {
+    expect(() =>
+      loadConfig({
+        lunchMoneyApiKey: "lm_test_key",
+        categoryMap: { "not-valid": 1 },
+      }),
+    ).toThrow();
+  });
+
   it("defaults optional arrays to empty", () => {
     const config = loadConfig({ lunchMoneyApiKey: "lm_test_key" });
     expect(config.tradeRepublicProfiles).toEqual([]);

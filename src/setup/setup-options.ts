@@ -1,4 +1,5 @@
-import { parseArgs, type ParseArgsConfig } from "node:util";
+import type { ParseArgsConfig } from "node:util";
+import { exportTypeSummaryPath, parseCliArgv } from "../shared/cli-args.js";
 
 export interface SetupCliOptions {
   readonly nonInteractive: boolean;
@@ -9,6 +10,8 @@ export interface SetupCliOptions {
   readonly owner: string | null;
   readonly lunchMoneyAssetId: number | null;
   readonly portfolioId: string | null;
+  readonly categories: boolean;
+  readonly exportTypeSummary: string | null;
   readonly help: boolean;
 }
 
@@ -22,6 +25,8 @@ const PARSE_CONFIG: ParseArgsConfig = {
     owner: { type: "string" },
     "lunch-money-asset-id": { type: "string" },
     "portfolio-id": { type: "string" },
+    categories: { type: "boolean", default: false },
+    "export-type-summary": { type: "string" },
     help: { type: "boolean", default: false, short: "h" },
   },
   allowPositionals: false,
@@ -40,16 +45,12 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --portfolio-id <id>            Scalable portfolio id (optional)
   --skip-broker-check            Skip sc/pytr install+login probes
   --yes                          Overwrite config.json / .env without prompting
+  --categories                   Map broker types to Lunch Money categories/tags (standalone)
+  --export-type-summary <file>   Write anonymised type counts/examples (opt-in)
   -h, --help                     Show this help`;
 
 export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
-  let parsed: ReturnType<typeof parseArgs>;
-  try {
-    parsed = parseArgs({ ...PARSE_CONFIG, args: [...argv] });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid setup arguments: ${message}`, { cause: error });
-  }
+  const parsed = parseCliArgv(argv, PARSE_CONFIG, "Invalid setup arguments");
   const values = parsed.values as Record<string, unknown>;
   const assetRaw = values["lunch-money-asset-id"];
   const lunchMoneyAssetId =
@@ -66,6 +67,8 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     owner: typeof values.owner === "string" ? values.owner : null,
     lunchMoneyAssetId,
     portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
+    categories: values.categories === true,
+    exportTypeSummary: exportTypeSummaryPath(values),
     help: values.help === true,
   };
 }

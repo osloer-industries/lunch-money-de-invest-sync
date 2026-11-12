@@ -40,6 +40,7 @@ describe("mapTradeRepublicEvent", () => {
       amount: -12.5,
       currency: "eur",
       payee: "Grocery Store",
+      canonicalType: "unknown",
       notes: "Card payment — CARD_TRANSACTION",
       source: "trade-republic",
     });

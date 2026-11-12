@@ -5,19 +5,24 @@ import type { BrokerSource, CanonicalTransaction } from "./shared/transaction.js
 import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-money/client.js";
 import { previewUpsert } from "./lunch-money/preview.js";
 import { upsertTransactions, type TransactionsApi } from "./lunch-money/upsert.js";
-import { createDefaultPytrCliRunner, fetchTradeRepublicTimeline } from "./trade-republic/client.js";
 import { mapTradeRepublicEvents } from "./trade-republic/mapper.js";
 import {
-  createDefaultScCliRunner,
-  fetchAllScalableCapitalTransactions,
-} from "./scalable-capital/client.js";
+  fetchScalableCashTransactionsForProfile,
+  fetchTradeRepublicEventsForProfile,
+} from "./shared/broker-profile-transport.js";
 import { mapScalableCapitalTransactions } from "./scalable-capital/mapper.js";
+import { applyCategoryTagMappings } from "./shared/apply-mappings.js";
+import { groupTypeObservations } from "./shared/canonical-type.js";
+import { collectTypeObservations } from "./shared/collect-type-observations.js";
+import { writeAnonymisedTypeSummaryToPath } from "./shared/export-type-summary.js";
 import {
   filterSyncConfig,
   parseSyncCliOptions,
   SYNC_HELP_TEXT,
   type SyncBroker,
 } from "./sync-options.js";
+import { writeFile } from "node:fs/promises";
+import { runCliModuleMain } from "./shared/cli-main.js";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 
 export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
@@ -29,10 +34,15 @@ export interface BrokerCollectors {
 
 export type SyncLogger = (message: string) => void;
 
+export function defaultSyncLogger(message: string): void {
+  console.log(message);
+}
+
 export interface RunSyncSelection {
   readonly includeBrokers: ReadonlySet<SyncBroker>;
   readonly owners: readonly string[];
   readonly dryRun: boolean;
+  readonly exportTypeSummary?: string | null;
 }
 
 function createDefaultRunSyncSelection(): RunSyncSelection {
@@ -53,15 +63,30 @@ interface SyncOneAccountParams {
   readonly rawTransactions: readonly CanonicalTransaction[];
   readonly lunchMoneyAssetId: number;
   readonly sharedCardLast4: readonly string[];
+  readonly categoryMap: SyncConfig["categoryMap"];
+  readonly tagMap: SyncConfig["tagMap"];
   readonly client: LunchMoneySyncClient;
   readonly logger: SyncLogger;
   readonly dryRun: boolean;
 }
 
 async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
-  const { owner, source, rawTransactions, lunchMoneyAssetId, sharedCardLast4, client, logger, dryRun } =
-    params;
-  const transactions = tagSharedExpenses(rawTransactions, sharedCardLast4);
+  const {
+    owner,
+    source,
+    rawTransactions,
+    lunchMoneyAssetId,
+    sharedCardLast4,
+    categoryMap,
+    tagMap,
+    client,
+    logger,
+    dryRun,
+  } = params;
+  const transactions = tagSharedExpenses(
+    applyCategoryTagMappings(rawTransactions, categoryMap, tagMap),
+    sharedCardLast4,
+  );
   if (dryRun) {
     const preview = await previewUpsert(client, transactions, lunchMoneyAssetId);
     logger(
@@ -85,7 +110,7 @@ export async function runSync(
   config: SyncConfig,
   client: LunchMoneySyncClient,
   collectors: BrokerCollectors,
-  logger: SyncLogger = console.log,
+  logger: SyncLogger = defaultSyncLogger,
   selection: RunSyncSelection = createDefaultRunSyncSelection(),
 ): Promise<void> {
   const tradeProfiles =
@@ -107,23 +132,28 @@ export async function runSync(
 
   const syncContext = {
     sharedCardLast4: config.sharedCardLast4,
+    categoryMap: config.categoryMap,
+    tagMap: config.tagMap,
     client,
     logger,
     dryRun: selection.dryRun,
   };
 
-  await syncProfilesForBroker(
-    tradeProfiles,
-    "trade-republic",
-    collectors.collectTradeRepublic,
-    syncContext,
-  );
-  await syncProfilesForBroker(
-    scalableProfiles,
-    "scalable-capital",
-    collectors.collectScalableCapital,
-    syncContext,
-  );
+  const brokerSyncJobs = [
+    {
+      profiles: tradeProfiles,
+      source: "trade-republic" as const,
+      collect: collectors.collectTradeRepublic,
+    },
+    {
+      profiles: scalableProfiles,
+      source: "scalable-capital" as const,
+      collect: collectors.collectScalableCapital,
+    },
+  ] as const;
+  await forEachProfileSequentially(brokerSyncJobs, async (job) => {
+    await syncProfilesForBroker(job.profiles, job.source, job.collect, syncContext);
+  });
 }
 
 async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetId: number }>(
@@ -132,6 +162,8 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
   collect: (profile: T) => Promise<CanonicalTransaction[]>,
   context: {
     sharedCardLast4: readonly string[];
+    categoryMap: SyncConfig["categoryMap"];
+    tagMap: SyncConfig["tagMap"];
     client: LunchMoneySyncClient;
     logger: SyncLogger;
     dryRun: boolean;
@@ -145,6 +177,8 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
       rawTransactions: transactions,
       lunchMoneyAssetId: profile.lunchMoneyAssetId,
       sharedCardLast4: context.sharedCardLast4,
+      categoryMap: context.categoryMap,
+      tagMap: context.tagMap,
       client: context.client,
       logger: context.logger,
       dryRun: context.dryRun,
@@ -158,26 +192,11 @@ export function createLiveCollectors(): BrokerCollectors {
 
 const liveCollectors: BrokerCollectors = {
   async collectTradeRepublic(profile) {
-    const pytrConfig = {
-      ...(profile.pytrCommand ? { pytrCommand: profile.pytrCommand } : {}),
-      ...(profile.pytrHome ? { pytrHome: profile.pytrHome } : {}),
-      ...(profile.loginV2 !== undefined ? { loginV2: profile.loginV2 } : {}),
-      ...(profile.wafTokenMode ? { wafTokenMode: profile.wafTokenMode } : {}),
-      ...(profile.account ? { account: profile.account } : {}),
-      ...(profile.pytrMinVersion ? { pytrMinVersion: profile.pytrMinVersion } : {}),
-    };
-    const runner = createDefaultPytrCliRunner(pytrConfig);
-    const events = await fetchTradeRepublicTimeline(runner, pytrConfig);
+    const events = await fetchTradeRepublicEventsForProfile(profile);
     return mapTradeRepublicEvents(events);
   },
   async collectScalableCapital(profile) {
-    const cliConfig = {
-      ...(profile.scBinaryPath ? { scBinaryPath: profile.scBinaryPath } : {}),
-      ...(profile.scConfigDir ? { scConfigDir: profile.scConfigDir } : {}),
-      ...(profile.portfolioId ? { portfolioId: profile.portfolioId } : {}),
-    };
-    const runner = createDefaultScCliRunner(cliConfig);
-    const transactions = await fetchAllScalableCapitalTransactions(runner, cliConfig);
+    const transactions = await fetchScalableCashTransactionsForProfile(profile);
     return mapScalableCapitalTransactions(transactions);
   },
 };
@@ -189,7 +208,12 @@ function selectionFromCliOptions(
     cli.brokers.length === 0
       ? new Set<SyncBroker>(["trade-republic", "scalable-capital"])
       : new Set(cli.brokers);
-  return { includeBrokers, owners: cli.owners, dryRun: cli.dryRun };
+  return {
+    includeBrokers,
+    owners: cli.owners,
+    dryRun: cli.dryRun,
+    exportTypeSummary: cli.exportTypeSummary,
+  };
 }
 
 export async function runSyncCli(
@@ -203,27 +227,28 @@ export async function runSyncCli(
 ): Promise<void> {
   const cli = parseSyncCliOptions(argv);
   if (cli.help) {
-    (deps.logger ?? console.log)(SYNC_HELP_TEXT);
+    (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return;
   }
   const config = (deps.readConfig ?? readConfigFromDisk)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
+  if (cli.exportTypeSummary) {
+    const observations = await collectTypeObservations(config);
+    const groups = groupTypeObservations(observations);
+    const target = await writeAnonymisedTypeSummaryToPath(cli.exportTypeSummary, groups, {
+      write: (absolutePath, body) => writeFile(absolutePath, body, "utf8"),
+    });
+    (deps.logger ?? defaultSyncLogger)(`Wrote anonymised type summary to ${target}`);
+  }
   await runSync(
     config,
     client,
     deps.collectors ?? liveCollectors,
-    deps.logger ?? console.log,
+    deps.logger ?? defaultSyncLogger,
     selectionFromCliOptions(cli),
   );
 }
 
-async function main(): Promise<void> {
+runCliModuleMain(async () => {
   await runSyncCli(process.argv.slice(2));
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
-}
+});

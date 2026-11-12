@@ -1,7 +1,8 @@
 import path from "node:path";
 import { z } from "zod";
+import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { loadConfig } from "../shared/config.js";
-import type { ScalableCapitalProfile, TradeRepublicProfile } from "../shared/config.js";
+import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import { createLunchMoneyClient } from "../lunch-money/client.js";
 import { runSyncCli } from "../sync.js";
 import {
@@ -10,6 +11,7 @@ import {
   ensureScCliReady,
   parseScPortfolios,
 } from "./broker-preflight.js";
+import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
   LunchMoneySetupClient,
@@ -70,14 +72,10 @@ async function chooseManualAccount(
     });
     return created.id;
   }
-  const id = Number(choice);
-  if (!Number.isInteger(id) || id <= 0) {
-    throw new Error("Manual account id must be a positive integer");
-  }
-  if (!accounts.some((account) => account.id === id)) {
-    throw new Error(`Manual account id ${id} was not returned by the Lunch Money API`);
-  }
-  return id;
+  return parsePromptPositiveInt(choice, {
+    entityLabel: "Manual account id",
+    exists: (id) => accounts.some((account) => account.id === id),
+  });
 }
 
 async function chooseScPortfolio(
@@ -97,6 +95,22 @@ async function chooseScPortfolio(
   return selected.length > 0 ? selected : undefined;
 }
 
+async function confirmOverwriteIfExists(
+  filesystem: SetupFilesystem,
+  filePath: string,
+  basename: string,
+  overwrite: boolean,
+  prompter: SetupPrompter,
+  refusalMessage: string,
+): Promise<void> {
+  if (filesystem.exists(filePath) && !overwrite) {
+    const ok = await prompter.confirm(`${basename} exists — overwrite?`, false);
+    if (!ok) {
+      throw new Error(refusalMessage);
+    }
+  }
+}
+
 async function writeEnvFile(
   filesystem: SetupFilesystem,
   apiKey: string,
@@ -104,12 +118,14 @@ async function writeEnvFile(
   prompter: SetupPrompter,
 ): Promise<string> {
   const envPath = path.join(process.cwd(), ENV_FILENAME);
-  if (filesystem.exists(envPath) && !overwrite) {
-    const ok = await prompter.confirm(`${ENV_FILENAME} exists — overwrite?`, false);
-    if (!ok) {
-      throw new Error("Refusing to overwrite existing .env");
-    }
-  }
+  await confirmOverwriteIfExists(
+    filesystem,
+    envPath,
+    ENV_FILENAME,
+    overwrite,
+    prompter,
+    "Refusing to overwrite existing .env",
+  );
   await filesystem.writeText(envPath, `LUNCH_MONEY_API_KEY=${apiKey}\n`);
   await filesystem.chmod(envPath, 0o600);
   return envPath;
@@ -124,17 +140,33 @@ async function writeConfigFile(
   },
   overwrite: boolean,
   prompter: SetupPrompter,
-): Promise<string> {
+): Promise<{ path: string; categoryMap: SyncConfig["categoryMap"]; tagMap: SyncConfig["tagMap"] }> {
   const configPath = path.join(process.cwd(), CONFIG_FILENAME);
-  if (filesystem.exists(configPath) && !overwrite) {
-    const ok = await prompter.confirm(`${CONFIG_FILENAME} exists — overwrite?`, false);
-    if (!ok) {
-      throw new Error("Refusing to overwrite existing config.json");
-    }
-  }
-  const json = `${JSON.stringify(config, null, 2)}\n`;
-  await filesystem.writeText(configPath, json);
-  return configPath;
+  await confirmOverwriteIfExists(
+    filesystem,
+    configPath,
+    CONFIG_FILENAME,
+    overwrite,
+    prompter,
+    "Refusing to overwrite existing config.json",
+  );
+  const parsed = filesystem.exists(configPath) ? readConfigJsonObject(filesystem, configPath) : {};
+  const stored = storedMapsFromConfigObject(parsed);
+  const categoryMap = stored.categoryMap;
+  const tagMap = stored.tagMap;
+  await writeConfigJsonObject(filesystem, configPath, { ...config, categoryMap, tagMap });
+  return { path: configPath, categoryMap, tagMap };
+}
+
+async function promptOwnerAndManualAccount(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  brokerLabel: string,
+  defaultOwner: string,
+): Promise<{ owner: string; lunchMoneyAssetId: number }> {
+  const owner = (await prompter.input(`${brokerLabel} owner label`, defaultOwner)).trim() || defaultOwner;
+  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
+  return { owner, lunchMoneyAssetId };
 }
 
 async function interactiveProfiles(
@@ -156,17 +188,23 @@ async function interactiveProfiles(
 
   if (brokers.includes("trade-republic")) {
     await ensurePytrReady(runners.pytr, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
-    const owner =
-      (await prompter.input("Trade Republic owner label", "operator-a")).trim() || "operator-a";
-    const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
+    const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
+      prompter,
+      client,
+      "Trade Republic",
+      "operator-a",
+    );
     tradeRepublicProfiles.push({ owner, lunchMoneyAssetId, pytrCommand: ["pytr"] });
   }
 
   if (brokers.includes("scalable-capital")) {
     await ensureScCliReady(runners.sc, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
-    const owner =
-      (await prompter.input("Scalable Capital owner label", "operator-b")).trim() || "operator-b";
-    const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
+    const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
+      prompter,
+      client,
+      "Scalable Capital",
+      "operator-b",
+    );
     let portfolioId: string | undefined;
     if (runners.sc) {
       const listed = await runners.sc.run(["broker", "portfolios", "--json"]);
@@ -181,6 +219,22 @@ async function interactiveProfiles(
   }
 
   return { tradeRepublicProfiles, scalableCapitalProfiles };
+}
+
+function createSetupLunchMoneyClient(
+  factory: (apiKey: string) => LunchMoneySetupClient,
+): (apiKey: string) => LunchMoneySetupClient {
+  return (apiKey: string): LunchMoneySetupClient => {
+    const client = factory(apiKey);
+    if (
+      typeof client.manualAccounts?.getAll !== "function" ||
+      typeof client.manualAccounts?.create !== "function" ||
+      typeof client.categories?.getAll !== "function"
+    ) {
+      throw new TypeError("Lunch Money client is missing manualAccounts/categories API");
+    }
+    return client;
+  };
 }
 
 function nonInteractiveProfiles(options: SetupCliOptions): {
@@ -223,17 +277,7 @@ export async function runSetup(
   assertNodeMajorVersion(deps.nodeVersion ?? process.version);
 
   const createClient =
-    deps.createLunchMoneyClient ??
-    ((apiKey: string): LunchMoneySetupClient => {
-      const client = createLunchMoneyClient(apiKey);
-      if (
-        typeof client.manualAccounts?.getAll !== "function" ||
-        typeof client.manualAccounts?.create !== "function"
-      ) {
-        throw new TypeError("Lunch Money client is missing manualAccounts API");
-      }
-      return client;
-    });
+    deps.createLunchMoneyClient ?? createSetupLunchMoneyClient(createLunchMoneyClient);
 
   const apiKey = options.nonInteractive
     ? process.env["LUNCH_MONEY_API_KEY"]?.trim() ?? ""
@@ -257,7 +301,7 @@ export async function runSetup(
 
   const profiles = options.nonInteractive
     ? nonInteractiveProfiles(options)
-  : await interactiveProfiles(deps.prompter, lmClient, deps.runners, options);
+    : await interactiveProfiles(deps.prompter, lmClient, deps.runners, options);
 
   const sharedRaw = options.nonInteractive
     ? "[]"
@@ -271,12 +315,13 @@ export async function runSetup(
   });
 
   const envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
-  const configPath = await writeConfigFile(
+  const written = await writeConfigFile(
     deps.filesystem,
     { sharedCardLast4, ...profiles },
     options.yes,
     deps.prompter,
   );
+  const configPath = written.path;
 
   process.env["LUNCH_MONEY_API_KEY"] = apiKey;
 
@@ -289,6 +334,11 @@ export async function runSetup(
   return {
     kind: "completed",
     files: { configPath, envPath },
-    config: { sharedCardLast4, ...profiles },
+    config: {
+      sharedCardLast4,
+      ...profiles,
+      categoryMap: written.categoryMap,
+      tagMap: written.tagMap,
+    },
   };
 }

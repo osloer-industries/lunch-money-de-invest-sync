@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import parseJson from "secure-json-parse";
 import { z } from "zod";
+import { categoryMapSchema, tagMapSchema } from "./canonical-type.js";
 
 const tradeRepublicWafTokenModeSchema = z.enum(["default", "playwright", "awswaf", "no-waf"]);
 
@@ -47,6 +48,10 @@ export const syncConfigSchema = z.object({
   sharedCardLast4: z.array(z.string().length(4)).default([]),
   tradeRepublicProfiles: z.array(tradeRepublicProfileSchema).default([]),
   scalableCapitalProfiles: z.array(scalableCapitalProfileSchema).default([]),
+  /** Maps canonical broker types to Lunch Money category ids (see issue #16). */
+  categoryMap: categoryMapSchema.default({}),
+  /** Extra tags to apply per canonical type at sync time. */
+  tagMap: tagMapSchema.default({}),
 });
 
 export type SyncConfig = z.infer<typeof syncConfigSchema>;
@@ -114,6 +119,8 @@ export function readConfigFromDisk(configPath = CONFIG_BASENAME): SyncConfig {
     sharedCardLast4: fromFile.sharedCardLast4,
     tradeRepublicProfiles: fromFile.tradeRepublicProfiles,
     scalableCapitalProfiles: fromFile.scalableCapitalProfiles,
+    categoryMap: fromFile.categoryMap,
+    tagMap: fromFile.tagMap,
     lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
   });
 }

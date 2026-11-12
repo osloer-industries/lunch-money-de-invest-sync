@@ -1,24 +1,10 @@
-import {
-  normalizeIsoOffsetWithoutColon,
-  utcCalendarDateFromIsoTimestamp,
-} from "../shared/utc-calendar-date.js";
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { PytrTimelineEvent } from "./types.js";
+import { classifyTradeRepublicEvent } from "../shared/broker-type-classification.js";
+import { tradeRepublicEventCalendarDate } from "./event-calendar-date.js";
+import { isSavebackEventType } from "./saveback.js";
 
 const SAVEBACK_TAG = "saveback";
-
-const SAVEBACK_EVENT_TYPES = new Set(["benefits_saveback_execution"]);
-
-/** TR saveback events sometimes use long PAYMENT-SERVICE-* event type strings. */
-function isSavebackEventType(eventType: string | null | undefined): boolean {
-  if (!eventType) {
-    return false;
-  }
-  if (SAVEBACK_EVENT_TYPES.has(eventType)) {
-    return true;
-  }
-  return eventType.startsWith("PAYMENT-SERVICE-IN-PAYMENT-DIRECT-");
-}
 
 export function isCashMovement(event: PytrTimelineEvent): boolean {
   if (event.deleted === true) {
@@ -26,13 +12,6 @@ export function isCashMovement(event: PytrTimelineEvent): boolean {
   }
   const value = event.amount?.value;
   return typeof value === "number" && value !== 0;
-}
-
-function parseUtcCalendarDate(isoTimestamp: string): string {
-  return utcCalendarDateFromIsoTimestamp(
-    normalizeIsoOffsetWithoutColon(isoTimestamp),
-    "Trade Republic event",
-  );
 }
 
 function buildNotes(event: PytrTimelineEvent): string | undefined {
@@ -52,18 +31,19 @@ function buildNotes(event: PytrTimelineEvent): string | undefined {
 }
 
 export function mapTradeRepublicEvent(event: PytrTimelineEvent): CanonicalTransaction | null {
-  if (!isCashMovement(event)) {
+  const observed = classifyTradeRepublicEvent(event);
+  if (!observed || !isCashMovement(event)) {
     return null;
   }
-  const amount = event.amount!.value;
   const tags = isSavebackEventType(event.eventType) ? [SAVEBACK_TAG] : undefined;
   const notes = buildNotes(event);
   return {
     externalId: `trade-republic:${event.id}`,
-    date: parseUtcCalendarDate(event.timestamp),
-    amount,
+    date: tradeRepublicEventCalendarDate(event.timestamp),
+    amount: observed.amount,
     currency: "eur",
     payee: event.title,
+    canonicalType: observed.canonicalType,
     ...(notes ? { notes } : {}),
     ...(tags ? { tags } : {}),
     source: "trade-republic",

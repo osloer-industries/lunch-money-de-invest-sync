@@ -47,6 +47,7 @@ describe("previewUpsert", () => {
           amount: -1,
           currency: "eur",
           payee: "A",
+          canonicalType: "unknown",
           source: "trade-republic",
         },
         {
@@ -55,6 +56,7 @@ describe("previewUpsert", () => {
           amount: -2,
           currency: "eur",
           payee: "B",
+          canonicalType: "unknown",
           source: "trade-republic",
         },
       ],
