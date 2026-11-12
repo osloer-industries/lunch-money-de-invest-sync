@@ -18,6 +18,7 @@ import {
   SYNC_HELP_TEXT,
   type SyncBroker,
 } from "./sync-options.js";
+import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 
 export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
 
@@ -104,33 +105,51 @@ export async function runSync(
     throw new Error(`No profiles matched --account filter: ${selection.owners.join(", ")}`);
   }
 
-  for (const profile of tradeProfiles) {
-    const transactions = await collectors.collectTradeRepublic(profile);
-    await syncOneAccount({
-      owner: profile.owner,
-      source: "trade-republic",
-      rawTransactions: transactions,
-      lunchMoneyAssetId: profile.lunchMoneyAssetId,
-      sharedCardLast4: config.sharedCardLast4,
-      client,
-      logger,
-      dryRun: selection.dryRun,
-    });
-  }
+  const syncContext = {
+    sharedCardLast4: config.sharedCardLast4,
+    client,
+    logger,
+    dryRun: selection.dryRun,
+  };
 
-  for (const profile of scalableProfiles) {
-    const transactions = await collectors.collectScalableCapital(profile);
+  await syncProfilesForBroker(
+    tradeProfiles,
+    "trade-republic",
+    collectors.collectTradeRepublic,
+    syncContext,
+  );
+  await syncProfilesForBroker(
+    scalableProfiles,
+    "scalable-capital",
+    collectors.collectScalableCapital,
+    syncContext,
+  );
+}
+
+async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetId: number }>(
+  profiles: readonly T[],
+  source: BrokerSource,
+  collect: (profile: T) => Promise<CanonicalTransaction[]>,
+  context: {
+    sharedCardLast4: readonly string[];
+    client: LunchMoneySyncClient;
+    logger: SyncLogger;
+    dryRun: boolean;
+  },
+): Promise<void> {
+  await forEachProfileSequentially(profiles, async (profile) => {
+    const transactions = await collect(profile);
     await syncOneAccount({
       owner: profile.owner,
-      source: "scalable-capital",
+      source,
       rawTransactions: transactions,
       lunchMoneyAssetId: profile.lunchMoneyAssetId,
-      sharedCardLast4: config.sharedCardLast4,
-      client,
-      logger,
-      dryRun: selection.dryRun,
+      sharedCardLast4: context.sharedCardLast4,
+      client: context.client,
+      logger: context.logger,
+      dryRun: context.dryRun,
     });
-  }
+  });
 }
 
 export function createLiveCollectors(): BrokerCollectors {
