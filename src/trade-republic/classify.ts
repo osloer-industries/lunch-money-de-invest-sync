@@ -1,22 +1,8 @@
 import type { CanonicalType, TypeObservation } from "../shared/canonical-type.js";
 import { includesAny } from "../shared/includes-any.js";
-import {
-  normalizeIsoOffsetWithoutColon,
-  utcCalendarDateFromIsoTimestamp,
-} from "../shared/utc-calendar-date.js";
+import { tradeRepublicEventCalendarDate } from "./event-calendar-date.js";
+import { isSavebackEventType } from "./saveback.js";
 import type { PytrTimelineEvent } from "./types.js";
-
-const SAVEBACK_EVENT_TYPES = new Set(["benefits_saveback_execution"]);
-
-function isSavebackEventType(eventType: string | null | undefined): boolean {
-  if (!eventType) {
-    return false;
-  }
-  if (SAVEBACK_EVENT_TYPES.has(eventType)) {
-    return true;
-  }
-  return eventType.startsWith("PAYMENT-SERVICE-IN-PAYMENT-DIRECT-");
-}
 
 const EVENT_TYPE_RULES: ReadonlyArray<{ readonly needles: readonly string[]; readonly type: CanonicalType }> = [
   { needles: ["DIVIDEND"], type: "dividend" },
@@ -44,13 +30,6 @@ function classifyEventType(eventType: string | null | undefined): CanonicalType 
   return "unknown";
 }
 
-function observationDate(timestamp: string): string {
-  return utcCalendarDateFromIsoTimestamp(
-    normalizeIsoOffsetWithoutColon(timestamp),
-    "Trade Republic event",
-  );
-}
-
 export function classifyTradeRepublicEvent(event: PytrTimelineEvent): TypeObservation | null {
   if (event.deleted === true) {
     return null;
@@ -70,7 +49,7 @@ export function classifyTradeRepublicEvent(event: PytrTimelineEvent): TypeObserv
     currency: event.amount?.currency?.toLowerCase() ?? "eur",
     payee: event.title,
     ...(subtitle && canonicalType !== "saveback" ? { notes: subtitle } : {}),
-    date: observationDate(event.timestamp),
+    date: tradeRepublicEventCalendarDate(event.timestamp),
   };
 }
 
