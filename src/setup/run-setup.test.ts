@@ -172,6 +172,47 @@ describe("runSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
+  it("rejects when no broker is selected", async () => {
+    await expect(
+      runSetup(
+        baseSetupOptions(),
+        defaultRunSetupDeps({
+          prompter: fakePrompter({ password: "lm_test_key", brokers: [] }),
+        }),
+      ),
+    ).rejects.toThrow(/at least one broker/);
+  });
+
+  it("reuses an existing manual account when create hits a duplicate name", async () => {
+    const lm = fakeLmClient();
+  const accounts = [
+    { id: 3, name: "Trade Republic (operator-a)" },
+  ];
+  (lm.manualAccounts.getAll as ReturnType<typeof vi.fn>)
+    .mockResolvedValueOnce(accounts)
+    .mockResolvedValueOnce(accounts)
+    .mockResolvedValue(accounts);
+    (lm.manualAccounts.create as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("ASSET_DISPLAY_NAME_ALREADY_EXISTS"),
+    );
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter: trInteractivePrompter({
+          confirms: (message) =>
+            message.includes("credential") || message.includes("already exists") || message.includes('Create manual'),
+        }),
+        createLunchMoneyClient: () => lm,
+        runSync: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    if (result.kind !== "completed") {
+      throw new Error("expected completed setup");
+    }
+    expect(result.config.tradeRepublicProfiles[0]?.lunchMoneyAssetId).toBe(3);
+  });
+
   it("runs the interactive Trade Republic flow", async () => {
     const result = await runSetup(
       baseSetupOptions(),

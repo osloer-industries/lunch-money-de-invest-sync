@@ -2,6 +2,7 @@ import path from "node:path";
 import { z } from "zod";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { loadConfig } from "../shared/config.js";
+import { readResumedProfiles } from "./resume-config.js";
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import { createLunchMoneyClient } from "../lunch-money/client.js";
 import { runSyncCli } from "../sync.js";
@@ -17,6 +18,9 @@ import { detectScBinaryPath } from "./detect-sc-binary.js";
 import { formatPytrLoginCommand } from "./pytr-session.js";
 import { createPytrCliRunner, createScCliRunner } from "../shared/subprocess-cli.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
+import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
+import { createManualAccountOrReuse } from "./manual-account.js";
+import { statusError, statusOk } from "./setup-status.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
   LunchMoneySetupClient,
@@ -37,12 +41,23 @@ async function promptApiKeyWithFactory(
   prompter: SetupPrompter,
   createClient: (apiKey: string) => LunchMoneySetupClient,
 ): Promise<string> {
-  const key = await prompter.password("Lunch Money API key");
-  if (key.trim().length === 0) {
-    throw new Error("Lunch Money API key is required");
+  for (;;) {
+    const key = await prompter.password("Lunch Money API key");
+    if (key.trim().length === 0) {
+      throw new Error("Lunch Money API key is required");
+    }
+    try {
+      await validateApiKey(createClient(key.trim()));
+      prompter.print(statusOk("Lunch Money API key verified"));
+      return key.trim();
+    } catch (error) {
+      if (isLunchMoneyUnauthorized(error)) {
+        prompter.print(statusError("Lunch Money rejected the API key — try again"));
+        continue;
+      }
+      throw error;
+    }
   }
-  await validateApiKey(createClient(key.trim()));
-  return key.trim();
 }
 
 const NEW_MANUAL_ACCOUNT = "__new__";
@@ -77,29 +92,31 @@ async function chooseManualAccount(
   owner: string,
 ): Promise<number> {
   const accountName = `${brokerLabel} (${owner})`;
-  const accounts = await client.manualAccounts.getAll();
-  const choice = await prompter.select(
-    `Lunch Money manual account for ${accountName}`,
-    manualAccountChoices(accounts, accountName),
-  );
-  if (choice === NEW_MANUAL_ACCOUNT) {
-    const create = await prompter.confirm(`Create Lunch Money manual account "${accountName}" (EUR, investment)?`, false);
-    if (!create) {
-      throw new Error("Manual account mapping cancelled");
+  for (;;) {
+    const accounts = await client.manualAccounts.getAll();
+    const choice = await prompter.select(
+      `Lunch Money manual account for ${accountName}`,
+      manualAccountChoices(accounts, accountName),
+    );
+    if (choice === NEW_MANUAL_ACCOUNT) {
+      const create = await prompter.confirm(
+        `Create Lunch Money manual account "${accountName}" (EUR, investment)?`,
+        false,
+      );
+      if (!create) {
+        continue;
+      }
+      const createdId = await createManualAccountOrReuse(prompter, client, accountName, brokerLabel);
+      if (createdId !== null) {
+        return createdId;
+      }
+      continue;
     }
-    const created = await client.manualAccounts.create({
-      name: accountName,
-      currency: "eur",
-      institution_name: brokerLabel,
-      type: "investment",
-      balance: "0",
+    return parsePromptPositiveInt(choice, {
+      entityLabel: "Manual account id",
+      exists: (id) => accounts.some((account) => account.id === id),
     });
-    return created.id;
   }
-  return parsePromptPositiveInt(choice, {
-    entityLabel: "Manual account id",
-    exists: (id) => accounts.some((account) => account.id === id),
-  });
 }
 
 async function chooseScPortfolio(
@@ -164,16 +181,19 @@ async function writeConfigFile(
   },
   overwrite: boolean,
   prompter: SetupPrompter,
+  mergeOnly = false,
 ): Promise<{ path: string; categoryMap: SyncConfig["categoryMap"]; tagMap: SyncConfig["tagMap"] }> {
   const configPath = path.join(process.cwd(), CONFIG_FILENAME);
-  await confirmOverwriteIfExists(
-    filesystem,
-    configPath,
-    CONFIG_FILENAME,
-    overwrite,
-    prompter,
-    "Refusing to overwrite existing config.json",
-  );
+  if (!mergeOnly) {
+    await confirmOverwriteIfExists(
+      filesystem,
+      configPath,
+      CONFIG_FILENAME,
+      overwrite,
+      prompter,
+      "Refusing to overwrite existing config.json",
+    );
+  }
   const parsed = filesystem.exists(configPath) ? readConfigJsonObject(filesystem, configPath) : {};
   const stored = storedMapsFromConfigObject(parsed);
   const categoryMap = stored.categoryMap;
@@ -193,48 +213,71 @@ async function promptOwnerAndManualAccount(
   return { owner, lunchMoneyAssetId };
 }
 
+type SetupProgressWriter = (partial: {
+  tradeRepublicProfiles: TradeRepublicProfile[];
+  scalableCapitalProfiles: ScalableCapitalProfile[];
+  sharedCardLast4: string[];
+}) => Promise<void>;
+
+async function addTradeRepublicProfile(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  options: SetupCliOptions,
+): Promise<TradeRepublicProfile> {
+  const detected = detectPytrLauncher();
+  const loginCommand = formatPytrLoginCommand(detected.pytrCommand);
+  await confirmPytrCredentialStorage(prompter, loginCommand);
+  const pytrRunner = createPytrCliRunner(detected.pytrCommand);
+  await ensurePytrReady(
+    pytrRunner,
+    prompter,
+    { enabled: true, skipCheck: options.skipBrokerCheck },
+    { pytrCommand: detected.pytrCommand },
+  );
+  const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
+    prompter,
+    client,
+    "Trade Republic",
+    "operator-a",
+  );
+  return {
+    owner,
+    lunchMoneyAssetId,
+    pytrCommand: [...detected.pytrCommand],
+  };
+}
+
 async function interactiveProfiles(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
   _runners: SetupBrokerRunners,
   options: SetupCliOptions,
+  filesystem: SetupFilesystem,
+  writeProgress: SetupProgressWriter,
 ): Promise<{
   tradeRepublicProfiles: TradeRepublicProfile[];
   scalableCapitalProfiles: ScalableCapitalProfile[];
 }> {
-  const tradeRepublicProfiles: TradeRepublicProfile[] = [];
-  const scalableCapitalProfiles: ScalableCapitalProfile[] = [];
+  const { tradeRepublicProfiles, scalableCapitalProfiles } = readResumedProfiles(filesystem);
 
-  const brokers = await prompter.checkbox("Which brokers should this config include?", [
-    { name: "Trade Republic (pytr)", value: "trade-republic" },
-    { name: "Scalable Capital (sc)", value: "scalable-capital" },
-  ]);
-
-  if (brokers.includes("trade-republic")) {
-    const detected = detectPytrLauncher();
-    const loginCommand = formatPytrLoginCommand(detected.pytrCommand);
-    await confirmPytrCredentialStorage(prompter, loginCommand);
-    const pytrRunner = createPytrCliRunner(detected.pytrCommand);
-    await ensurePytrReady(
-      pytrRunner,
-      prompter,
-      { enabled: true, skipCheck: options.skipBrokerCheck },
-      { pytrCommand: detected.pytrCommand },
-    );
-    const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
-      prompter,
-      client,
-      "Trade Republic",
-      "operator-a",
-    );
-    tradeRepublicProfiles.push({
-      owner,
-      lunchMoneyAssetId,
-      pytrCommand: [...detected.pytrCommand],
-    });
+  const brokers = await prompter.checkbox(
+    "Which brokers should this config include? (Space to select, Enter to confirm)",
+    [
+      { name: "Trade Republic (pytr)", value: "trade-republic" },
+      { name: "Scalable Capital (sc)", value: "scalable-capital" },
+    ],
+  );
+  if (brokers.length === 0) {
+    throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
   }
 
-  if (brokers.includes("scalable-capital")) {
+  if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
+    tradeRepublicProfiles.push(await addTradeRepublicProfile(prompter, client, options));
+    await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
+    prompter.print(statusOk("Trade Republic profile saved to config.json"));
+  }
+
+  if (brokers.includes("scalable-capital") && scalableCapitalProfiles.length === 0) {
     const scPath = _runners.sc ? undefined : detectScBinaryPath(undefined);
     const scRunner = _runners.sc ?? createScCliRunner(detectScBinaryPath(undefined));
     await ensureScCliReady(scRunner, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
@@ -257,6 +300,8 @@ async function interactiveProfiles(
       ...(resolvedScPath !== "sc" ? { scBinaryPath: resolvedScPath } : {}),
       ...(portfolioId ? { portfolioId } : {}),
     });
+    await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
+    prompter.print(statusOk("Scalable Capital profile saved to config.json"));
   }
 
   return { tradeRepublicProfiles, scalableCapitalProfiles };
@@ -304,6 +349,45 @@ function nonInteractiveProfiles(options: SetupCliOptions): {
   };
 }
 
+async function finishSetup(
+  options: SetupCliOptions,
+  deps: {
+    prompter: SetupPrompter;
+    filesystem: SetupFilesystem;
+    runSync?: typeof runSyncCli;
+  },
+  apiKey: string,
+  envPath: string,
+  profiles: {
+    tradeRepublicProfiles: TradeRepublicProfile[];
+    scalableCapitalProfiles: ScalableCapitalProfile[];
+  },
+  sharedCardLast4: string[],
+): Promise<SetupResult> {
+  const written = await writeConfigFile(
+    deps.filesystem,
+    { sharedCardLast4, ...profiles },
+    options.yes,
+    deps.prompter,
+  );
+  process.env["LUNCH_MONEY_API_KEY"] = apiKey;
+  if (!options.nonInteractive && (await deps.prompter.confirm("Run a dry-run sync now?", true))) {
+    await (deps.runSync ?? runSyncCli)(["--dry-run"], {
+      logger: deps.prompter.print.bind(deps.prompter),
+    });
+  }
+  return {
+    kind: "completed",
+    files: { configPath: written.path, envPath },
+    config: {
+      sharedCardLast4,
+      ...profiles,
+      categoryMap: written.categoryMap,
+      tagMap: written.tagMap,
+    },
+  };
+}
+
 export async function runSetup(
   options: SetupCliOptions,
   deps: {
@@ -328,6 +412,18 @@ export async function runSetup(
   }
 
   const lmClient = createClient(apiKey);
+
+  let envPath = "";
+  if (!options.nonInteractive) {
+    envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
+    process.env["LUNCH_MONEY_API_KEY"] = apiKey;
+    deps.prompter.print(statusOk("Saved Lunch Money API key to .env"));
+  }
+
+  const writeProgress: SetupProgressWriter = async (partial) => {
+    await writeConfigFile(deps.filesystem, partial, options.yes, deps.prompter, true);
+  };
+
   if (options.nonInteractive) {
     await validateApiKey(lmClient);
     await ensurePytrReady(deps.runners.pytr, deps.prompter, {
@@ -342,7 +438,14 @@ export async function runSetup(
 
   const profiles = options.nonInteractive
     ? nonInteractiveProfiles(options)
-    : await interactiveProfiles(deps.prompter, lmClient, deps.runners, options);
+    : await interactiveProfiles(
+        deps.prompter,
+        lmClient,
+        deps.runners,
+        options,
+        deps.filesystem,
+        writeProgress,
+      );
 
   const sharedRaw = options.nonInteractive
     ? "[]"
@@ -355,31 +458,8 @@ export async function runSetup(
     ...profiles,
   });
 
-  const envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
-  const written = await writeConfigFile(
-    deps.filesystem,
-    { sharedCardLast4, ...profiles },
-    options.yes,
-    deps.prompter,
-  );
-  const configPath = written.path;
-
-  process.env["LUNCH_MONEY_API_KEY"] = apiKey;
-
-  if (!options.nonInteractive && (await deps.prompter.confirm("Run a dry-run sync now?", true))) {
-    await (deps.runSync ?? runSyncCli)(["--dry-run"], {
-      logger: deps.prompter.print.bind(deps.prompter),
-    });
+  if (options.nonInteractive) {
+    envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
   }
-
-  return {
-    kind: "completed",
-    files: { configPath, envPath },
-    config: {
-      sharedCardLast4,
-      ...profiles,
-      categoryMap: written.categoryMap,
-      tagMap: written.tagMap,
-    },
-  };
+  return finishSetup(options, deps, apiKey, envPath, profiles, sharedCardLast4);
 }
