@@ -40,7 +40,12 @@ function pytrHomeEnv(pytrHome: string | undefined): Record<string, string> | und
 }
 
 function parseSemver(version: string): [number, number, number] | null {
-  const match = /(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
+  const trimmed = version.trim();
+  const start = trimmed.search(/\d+\.\d+\.\d+/);
+  if (start < 0) {
+    return null;
+  }
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(trimmed.slice(start));
   if (!match) {
     return null;
   }
