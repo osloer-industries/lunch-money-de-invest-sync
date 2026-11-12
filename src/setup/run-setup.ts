@@ -42,31 +42,50 @@ async function promptApiKeyWithFactory(
 
 const NEW_MANUAL_ACCOUNT = "__new__";
 
+function manualAccountChoice(account: { id: number; name: string }): { name: string; value: string } {
+  return { name: `[${account.id}] ${account.name}`, value: String(account.id) };
+}
+
+/**
+ * Order picker choices so the first (default) option is the right one for this broker:
+ * an existing account already named `<Broker> (<owner>)` if there is one, otherwise
+ * "Create new", followed by every other existing account.
+ */
+export function manualAccountChoices(
+  accounts: ReadonlyArray<{ id: number; name: string }>,
+  accountName: string,
+): Array<{ name: string; value: string }> {
+  const wanted = accountName.trim().toLowerCase();
+  const matching = accounts.filter((account) => account.name.trim().toLowerCase() === wanted);
+  const others = accounts.filter((account) => account.name.trim().toLowerCase() !== wanted);
+  return [
+    ...matching.map(manualAccountChoice),
+    { name: `Create new manual account "${accountName}"`, value: NEW_MANUAL_ACCOUNT },
+    ...others.map(manualAccountChoice),
+  ];
+}
+
 async function chooseManualAccount(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
-  label: string,
+  brokerLabel: string,
+  owner: string,
 ): Promise<number> {
+  const accountName = `${brokerLabel} (${owner})`;
   const accounts = await client.manualAccounts.getAll();
   const choice = await prompter.select(
-    `Lunch Money manual account for ${label}`,
-    [
-      ...accounts.map((account) => ({
-        name: `[${account.id}] ${account.name}`,
-        value: String(account.id),
-      })),
-      { name: "Create new manual account", value: NEW_MANUAL_ACCOUNT },
-    ],
+    `Lunch Money manual account for ${accountName}`,
+    manualAccountChoices(accounts, accountName),
   );
   if (choice === NEW_MANUAL_ACCOUNT) {
-    const create = await prompter.confirm("Create a new Lunch Money manual account?", false);
+    const create = await prompter.confirm(`Create Lunch Money manual account "${accountName}" (EUR, investment)?`, false);
     if (!create) {
       throw new Error("Manual account mapping cancelled");
     }
     const created = await client.manualAccounts.create({
-      name: `Broker (${label})`,
+      name: accountName,
       currency: "eur",
-      institution_name: "Manual",
+      institution_name: brokerLabel,
       type: "investment",
       balance: "0",
     });
@@ -165,7 +184,7 @@ async function promptOwnerAndManualAccount(
   defaultOwner: string,
 ): Promise<{ owner: string; lunchMoneyAssetId: number }> {
   const owner = (await prompter.input(`${brokerLabel} owner label`, defaultOwner)).trim() || defaultOwner;
-  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, owner);
+  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, brokerLabel, owner);
   return { owner, lunchMoneyAssetId };
 }
 

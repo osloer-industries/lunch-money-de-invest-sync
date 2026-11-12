@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSetup } from "./run-setup.js";
+import { manualAccountChoices, runSetup } from "./run-setup.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type { LunchMoneySetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
 
@@ -66,7 +66,7 @@ function fakeLmClient(): LunchMoneySetupClient {
   return {
     manualAccounts: {
       getAll: vi.fn().mockResolvedValue([{ id: 3, name: "TR operator-a" }]),
-      create: vi.fn().mockResolvedValue({ id: 99, name: "Broker (operator-a)" }),
+      create: vi.fn().mockResolvedValue({ id: 99, name: "Trade Republic (operator-a)" }),
     },
     categories: {
       getAll: vi.fn().mockResolvedValue([]),
@@ -281,13 +281,43 @@ describe("runSetup", () => {
       defaultRunSetupDeps({
         prompter: trInteractivePrompter({
           selects: ["__new__"],
-          confirms: (message) => message.includes("Create a new"),
+          confirms: (message) => message.includes("Create Lunch Money manual account"),
         }),
         runSync: vi.fn().mockResolvedValue(undefined),
         createLunchMoneyClient: () => lm,
       }),
     );
     expect(result.kind).toBe("completed");
-    expect(lm.manualAccounts.create).toHaveBeenCalled();
+    expect(lm.manualAccounts.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Trade Republic (operator-a)",
+        institution_name: "Trade Republic",
+      }),
+    );
+  });
+});
+
+describe("manualAccountChoices", () => {
+  it("defaults to creating the broker-specific account when none matches", () => {
+    const choices = manualAccountChoices(
+      [
+        { id: 1, name: "Checking" },
+        { id: 2, name: "Savings" },
+      ],
+      "Scalable Capital (operator-a)",
+    );
+    expect(choices.map((choice) => choice.value)).toEqual(["__new__", "1", "2"]);
+    expect(choices[0]?.name).toBe('Create new manual account "Scalable Capital (operator-a)"');
+  });
+
+  it("defaults to an existing account that already has the broker-specific name", () => {
+    const choices = manualAccountChoices(
+      [
+        { id: 1, name: "Checking" },
+        { id: 7, name: "trade republic (operator-a)" },
+      ],
+      "Trade Republic (operator-a)",
+    );
+    expect(choices.map((choice) => choice.value)).toEqual(["7", "__new__", "1"]);
   });
 });
