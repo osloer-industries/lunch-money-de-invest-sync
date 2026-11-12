@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSetup } from "./run-setup.js";
+import { manualAccountChoices, runSetup } from "./run-setup.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type { LunchMoneySetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
 
@@ -294,5 +294,30 @@ describe("runSetup", () => {
         institution_name: "Trade Republic",
       }),
     );
+  });
+});
+
+describe("manualAccountChoices", () => {
+  it("defaults to creating the broker-specific account when none matches", () => {
+    const choices = manualAccountChoices(
+      [
+        { id: 1, name: "Checking" },
+        { id: 2, name: "Savings" },
+      ],
+      "Scalable Capital (operator-a)",
+    );
+    expect(choices.map((choice) => choice.value)).toEqual(["__new__", "1", "2"]);
+    expect(choices[0]?.name).toBe('Create new manual account "Scalable Capital (operator-a)"');
+  });
+
+  it("defaults to an existing account that already has the broker-specific name", () => {
+    const choices = manualAccountChoices(
+      [
+        { id: 1, name: "Checking" },
+        { id: 7, name: "trade republic (operator-a)" },
+      ],
+      "Trade Republic (operator-a)",
+    );
+    expect(choices.map((choice) => choice.value)).toEqual(["7", "__new__", "1"]);
   });
 });

@@ -42,6 +42,29 @@ async function promptApiKeyWithFactory(
 
 const NEW_MANUAL_ACCOUNT = "__new__";
 
+function manualAccountChoice(account: { id: number; name: string }): { name: string; value: string } {
+  return { name: `[${account.id}] ${account.name}`, value: String(account.id) };
+}
+
+/**
+ * Order picker choices so the first (default) option is the right one for this broker:
+ * an existing account already named `<Broker> (<owner>)` if there is one, otherwise
+ * "Create new", followed by every other existing account.
+ */
+export function manualAccountChoices(
+  accounts: ReadonlyArray<{ id: number; name: string }>,
+  accountName: string,
+): Array<{ name: string; value: string }> {
+  const wanted = accountName.trim().toLowerCase();
+  const matching = accounts.filter((account) => account.name.trim().toLowerCase() === wanted);
+  const others = accounts.filter((account) => account.name.trim().toLowerCase() !== wanted);
+  return [
+    ...matching.map(manualAccountChoice),
+    { name: `Create new manual account "${accountName}"`, value: NEW_MANUAL_ACCOUNT },
+    ...others.map(manualAccountChoice),
+  ];
+}
+
 async function chooseManualAccount(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
@@ -52,13 +75,7 @@ async function chooseManualAccount(
   const accounts = await client.manualAccounts.getAll();
   const choice = await prompter.select(
     `Lunch Money manual account for ${accountName}`,
-    [
-      ...accounts.map((account) => ({
-        name: `[${account.id}] ${account.name}`,
-        value: String(account.id),
-      })),
-      { name: `Create new manual account "${accountName}"`, value: NEW_MANUAL_ACCOUNT },
-    ],
+    manualAccountChoices(accounts, accountName),
   );
   if (choice === NEW_MANUAL_ACCOUNT) {
     const create = await prompter.confirm(`Create Lunch Money manual account "${accountName}" (EUR, investment)?`, false);
