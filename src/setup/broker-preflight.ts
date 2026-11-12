@@ -12,6 +12,13 @@ function brokerCheckRequested(options: { enabled: boolean; skipCheck: boolean })
   return options.enabled && !options.skipCheck;
 }
 
+function requireBrokerRunner<T>(runner: T | undefined, brokerLabel: string): T {
+  if (!runner) {
+    throw new Error(`${brokerLabel} setup was requested but no runner is configured`);
+  }
+  return runner;
+}
+
 async function promptBrokerLogin(
   prompter: SetupPrompter,
   instructions: string,
@@ -44,12 +51,10 @@ export async function ensureScCliReady(
   if (!brokerCheckRequested(options)) {
     return;
   }
-  if (!runner) {
-    throw new Error("Scalable Capital setup was requested but no sc runner is configured");
-  }
+  const sc = requireBrokerRunner(runner, "Scalable Capital");
   let portfoliosRun: Awaited<ReturnType<ScCliRunner["run"]>>;
   try {
-    portfoliosRun = await runner.run(["broker", "portfolios", "--json"]);
+    portfoliosRun = await sc.run(["broker", "portfolios", "--json"]);
   } catch (error) {
     const code =
       typeof error === "object" && error !== null && Reflect.get(error, "code") === "ENOENT"
@@ -69,7 +74,7 @@ export async function ensureScCliReady(
     `Scalable CLI session is missing or expired. Run:\n\n  ${SC_LOGIN_COMMAND}\n`,
     "Press Enter after `sc login` succeeds...",
     async () => {
-      const retry = await runner.run(["broker", "portfolios", "--json"]);
+      const retry = await sc.run(["broker", "portfolios", "--json"]);
       return isScSessionActive(retry.stdout);
     },
     "Scalable CLI still has no active session after login",
@@ -95,12 +100,10 @@ export async function ensurePytrReady(
   if (!brokerCheckRequested(options)) {
     return;
   }
-  if (!runner) {
-    throw new Error("Trade Republic setup was requested but no pytr runner is configured");
-  }
+  const pytr = requireBrokerRunner(runner, "Trade Republic");
   let versionRun: Awaited<ReturnType<PytrCliRunner["run"]>>;
   try {
-    versionRun = await runner.run(["-V"]);
+    versionRun = await pytr.run(["-V"]);
   } catch (error) {
     prompter.print("pytr was not found — install https://github.com/pytr-org/pytr (for example `uvx pytr@0.4.10`)");
     throw error;
@@ -109,7 +112,7 @@ export async function ensurePytrReady(
     throw new Error("pytr is installed but `-V` failed — check your pytrCommand");
   }
   const probeDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
-  const probe = await runner.run(["export_transactions", "--last_days", "1", "--outputdir", probeDir]);
+  const probe = await pytr.run(["export_transactions", "--last_days", "1", "--outputdir", probeDir]);
   const loggedIn = probe.exitCode === 0;
   if (loggedIn) {
     return;
@@ -124,7 +127,7 @@ export async function ensurePytrReady(
     "Press Enter after `pytr login` succeeds...",
     async () => {
       const retryDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
-      const retry = await runner.run(["export_transactions", "--last_days", "1", "--outputdir", retryDir]);
+      const retry = await pytr.run(["export_transactions", "--last_days", "1", "--outputdir", retryDir]);
       return retry.exitCode === 0;
     },
     "pytr still cannot export transactions after login",
