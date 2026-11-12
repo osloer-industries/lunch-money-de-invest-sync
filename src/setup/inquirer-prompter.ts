@@ -49,7 +49,7 @@ export function createInquirerPrompter(): SetupPrompter {
     async search(message, choices) {
       return searchPrompt({
         message,
-        source: async (term) => filterChoices(choices, term),
+        source: (term) => filterChoices(choices, term),
       });
     },
     async confirm(message, defaultYes = false) {
