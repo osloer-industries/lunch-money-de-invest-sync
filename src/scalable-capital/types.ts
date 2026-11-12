@@ -55,4 +55,5 @@ export interface ScalableCapitalCliConfig {
   scConfigDir?: string;
   /** Passed as `sc broker transactions --portfolio-id` when the operator has multiple portfolios. */
   portfolioId?: string;
+  cliSubprocessTimeoutMs?: number;
 }

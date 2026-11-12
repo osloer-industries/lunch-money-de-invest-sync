@@ -35,4 +35,5 @@ export interface TradeRepublicPytrConfig {
   /** Passed through to pytr `--account` when syncing a non-primary TR account. */
   readonly account?: string;
   readonly pytrMinVersion?: string;
+  readonly cliSubprocessTimeoutMs?: number;
 }
