@@ -11,6 +11,7 @@ import {
   ensureScCliReady,
   parseScPortfolios,
 } from "./broker-preflight.js";
+import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
   LunchMoneySetupClient,
@@ -71,14 +72,10 @@ async function chooseManualAccount(
     });
     return created.id;
   }
-  const id = Number(choice);
-  if (!Number.isInteger(id) || id <= 0) {
-    throw new Error("Manual account id must be a positive integer");
-  }
-  if (!accounts.some((account) => account.id === id)) {
-    throw new Error(`Manual account id ${id} was not returned by the Lunch Money API`);
-  }
-  return id;
+  return parsePromptPositiveInt(choice, {
+    entityLabel: "Manual account id",
+    exists: (id) => accounts.some((account) => account.id === id),
+  });
 }
 
 async function chooseScPortfolio(
