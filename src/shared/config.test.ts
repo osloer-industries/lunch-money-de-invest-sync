@@ -10,17 +10,16 @@ const validRaw = {
   sharedCardLast4: ["1234"],
   tradeRepublicProfiles: [
     {
-      owner: "me",
-      phoneNumber: "+490000000000",
-      pin: "sync-test-pin",
+      owner: "operator-a",
       lunchMoneyAssetId: 1,
+      pytrCommand: ["pytr"],
     },
   ],
   scalableCapitalProfiles: [
     {
-      owner: "secondary",
-      proxyUrl: "http://localhost:8000",
+      owner: "operator-b",
       lunchMoneyAssetId: 2,
+      portfolioId: "portfolio-operator-a",
     },
   ],
 };
@@ -29,7 +28,7 @@ describe("loadConfig", () => {
   it("parses a fully populated config", () => {
     const config = loadConfig(validRaw);
     expect(config.tradeRepublicProfiles).toHaveLength(1);
-    expect(config.scalableCapitalProfiles[0]?.owner).toBe("secondary");
+    expect(config.scalableCapitalProfiles[0]?.owner).toBe("operator-b");
   });
 
   it("defaults optional arrays to empty", () => {
@@ -47,29 +46,69 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...validRaw, sharedCardLast4: ["12"] })).toThrow();
   });
 
-  it("rejects a trade republic profile missing a pin", () => {
-    const { pin: _pin, ...profileWithoutPin } = validRaw.tradeRepublicProfiles[0]!;
+  it("accepts optional trade republic pytr profile fields", () => {
+    const config = loadConfig({
+      ...validRaw,
+      tradeRepublicProfiles: [
+        {
+          owner: "operator-a",
+          lunchMoneyAssetId: 1,
+          pytrCommand: ["uvx", "pytr"],
+          pytrHome: "/tmp/operator-a/.pytr",
+          loginV2: true,
+          wafTokenMode: "playwright",
+          account: "acct-1",
+          pytrMinVersion: "0.4.10",
+        },
+      ],
+    });
+    expect(config.tradeRepublicProfiles[0]?.pytrMinVersion).toBe("0.4.10");
+  });
+
+  it("rejects a relative pytrHome path", () => {
     expect(() =>
       loadConfig({
         ...validRaw,
-        tradeRepublicProfiles: [profileWithoutPin],
+        tradeRepublicProfiles: [
+          {
+            owner: "operator-a",
+            lunchMoneyAssetId: 1,
+            pytrHome: "relative/.pytr",
+          },
+        ],
+      }),
+    ).toThrow(/pytrHome must be an absolute path/);
+  });
+
+  it("rejects removed trade republic credential fields", () => {
+    expect(() =>
+      loadConfig({
+        ...validRaw,
+        tradeRepublicProfiles: [
+          {
+            owner: "operator-a",
+            phoneNumber: "+490000000000",
+            pin: "sync-test-pin",
+            lunchMoneyAssetId: 1,
+          },
+        ],
       }),
     ).toThrow();
   });
 
-  it("rejects cloud metadata proxy URLs", () => {
+  it("rejects removed scalable capital proxy fields", () => {
     expect(() =>
       loadConfig({
         ...validRaw,
         scalableCapitalProfiles: [
           {
-            owner: "me",
-            proxyUrl: "http://169.254.169.254/",
+            owner: "operator-a",
+            proxyUrl: "http://127.0.0.1:3141",
             lunchMoneyAssetId: 1,
           },
         ],
       }),
-    ).toThrow(/must not target 169.254.169.254/);
+    ).toThrow();
   });
 });
 

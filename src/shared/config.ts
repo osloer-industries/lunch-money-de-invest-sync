@@ -1,60 +1,45 @@
 import { readFileSync } from "node:fs";
-import { isIP } from "node:net";
 import path from "node:path";
 import parseJson from "secure-json-parse";
 import { z } from "zod";
 
-/** Hostnames that must never be used as Scalable Capital proxy targets (cloud metadata SSRF). */
-const BLOCKED_PROXY_HOSTNAMES = new Set(["metadata.google.internal", "metadata.goog"]);
+const tradeRepublicWafTokenModeSchema = z.enum(["default", "playwright", "awswaf", "no-waf"]);
 
-/** IPv4 link-local block (includes cloud metadata endpoints such as 169.254.169.254). */
-function isLinkLocalIpv4Address(hostname: string): boolean {
-  return isIP(hostname) === 4 && hostname.startsWith("169.254.");
-}
+const tradeRepublicProfileSchema = z
+  .object({
+    owner: z.string().min(1),
+    lunchMoneyAssetId: z.number().int().positive(),
+    /** argv prefix to launch pytr (e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`). */
+    pytrCommand: z.array(z.string().min(1)).min(1).optional(),
+    /** Absolute path to the operator pytr home directory (`…/.pytr`). Overrides process HOME for the child only. */
+    pytrHome: z
+      .string()
+      .min(1)
+      .refine((value) => path.isAbsolute(value), { message: "pytrHome must be an absolute path" })
+      .optional(),
+    loginV2: z.boolean().optional(),
+    wafTokenMode: tradeRepublicWafTokenModeSchema.optional(),
+    account: z.string().min(1).optional(),
+    pytrMinVersion: z.string().min(1).optional(),
+  })
+  .strict();
 
-function validateProxyUrl(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error("proxyUrl must be a valid URL");
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("proxyUrl must use http or https");
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error("proxyUrl must not embed credentials");
-  }
-  const host = parsed.hostname.toLowerCase();
-  if (BLOCKED_PROXY_HOSTNAMES.has(host) || isLinkLocalIpv4Address(host)) {
-    throw new Error(`proxyUrl must not target ${host}`);
-  }
-}
-
-const tradeRepublicProfileSchema = z.object({
-  owner: z.string().min(1),
-  phoneNumber: z.string().min(1),
-  pin: z.string().min(1),
-  lunchMoneyAssetId: z.number().int().positive(),
-});
-
-const scalableCapitalProfileSchema = z.object({
-  owner: z.string().min(1),
-  /** Base URL of the local auth proxy (e.g. http://localhost:8000). */
-  proxyUrl: z
-    .string()
-    .url()
-    .superRefine((value, ctx) => {
-      try {
-        validateProxyUrl(value);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "invalid proxyUrl";
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message });
-      }
-    }),
-  proxyToken: z.string().min(1).optional(),
-  lunchMoneyAssetId: z.number().int().positive(),
-});
+const scalableCapitalProfileSchema = z
+  .object({
+    owner: z.string().min(1),
+    lunchMoneyAssetId: z.number().int().positive(),
+    /** `sc broker transactions --portfolio-id` when multiple portfolios exist. */
+    portfolioId: z.string().min(1).optional(),
+    /** Absolute path to the `sc` binary (otherwise resolved under trusted system dirs). */
+    scBinaryPath: z
+      .string()
+      .min(1)
+      .refine((value) => path.isAbsolute(value), { message: "scBinaryPath must be an absolute path" })
+      .optional(),
+    /** Overrides SC_CONFIG_DIR for the child process when sessions live outside the default dir. */
+    scConfigDir: z.string().min(1).optional(),
+  })
+  .strict();
 
 export const syncConfigSchema = z.object({
   lunchMoneyApiKey: z.string().min(1),

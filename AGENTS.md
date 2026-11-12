@@ -18,6 +18,8 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Run `npm run check` before submitting a change. This runs Oxlint, the
   TypeScript compiler, coverage, and the production build.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
+- Pin `osloer-industries/.github` reusable workflows by full SHA (`# main` comment).
+  Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.
 
 ## Architecture
 
@@ -27,11 +29,56 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Use strict TypeScript, ECMAScript modules, and explicit `.js` extensions for
   relative imports compiled with NodeNext.
 
+## Trade Republic (pytr)
+
+- Transport lives in `src/trade-republic/client.ts` and **must** spawn the operator's
+  [pytr](https://github.com/pytr-org/pytr) CLI (`export_transactions` → `all_events.json`),
+  never an in-process WebSocket client.
+- Validate pytr artifacts with `zod` at the boundary; keep the mapper pure.
+- Preserve dedup ids as `trade-republic:{id}` using the TR event id from pytr output.
+- Set each transaction **date** to the **UTC calendar day** of the ISO `timestamp`.
+- Credentials and sessions are **local-only** under the operator's pytr home (`~/.pytr` by default,
+  overridable per profile via `pytrHome`). Operators run `pytr login` locally. Never commit pytr
+  session files or operator config with secrets. CI uses fixtures and mocked `PytrCliRunner` only.
+- Optional profile fields: `pytrCommand` (argv prefix, e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`),
+  `pytrHome`, `loginV2`, `wafTokenMode`, `account`, `pytrMinVersion`.
+- **Saveback:** emit one Lunch Money row per saveback timeline event (tag `saveback`), not separate
+  deposit and buy rows. Do not hardcode an income/excluded category — document Lunch Money rule options.
+- **Clean break:** remove `trade-republic-api`, `phoneNumber`, and `pin` from config with no migration
+  shims. Assume a fresh Lunch Money manual account when adopting pytr; `external_id` format
+  `trade-republic:{id}` is for idempotent re-sync only.
+
+## Scalable Capital (scalable-cli)
+
+- Transport lives in `src/scalable-capital/client.ts` and **must** call the official `sc`
+  binary as a child process (`sc broker transactions --json`), never an HTTP proxy.
+- Parse the machine JSON envelope (`ok`, `command`, `data`, `error`) and validate broker
+  payloads with `zod`. Do not log stdout that may contain account metadata.
+- Map only `BrokerCashTransactionSummary` rows to Lunch Money; preserve dedup ids as
+  `scalable-capital:{id}` using the broker transaction id from `sc`.
+- Set each transaction **date** to the **UTC calendar day** of `last_event_datetime` (not local
+  timezone).
+- Credentials and sessions are **local-only**: operators run `sc login` on their own machine
+  after enabling Agentic Investing in the Scalable web profile. Never commit `sc` session
+  files, tokens, or operator config with secrets. CI uses fixtures and mocked `ScCliRunner`
+  only — no live `sc` or broker calls.
+- Optional profile fields: `portfolioId`, `scBinaryPath`, `scConfigDir` (`SC_CONFIG_DIR`).
+- **Clean break:** the old HTTP proxy integration is removed entirely (no `proxyUrl`,
+  no migration shims). Assume operators use a fresh Lunch Money manual account when adopting
+  `sc`; `external_id` format `scalable-capital:{id}` is for idempotent re-sync only.
+
 ## Tests and security
 
-- Unit tests use fakes for network and WebSocket I/O; no live broker or Lunch Money calls.
+- Unit tests use fakes for broker CLI and API I/O; no live broker or Lunch Money calls.
 - Keep branch, function, line, and statement coverage at or above 80%.
 - Do not log API keys, PINs, or full broker payloads in production paths.
+
+## Releases and versioning
+
+- Stay **below 1.0.0** until the maintainer explicitly decides otherwise (`package.json` must remain `0.x.y`).
+- `release-please-config.json` must keep `bump-minor-pre-major` and `bump-patch-for-minor-pre-major` on the root package
+  so `feat!` / `BREAKING CHANGE` commits do not jump straight from `0.1.0` to `1.0.0`.
+- Do not bump the major version to `1` or drop those flags in a drive-by change.
 
 ## Pull requests
 

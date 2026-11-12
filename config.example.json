@@ -1,25 +1,27 @@
 {
-  "sharedCardLast4": ["1234"],
+  "sharedCardLast4": ["0000"],
   "tradeRepublicProfiles": [
     {
-      "owner": "me",
-      "phoneNumber": "+490000000010",
-      "pin": "0000",
-      "lunchMoneyAssetId": 1
+      "owner": "operator-a",
+      "lunchMoneyAssetId": 1,
+      "pytrCommand": ["pytr"]
     },
     {
-      "owner": "secondary",
-      "phoneNumber": "+490000000011",
-      "pin": "5678",
-      "lunchMoneyAssetId": 2
+      "owner": "operator-b",
+      "lunchMoneyAssetId": 2,
+      "pytrCommand": ["uvx", "pytr@0.4.10"],
+      "pytrMinVersion": "0.4.10"
     }
   ],
   "scalableCapitalProfiles": [
     {
-      "owner": "me",
-      "proxyUrl": "http://127.0.0.1:3141",
-      "proxyToken": "set-a-real-token-when-you-run-the-proxy-with---token",
+      "owner": "operator-a",
       "lunchMoneyAssetId": 3
+    },
+    {
+      "owner": "operator-b",
+      "lunchMoneyAssetId": 4,
+      "portfolioId": "portfolio-operator-b"
     }
   ]
 }

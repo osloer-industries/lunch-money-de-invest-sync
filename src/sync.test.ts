@@ -1,7 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CanonicalTransaction } from "./shared/transaction.js";
 import type { SyncConfig } from "./shared/config.js";
-import { runSync, type BrokerCollectors, type LunchMoneySyncClient } from "./sync.js";
+import { createLiveCollectors, runSync, runSyncCli, type BrokerCollectors, type LunchMoneySyncClient } from "./sync.js";
+
+const fetchAllScalableCapitalTransactions = vi.hoisted(() => vi.fn());
+const createDefaultScCliRunner = vi.hoisted(() => vi.fn(() => ({})));
+const fetchTradeRepublicTimeline = vi.hoisted(() => vi.fn());
+const createDefaultPytrCliRunner = vi.hoisted(() => vi.fn(() => ({})));
+
+vi.mock("./scalable-capital/client.js", () => ({
+  fetchAllScalableCapitalTransactions,
+  createDefaultScCliRunner,
+}));
+
+vi.mock("./trade-republic/client.js", () => ({
+  fetchTradeRepublicTimeline,
+  createDefaultPytrCliRunner,
+}));
 
 function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction {
   return {
@@ -45,14 +60,7 @@ describe("runSync", () => {
       collectScalableCapital: vi.fn(),
     };
     const config = baseConfig({
-      tradeRepublicProfiles: [
-        {
-          owner: "me",
-          phoneNumber: "+490000000003",
-          pin: "0000",
-          lunchMoneyAssetId: 1,
-        },
-      ],
+      tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
     });
 
     await runSync(config, client, collectors, () => {});
@@ -73,9 +81,7 @@ describe("runSync", () => {
       collectScalableCapital: vi.fn().mockResolvedValue([tx({ source: "scalable-capital" })]),
     };
     const config = baseConfig({
-      scalableCapitalProfiles: [
-        { owner: "secondary", proxyUrl: "http://localhost:3141", lunchMoneyAssetId: 2 },
-      ],
+      scalableCapitalProfiles: [{ owner: "operator-b", lunchMoneyAssetId: 2 }],
     });
 
     await runSync(config, client, collectors, () => {});
@@ -96,14 +102,184 @@ describe("runSync", () => {
     };
     const config = baseConfig({
       tradeRepublicProfiles: [
-        { owner: "me", phoneNumber: "+1", pin: "1", lunchMoneyAssetId: 9 },
+        { owner: "operator-a", lunchMoneyAssetId: 9 },
       ],
     });
     const logger = vi.fn();
 
     await runSync(config, client, collectors, logger);
 
-    expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:me"));
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("trade-republic:operator-a"));
+  });
+
+  it("wires the live trade republic collector to the pytr CLI transport", async () => {
+    fetchTradeRepublicTimeline.mockResolvedValue([
+      {
+        id: "evt-1",
+        timestamp: "2026-07-01T12:00:00.000+0000",
+        title: "Merchant",
+        amount: { currency: "EUR", value: -5 },
+      },
+    ]);
+    const collectors = createLiveCollectors();
+    const mapped = await collectors.collectTradeRepublic({ owner: "operator-a", lunchMoneyAssetId: 1 });
+    expect(mapped[0]?.externalId).toBe("trade-republic:evt-1");
+    expect(fetchTradeRepublicTimeline).toHaveBeenCalled();
+  });
+
+  it("forwards optional pytr profile fields to the transport", async () => {
+    fetchTradeRepublicTimeline.mockResolvedValue([]);
+    const collectors = createLiveCollectors();
+    await collectors.collectTradeRepublic({
+      owner: "operator-a",
+      lunchMoneyAssetId: 1,
+      pytrCommand: ["uvx", "pytr"],
+      pytrHome: "/data/operator-a/.pytr",
+      loginV2: true,
+      wafTokenMode: "playwright",
+      account: "acct-1",
+      pytrMinVersion: "0.4.10",
+    });
+    expect(fetchTradeRepublicTimeline).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        pytrCommand: ["uvx", "pytr"],
+        pytrHome: "/data/operator-a/.pytr",
+        loginV2: true,
+        wafTokenMode: "playwright",
+        account: "acct-1",
+        pytrMinVersion: "0.4.10",
+      }),
+    );
+  });
+
+  it("wires the live scalable collector to the CLI transport", async () => {
+    fetchAllScalableCapitalTransactions.mockResolvedValue([
+      {
+        id: "tx-cash-1",
+        date: "2026-03-10T10:00:00Z",
+        type: "BrokerCashTransaction",
+        description: "Deposit",
+        amount: 10,
+        currency: "EUR",
+      },
+    ]);
+    const collectors = createLiveCollectors();
+    const mapped = await collectors.collectScalableCapital({
+      owner: "operator-a",
+      lunchMoneyAssetId: 3,
+      portfolioId: "portfolio-operator-a",
+    });
+    expect(mapped[0]?.externalId).toBe("scalable-capital:tx-cash-1");
+    expect(fetchAllScalableCapitalTransactions).toHaveBeenCalled();
+  });
+
+  it("dry-run uses GET preview and skips inserts", async () => {
+    const client = fakeClient();
+    client.transactions.getAll = vi.fn().mockResolvedValue({ transactions: [], hasMore: false });
+    const collectors: BrokerCollectors = {
+      collectTradeRepublic: vi.fn().mockResolvedValue([tx()]),
+      collectScalableCapital: vi.fn(),
+    };
+    const logger = vi.fn();
+    const config = baseConfig({
+      tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
+    });
+    await runSync(config, client, collectors, logger, {
+      includeBrokers: new Set(["trade-republic"]),
+      owners: [],
+      dryRun: true,
+    });
+    expect(client.transactions.create).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("dry-run"));
+  });
+
+  it("logs duplicate preview lines during dry-run", async () => {
+    const client = fakeClient();
+    client.transactions.getAll = vi
+      .fn()
+      .mockResolvedValue({ transactions: [{ external_id: "trade-republic:evt-1" }], hasMore: false });
+    const logger = vi.fn();
+    await runSync(
+      baseConfig({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+      client,
+      {
+        collectTradeRepublic: vi.fn().mockResolvedValue([tx({ externalId: "trade-republic:evt-1" }), tx()]),
+        collectScalableCapital: vi.fn(),
+      },
+      logger,
+      { includeBrokers: new Set(["trade-republic"]), owners: [], dryRun: true },
+    );
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("="));
+  });
+
+  it("throws when --account matches no configured profiles", async () => {
+    const client = fakeClient();
+    await expect(
+      runSync(
+        baseConfig({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+        client,
+        { collectTradeRepublic: vi.fn(), collectScalableCapital: vi.fn() },
+        vi.fn(),
+        { includeBrokers: new Set(["trade-republic"]), owners: ["missing"], dryRun: false },
+      ),
+    ).rejects.toThrow(/No profiles matched/);
+  });
+
+  it("combines --broker and --account filters", async () => {
+    const client = fakeClient();
+    const collectors: BrokerCollectors = {
+      collectTradeRepublic: vi.fn().mockResolvedValue([tx()]),
+      collectScalableCapital: vi.fn(),
+    };
+    await runSyncCli(
+      ["--broker", "trade-republic", "--account", "operator-a"],
+      {
+        readConfig: () =>
+          baseConfig({
+            tradeRepublicProfiles: [
+              { owner: "operator-a", lunchMoneyAssetId: 1 },
+              { owner: "operator-b", lunchMoneyAssetId: 2 },
+            ],
+          }),
+        createClient: () => client as never,
+        collectors,
+        logger: () => {},
+      },
+    );
+    expect(collectors.collectTradeRepublic).toHaveBeenCalledOnce();
+  });
+
+  it("limits sync to scalable capital when --broker scalable-capital", async () => {
+    const client = fakeClient();
+    const collectors: BrokerCollectors = {
+      collectTradeRepublic: vi.fn(),
+      collectScalableCapital: vi.fn().mockResolvedValue([tx({ source: "scalable-capital" })]),
+    };
+    await runSyncCli(["--broker", "scalable-capital"], {
+      readConfig: () =>
+        baseConfig({
+          tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
+          scalableCapitalProfiles: [{ owner: "operator-b", lunchMoneyAssetId: 2 }],
+        }),
+      createClient: () => client as never,
+      collectors,
+      logger: () => {},
+    });
+    expect(collectors.collectTradeRepublic).not.toHaveBeenCalled();
+    expect(collectors.collectScalableCapital).toHaveBeenCalled();
+  });
+
+  it("runSyncCli prints help without touching brokers", async () => {
+    const logger = vi.fn();
+    await runSyncCli(["--help"], { logger, readConfig: () => baseConfig() });
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("--dry-run"));
+  });
+
+  it("runSyncCli rejects unknown flags", async () => {
+    await expect(runSyncCli(["--nope"], { readConfig: () => baseConfig() })).rejects.toThrow(
+      /Invalid sync arguments/,
+    );
   });
 
   it("does nothing and logs nothing when no profiles are configured", async () => {
