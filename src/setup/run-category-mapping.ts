@@ -8,9 +8,8 @@ import {
 import { collectTypeObservations } from "../shared/collect-type-observations.js";
 import { serializeTypeSummaryFromGroups } from "../shared/export-type-summary.js";
 import { anonymizeTypeExample } from "../shared/anonymize.js";
-import { parseStoredMaps } from "../shared/config-maps.js";
 import { readConfigFromDisk, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
-import { parseJsonText } from "../shared/config.js";
+import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
 import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
 import type { SetupCliOptions } from "./setup-options.js";
@@ -97,19 +96,13 @@ async function mergeConfigOnDisk(
   patch: Pick<SyncConfig, "categoryMap" | "tagMap">,
 ): Promise<string> {
   const configPath = resolveConfigFilePath(CONFIG_FILENAME);
-  const existingText = filesystem.exists(configPath) ? (filesystem.readText(configPath) ?? "{}") : "{}";
-  const parsed = parseJsonText(existingText);
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`${CONFIG_FILENAME} must be a JSON object`);
-  }
-  const stored = parseStoredMaps(parsed);
-  const merged = {
+  const parsed = readConfigJsonObject(filesystem, configPath);
+  const stored = storedMapsFromConfigObject(parsed);
+  await writeConfigJsonObject(filesystem, configPath, {
     ...parsed,
     categoryMap: { ...stored.categoryMap, ...patch.categoryMap },
     tagMap: { ...stored.tagMap, ...patch.tagMap },
-  };
-  const json = `${JSON.stringify(merged, null, 2)}\n`;
-  await filesystem.writeText(configPath, json);
+  });
   return configPath;
 }
 
