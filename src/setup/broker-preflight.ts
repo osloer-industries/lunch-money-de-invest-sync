@@ -1,7 +1,10 @@
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { scMachineEnvelopeSchema } from "../scalable-capital/types.js";
+import {
+  parseScMachineEnvelopeStdout,
+  tryParseScMachineEnvelopeStdout,
+} from "../scalable-capital/sc-envelope.js";
 import type { PytrCliRunner, ScCliRunner } from "../shared/subprocess-cli.js";
 import type { SetupPrompter } from "./types.js";
 
@@ -82,14 +85,8 @@ export async function ensureScCliReady(
 }
 
 function isScSessionActive(stdout: string): boolean {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout.trim());
-  } catch {
-    return false;
-  }
-  const envelope = scMachineEnvelopeSchema.safeParse(parsed);
-  return envelope.success && envelope.data.ok;
+  const envelope = tryParseScMachineEnvelopeStdout(stdout);
+  return envelope !== null && envelope.ok;
 }
 
 export async function ensurePytrReady(
@@ -135,17 +132,11 @@ export async function ensurePytrReady(
 }
 
 export function parseScPortfolios(stdout: string): Array<{ id: string; name: string }> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout.trim());
-  } catch {
-    throw new Error("Scalable CLI portfolios response is not valid JSON");
-  }
-  const envelope = scMachineEnvelopeSchema.safeParse(parsed);
-  if (!envelope.success || !envelope.data.ok) {
+  const envelope = parseScMachineEnvelopeStdout(stdout);
+  if (!envelope.ok) {
     throw new Error("Scalable CLI portfolios command failed");
   }
-  const data = envelope.data.data;
+  const data = envelope.data;
   if (!data || typeof data !== "object") {
     return [];
   }

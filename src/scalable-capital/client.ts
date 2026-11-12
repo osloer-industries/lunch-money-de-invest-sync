@@ -1,34 +1,18 @@
 import {
   scBrokerTransactionsDataSchema,
-  scMachineEnvelopeSchema,
   scalableCapitalTransactionSchema,
   type ScalableCapitalCliConfig,
   type ScalableCapitalTransaction,
   type ScTransactionSummary,
 } from "./types.js";
+import { parseScMachineEnvelopeStdout } from "./sc-envelope.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
 
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;
 const CASH_SUMMARY_TYPE = "BrokerCashTransactionSummary";
 
-function parseEnvelope(stdout: string) {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout.trim());
-  } catch {
-    throw new Error("Scalable CLI returned stdout that is not valid JSON");
-  }
-  const envelope = scMachineEnvelopeSchema.safeParse(parsed);
-  if (!envelope.success) {
-    throw new Error(
-      `Scalable CLI JSON envelope didn't match the expected shape: ${envelope.error.message}`,
-    );
-  }
-  return envelope.data;
-}
-
-function cliErrorMessage(envelope: ReturnType<typeof parseEnvelope>): string {
+function cliErrorMessage(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): string {
   const code = envelope.error?.code ?? "unknown";
   const hint = envelope.hints?.[0];
   return hint
@@ -36,7 +20,7 @@ function cliErrorMessage(envelope: ReturnType<typeof parseEnvelope>): string {
     : `Scalable CLI command failed (${code})`;
 }
 
-function assertSuccessEnvelope(envelope: ReturnType<typeof parseEnvelope>): void {
+function assertSuccessEnvelope(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): void {
   if (envelope.ok) {
     return;
   }
@@ -136,10 +120,10 @@ async function runTransactionsPage(
     }
     throw error;
   }
-  const envelope = parseEnvelope(run.stdout);
+  const envelope = parseScMachineEnvelopeStdout(run.stdout);
   if (!envelope.ok && envelope.error?.code === "refresh_retryable") {
     const retry = await runner.run(argv, env);
-    const retryEnvelope = parseEnvelope(retry.stdout);
+    const retryEnvelope = parseScMachineEnvelopeStdout(retry.stdout);
     assertSuccessEnvelope(retryEnvelope);
     return parseTransactionsData(retryEnvelope);
   }
@@ -147,7 +131,7 @@ async function runTransactionsPage(
   return parseTransactionsData(envelope);
 }
 
-function parseTransactionsData(envelope: ReturnType<typeof parseEnvelope>): {
+function parseTransactionsData(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): {
   transactions: ScalableCapitalTransaction[];
   summaries: ScTransactionSummary[];
   cursor: string | null | undefined;
