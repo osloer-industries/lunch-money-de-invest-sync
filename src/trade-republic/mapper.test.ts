@@ -76,6 +76,13 @@ describe("mapTradeRepublicEvent", () => {
     expect(() => mapTradeRepublicEvent(event({ timestamp: "not-a-date" }))).toThrow(/timestamp/);
   });
 
+  it("omits notes when subtitle and event type are absent", () => {
+    const tx = mapTradeRepublicEvent(
+      event({ subtitle: "", eventType: undefined, amount: { currency: "EUR", value: -1 } }),
+    );
+    expect(tx?.notes).toBeUndefined();
+  });
+
   it("returns null for an informational event", () => {
     expect(mapTradeRepublicEvent(event({ amount: { currency: "EUR", value: 0 } }))).toBeNull();
   });

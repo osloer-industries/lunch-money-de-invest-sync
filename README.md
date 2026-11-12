@@ -74,11 +74,15 @@ Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com
 git clone https://github.com/osloer-industries/lunch-money-de-invest-sync.git
 cd lunch-money-de-invest-sync
 npm ci
-cp config.example.json config.json   # edit profiles — see Configuration
-cp .env.example .env                 # optional; never commit real values
-export LUNCH_MONEY_API_KEY='your-key'
+# Install pytr and/or sc locally, then:
+npm run setup
+npm run sync -- --dry-run
 npm run sync
 ```
+
+`npm run setup` checks Node 24, verifies `sc` / `pytr` install and login (prompting for `sc login --local-read-only` or `pytr login` when needed), validates your Lunch Money API key with a read-only call, writes gitignored `.env` (mode `0600`) and `config.json`, and can run an optional dry-run sync.
+
+Use `npm run sync -- --broker trade-republic --account operator-a --dry-run` to limit brokers/owners or preview inserts without POST requests.
 
 ## Configuration
 
@@ -199,7 +203,8 @@ transports; tests inject fakes.
 
 | Script | Description |
 | --- | --- |
-| `npm run sync` | Run a full sync using `config.json` and `LUNCH_MONEY_API_KEY` |
+| `npm run setup` | Interactive onboarding (brokers, Lunch Money mapping, `.env` + `config.json`) |
+| `npm run sync` | Run a sync using `config.json` and `LUNCH_MONEY_API_KEY` (`--dry-run`, `--broker`, `--account`) |
 | `npm run check` | Lint, typecheck, coverage, and build (matches CI **Quality** job) |
 | `npm run lint` | Oxlint |
 | `npm run typecheck` | `tsc --noEmit` |

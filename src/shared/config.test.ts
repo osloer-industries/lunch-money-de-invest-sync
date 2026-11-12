@@ -65,6 +65,21 @@ describe("loadConfig", () => {
     expect(config.tradeRepublicProfiles[0]?.pytrMinVersion).toBe("0.4.10");
   });
 
+  it("rejects a relative pytrHome path", () => {
+    expect(() =>
+      loadConfig({
+        ...validRaw,
+        tradeRepublicProfiles: [
+          {
+            owner: "operator-a",
+            lunchMoneyAssetId: 1,
+            pytrHome: "relative/.pytr",
+          },
+        ],
+      }),
+    ).toThrow(/pytrHome must be an absolute path/);
+  });
+
   it("rejects removed trade republic credential fields", () => {
     expect(() =>
       loadConfig({

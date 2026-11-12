@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `npm run sync` CLI flags: `--broker`, `--account`, `--dry-run`, `--help` (Node `parseArgs`).
+- `npm run setup` interactive onboarding with injectable I/O for tests; `--non-interactive` for scripted installs.
 - Trade Republic pytr transport (`PytrCliRunner`), saveback single-row tagging, and fixture-based tests.
 - `sc broker transactions --json` transport with fixture-based tests and cursor pagination.
 - Operator docs for Linux glibc ≥ 2.38 prerequisite and recommended `sc login --local-read-only`.

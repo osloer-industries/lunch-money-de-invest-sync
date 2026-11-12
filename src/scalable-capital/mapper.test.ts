@@ -33,6 +33,10 @@ describe("utcCalendarDateFromEventTimestamp", () => {
   it("uses the UTC calendar day even when the timestamp carries a positive offset", () => {
     expect(utcCalendarDateFromEventTimestamp("2026-07-02T00:30:00+02:00")).toBe("2026-07-01");
   });
+
+  it("throws when the timestamp is not parseable", () => {
+    expect(() => utcCalendarDateFromEventTimestamp("not-a-date")).toThrow(/not valid ISO-8601/);
+  });
 });
 
 describe("mapScalableCapitalTransaction", () => {
