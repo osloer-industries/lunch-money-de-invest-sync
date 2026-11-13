@@ -156,16 +156,7 @@ function buildExportArgv(outputDir: string, config: TradeRepublicPytrConfig): st
     "--lang",
     "en",
   ];
-  if (config.loginV2) {
-    argv.push("--v2");
-  }
-  if (config.wafTokenMode === "no-waf") {
-    argv.push("--no-waf-token");
-  } else if (config.wafTokenMode === "playwright") {
-    argv.push("--waf-token", "playwright");
-  } else if (config.wafTokenMode === "awswaf") {
-    argv.push("--waf-token", "awswaf");
-  }
+  argv.push("--v2");
   if (config.account) {
     argv.push("--account", config.account);
   }
@@ -183,7 +174,7 @@ function truncateStderr(stderr: string, max = 500): string {
 function actionablePytrFailure(stderr: string, exitCode: number): string {
   const lower = stderr.toLowerCase();
   if (lower.includes("credentials") || lower.includes("login") || lower.includes("not logged")) {
-    return "pytr session is missing or expired — run `pytr login` (or `pytr login --v2`) on this machine first";
+    return "pytr session is missing or expired — run `pytr login --v2 --store_credentials` on this machine first";
   }
   if (lower.includes("426") || lower.includes("client_version_outdated")) {
     return (
@@ -191,7 +182,7 @@ function actionablePytrFailure(stderr: string, exitCode: number): string {
     );
   }
   if (lower.includes("waf") || lower.includes("playwright")) {
-    return "pytr WAF login failed — install pytr[playwright] + chromium or try `pytr login --v2`";
+    return "pytr login failed — use app approval: `pytr login --v2 --store_credentials`";
   }
   const detail = truncateStderr(stderr);
   return detail.length > 0

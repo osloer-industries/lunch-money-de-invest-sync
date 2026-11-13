@@ -107,7 +107,7 @@ Copy [`config.example.json`](config.example.json) to `config.json` in the repo r
 | Field | Purpose |
 | --- | --- |
 | `sharedCardLast4` | Last four digits of cards whose spend should receive the `shared` tag (matched in payee/notes text) |
-| `tradeRepublicProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `pytrCommand`, `pytrHome`, `loginV2`, `wafTokenMode`, `account`, `pytrMinVersion` |
+| `tradeRepublicProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `pytrCommand`, `pytrHome`, `account`, `pytrMinVersion` |
 | `scalableCapitalProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `portfolioId`, `scBinaryPath`, `scConfigDir` |
 | `categoryMap` | Canonical type → Lunch Money `category_id` (see `npm run setup -- --categories`) |
 | `tagMap` | Canonical type → extra tag names applied at sync (unknown types always get `needs-review`) |
@@ -124,7 +124,7 @@ The `owner` string is a **local label** for logs only (e.g. `operator-a`, `opera
   twice is a no-op, so re-running a sync is always safe.
 - **Trade Republic**: [pytr](https://github.com/pytr-org/pytr) (community CLI, MIT). Sync shells out to
   `pytr export_transactions`, reads `all_events.json`, and maps cash-relevant timeline events.
-  Operators authenticate with `pytr login` (or `pytr login --v2`); credentials live under `~/.pytr`
+  Operators authenticate with `pytr login --v2` (app approval); credentials live under `~/.pytr`
   on the operator machine, never in this repo.
 - **Scalable Capital**: the official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli)
   (`sc`, Apache-2.0). Sync shells out to `sc broker transactions --json`, parses the machine JSON
@@ -157,7 +157,7 @@ field fails loudly with a clear error instead of silently inserting wrong amount
 
 1. Install pytr per operator machine ([pytr](https://github.com/pytr-org/pytr); recommended:
    `uvx pytr@0.4.10` or pin via `pytrCommand` in config).
-2. Run `pytr login` or `pytr login --v2` once (interactive; credentials stay in `~/.pytr`, not in this repo).
+2. Run `pytr login --v2 --store_credentials` once (interactive; credentials stay in `~/.pytr`, not in this repo).
 3. Optional: set `pytrHome` when the pytr data dir is not `~/.pytr` (path must end with `/.pytr`).
 4. Run `npm run sync` with `LUNCH_MONEY_API_KEY` set. Re-run `pytr login` when pytr reports an expired session.
 

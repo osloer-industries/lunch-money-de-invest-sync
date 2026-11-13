@@ -74,14 +74,39 @@ describe("loadConfig", () => {
           lunchMoneyAssetId: 1,
           pytrCommand: ["uvx", "pytr"],
           pytrHome: "/tmp/operator-a/.pytr",
-          loginV2: true,
-          wafTokenMode: "playwright",
           account: "acct-1",
           pytrMinVersion: "0.4.10",
         },
       ],
     });
     expect(config.tradeRepublicProfiles[0]?.pytrMinVersion).toBe("0.4.10");
+  });
+
+  it("rejects removed loginV2 and wafTokenMode profile keys", () => {
+    expect(() =>
+      loadConfig({
+        ...validRaw,
+        tradeRepublicProfiles: [
+          {
+            owner: "operator-a",
+            lunchMoneyAssetId: 1,
+            loginV2: true,
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      loadConfig({
+        ...validRaw,
+        tradeRepublicProfiles: [
+          {
+            owner: "operator-a",
+            lunchMoneyAssetId: 1,
+            wafTokenMode: "awswaf",
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("rejects a relative pytrHome path", () => {

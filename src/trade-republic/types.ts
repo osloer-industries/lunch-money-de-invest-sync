@@ -24,14 +24,10 @@ export type PytrTimelineEvent = z.infer<typeof pytrTimelineEventSchema>;
 
 export const pytrAllEventsSchema = z.array(pytrTimelineEventSchema);
 
-export type TradeRepublicWafTokenMode = "default" | "playwright" | "awswaf" | "no-waf";
-
 export interface TradeRepublicPytrConfig {
   readonly pytrCommand?: readonly string[];
   /** Absolute path to the pytr data directory (typically ends with `.pytr`). */
   readonly pytrHome?: string;
-  readonly loginV2?: boolean;
-  readonly wafTokenMode?: TradeRepublicWafTokenMode;
   /** Passed through to pytr `--account` when syncing a non-primary TR account. */
   readonly account?: string;
   readonly pytrMinVersion?: string;

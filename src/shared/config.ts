@@ -5,8 +5,6 @@ import { z } from "zod";
 import { categoryMapSchema, tagMapSchema } from "./canonical-type.js";
 import { formatConfigLoadError } from "./config-cli-errors.js";
 
-const tradeRepublicWafTokenModeSchema = z.enum(["default", "playwright", "awswaf", "no-waf"]);
-
 const tradeRepublicProfileSchema = z
   .object({
     owner: z.string().min(1),
@@ -19,8 +17,6 @@ const tradeRepublicProfileSchema = z
       .min(1)
       .refine((value) => path.isAbsolute(value), { message: "pytrHome must be an absolute path" })
       .optional(),
-    loginV2: z.boolean().optional(),
-    wafTokenMode: tradeRepublicWafTokenModeSchema.optional(),
     account: z.string().min(1).optional(),
     pytrMinVersion: z.string().min(1).optional(),
     /** Overrides the default 120s subprocess timeout for pytr child processes. */
