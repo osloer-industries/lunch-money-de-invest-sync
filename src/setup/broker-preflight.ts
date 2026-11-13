@@ -5,6 +5,7 @@ import {
   parseScMachineEnvelopeStdout,
   tryParseScMachineEnvelopeStdout,
 } from "../scalable-capital/sc-envelope.js";
+import { isErrnoCode } from "../shared/errno.js";
 import type { PytrCliRunner, ScCliRunner } from "../shared/subprocess-cli.js";
 import type { SetupPrompter } from "./types.js";
 
@@ -59,11 +60,7 @@ export async function ensureScCliReady(
   try {
     portfoliosRun = await sc.run(["broker", "portfolios", "--json"]);
   } catch (error) {
-    const code =
-      typeof error === "object" && error !== null && Reflect.get(error, "code") === "ENOENT"
-        ? "missing"
-        : "unknown";
-    if (code === "missing") {
+    if (isErrnoCode(error, "ENOENT")) {
       prompter.print("Scalable CLI (`sc`) was not found — install https://github.com/ScalableCapital/scalable-cli");
     }
     throw error;
@@ -102,7 +99,9 @@ export async function ensurePytrReady(
   try {
     versionRun = await pytr.run(["-V"]);
   } catch (error) {
-    prompter.print("pytr was not found — install https://github.com/pytr-org/pytr (for example `uvx pytr@0.4.10`)");
+    if (isErrnoCode(error, "ENOENT")) {
+      prompter.print("pytr was not found — install https://github.com/pytr-org/pytr (for example `uvx pytr@0.4.10`)");
+    }
     throw error;
   }
   if (versionRun.exitCode !== 0) {

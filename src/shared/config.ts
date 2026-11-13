@@ -23,6 +23,8 @@ const tradeRepublicProfileSchema = z
     wafTokenMode: tradeRepublicWafTokenModeSchema.optional(),
     account: z.string().min(1).optional(),
     pytrMinVersion: z.string().min(1).optional(),
+    /** Overrides the default 120s subprocess timeout for pytr child processes. */
+    cliSubprocessTimeoutMs: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -40,6 +42,8 @@ const scalableCapitalProfileSchema = z
       .optional(),
     /** Overrides SC_CONFIG_DIR for the child process when sessions live outside the default dir. */
     scConfigDir: z.string().min(1).optional(),
+    /** Overrides the default 120s subprocess timeout for `sc` child processes. */
+    cliSubprocessTimeoutMs: z.number().int().positive().optional(),
   })
   .strict();
 
