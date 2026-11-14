@@ -10,13 +10,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   workflow-security:
-    uses: osloer-industries/.github/.github/workflows/workflow-security.yml@eb1884c861aed5f39259adf8d02db11c2a196051 # main
+    uses: osloer-industries/.github/.github/workflows/workflow-security.yml@4ca4cc7336b5b34d02a724e8a7aed245cf1ffae4 # v0.1.0
     permissions:
       contents: read
       actions: read
 
   quality:
-    uses: osloer-industries/.github/.github/workflows/node-npm-quality.yml@eb1884c861aed5f39259adf8d02db11c2a196051 # main
+    uses: osloer-industries/.github/.github/workflows/node-npm-quality.yml@4ca4cc7336b5b34d02a724e8a7aed245cf1ffae4 # v0.1.0
     permissions:
       contents: read
 

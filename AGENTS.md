@@ -18,7 +18,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Run `npm run check` before submitting a change. This runs Oxlint, the
   TypeScript compiler, coverage, and the production build.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
-- Pin `osloer-industries/.github` reusable workflows by full SHA (`# main` comment).
+- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.1.0` or matching release tag comment).
   Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.
 
 ## Architecture
