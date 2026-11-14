@@ -86,7 +86,9 @@ These rules apply to every agent (Cursor, Grok Bot, any other) working in this r
   binary as a child process (`sc broker transactions --json`), never an HTTP proxy.
 - Parse the machine JSON envelope (`ok`, `command`, `data`, `error`) and validate broker
   payloads with `zod`. Do not log stdout that may contain account metadata.
-- Map only `BrokerCashTransactionSummary` rows to Lunch Money; preserve dedup ids as
+- Map `BrokerCashTransactionSummary` rows and executed `BrokerSecurityTransactionSummary` rows
+  (buy / sell / savings plan, signed by trade direction) to Lunch Money so the cash account matches
+  `cash_balance`; skip pending/cancelled orders and depot transfers. Preserve dedup ids as
   `scalable-capital:{id}` using the broker transaction id from `sc`.
 - Set each transaction **date** to the **UTC calendar day** of `last_event_datetime` (not local
   timezone).

@@ -12,6 +12,30 @@ import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;
 const CASH_SUMMARY_TYPE = "BrokerCashTransactionSummary";
+const SECURITY_SUMMARY_TYPE = "BrokerSecurityTransactionSummary";
+
+/**
+ * Security order statuses (from `sc broker transactions --status`) where no cash has moved yet, or
+ * never will. Such rows are skipped and picked up on a later sync once they are FILLED/SETTLED;
+ * inserting them early would freeze a wrong amount (Lunch Money dedups by external_id).
+ */
+const SC_NOT_EXECUTED_STATUSES = new Set([
+  "CREATED",
+  "REQUESTED",
+  "PENDING",
+  "PARTIAL_FILLED",
+  "CANCELLED",
+  "CANCEL_REQUESTED",
+  "EXPIRED",
+  "REJECTED",
+]);
+
+/** Security deliveries in or out of the depot (no cash leg). */
+const SC_NON_CASH_SECURITY_TYPES = new Set(["TRANSFER_IN", "TRANSFER_OUT", "SWAP_IN", "SWAP_OUT"]);
+
+function normalizeEnum(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase().replaceAll(/[\s-]+/g, "_");
+}
 
 function parseDecimalAmount(value: string | number | null | undefined): number {
   if (typeof value === "number") {
@@ -21,7 +45,7 @@ function parseDecimalAmount(value: string | number | null | undefined): number {
     return value;
   }
   if (value === null || value === undefined) {
-    throw new Error("Scalable CLI cash transaction is missing amount");
+    throw new Error("Scalable CLI transaction is missing amount");
   }
   if (typeof value !== "string") {
     throw new TypeError("Scalable CLI transaction amount has an unexpected type");
@@ -34,26 +58,57 @@ function parseDecimalAmount(value: string | number | null | undefined): number {
   return parsed;
 }
 
-function normalizeCashItem(item: ScTransactionSummary): ScalableCapitalTransaction | null {
-  if (item.summary_type !== CASH_SUMMARY_TYPE) {
+function isCashAffectingSecurityItem(item: ScTransactionSummary): boolean {
+  if (item.summary_type !== SECURITY_SUMMARY_TYPE) {
+    return false;
+  }
+  if (SC_NOT_EXECUTED_STATUSES.has(normalizeEnum(item.status))) {
+    return false;
+  }
+  return !SC_NON_CASH_SECURITY_TYPES.has(normalizeEnum(item.security_transaction_type));
+}
+
+/**
+ * Cash summaries and executed security trades both move brokerage cash; everything else (crypto,
+ * pending/cancelled orders, depot transfers) is skipped.
+ */
+function normalizeItem(item: ScTransactionSummary): ScalableCapitalTransaction | null {
+  const isCash = item.summary_type === CASH_SUMMARY_TYPE;
+  if (!isCash && !isCashAffectingSecurityItem(item)) {
     return null;
   }
   if (item.is_cancellation === true) {
     return null;
   }
   if (!item.last_event_datetime) {
-    throw new Error(`Scalable CLI cash transaction ${item.id} is missing last_event_datetime`);
+    throw new Error(
+      `Scalable CLI ${isCash ? "cash" : "security"} transaction ${item.id} is missing last_event_datetime`,
+    );
   }
   const normalized = {
     id: item.id,
     date: item.last_event_datetime,
-    type: "BrokerCashTransaction" as const,
+    type: isCash ? "BrokerCashTransaction" : "BrokerSecurityTransaction",
     description: item.description?.trim() ?? "",
     amount: parseDecimalAmount(item.amount),
     currency: item.currency?.trim() || "EUR",
-    ...(item.cash_transaction_type?.trim() ? { cashTransactionType: item.cash_transaction_type.trim() } : {}),
+    ...structuredTypeFields(item),
   };
   return scalableCapitalTransactionSchema.parse(normalized);
+}
+
+/** Structured backend enums used by classification; omitted when blank. */
+function structuredTypeFields(
+  item: ScTransactionSummary,
+): Pick<Partial<ScalableCapitalTransaction>, "cashTransactionType" | "securityTransactionType" | "side"> {
+  const cashTransactionType = item.cash_transaction_type?.trim();
+  const securityTransactionType = item.security_transaction_type?.trim();
+  const side = item.side?.trim();
+  return {
+    ...(cashTransactionType ? { cashTransactionType } : {}),
+    ...(securityTransactionType ? { securityTransactionType } : {}),
+    ...(side ? { side } : {}),
+  };
 }
 
 function buildTransactionsArgv(config: ScalableCapitalCliConfig, cursor?: string): string[] {
@@ -93,7 +148,7 @@ function parseTransactionsData(envelope: ScMachineEnvelope): {
   }
   const summaries = dataParsed.data.result.items;
   const transactions = summaries
-    .map((item) => normalizeCashItem(item))
+    .map((item) => normalizeItem(item))
     .filter((tx): tx is ScalableCapitalTransaction => tx !== null);
   return { transactions, summaries, cursor: dataParsed.data.result.cursor };
 }
@@ -126,7 +181,7 @@ export function fetchAllScalableTransactionSummaries(
   return paginateBrokerTransactionPages(runner, config, (page) => page.summaries);
 }
 
-/** Fetches every page of broker cash transactions via `sc broker transactions --json`. */
+/** Fetches every page of cash-affecting broker transactions (cash rows + executed trades). */
 export function fetchAllScalableCapitalTransactions(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,

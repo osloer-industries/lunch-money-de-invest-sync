@@ -41,7 +41,7 @@
 | Broker | Integration | What gets synced |
 | --- | --- | --- |
 | **Trade Republic** | [pytr](https://github.com/pytr-org/pytr) (community CLI, unofficial) | pytr timeline events with non-zero cash amount (card spend, transfers, interest, saveback as one row, …) |
-| **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries only (security buy/sell/savings-plan rows are not inserted; category setup skips those types when only Scalable profiles exist — **Option A**) |
+| **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries **and** executed security trades (buy, sell, savings plan) as cash movements, so the cash account matches Scalable's `cash_balance`; pending, cancelled and depot-transfer rows are skipped |
 
 Both broker surfaces can change without notice. Payloads are validated with **zod** at the boundary so schema drift
 should fail loudly instead of inserting wrong amounts.
@@ -206,7 +206,7 @@ The `owner` string is a **local label** for logs only (e.g. `operator-a`, `opera
   on the operator machine, never in this repo.
 - **Scalable Capital**: the official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli)
   (`sc`, Apache-2.0). Sync shells out to `sc broker transactions --json`, parses the machine JSON
-  envelope, and maps cash summaries into Lunch Money. Operators authenticate with `sc login`
+  envelope, and maps cash summaries plus executed trades into Lunch Money. Operators authenticate with `sc login`
   (device-code OAuth) after enabling **Profile → Security → Agentic Investing** in the Scalable
   web app. Recommended for sync: `sc login --local-read-only`.
 
@@ -247,6 +247,14 @@ If `sc` is installed outside standard directories, set `scBinaryPath` in config 
 
 Broker credentials and CLI session files stay on the operator's machine only (`SC_CONFIG_DIR` /
 default config dir). Never commit them to this repo.
+
+**Upgrading from 0.2.x:** earlier versions inserted only cash summaries (deposits, internal
+transfers, …) and never subtracted the ETF purchases paid from that cash, so the Scalable cash account
+in Lunch Money grew with every deposit. The next sync inserts the missing buy / sell / savings-plan rows
+(each with its stable `scalable-capital:{id}` external id, so re-runs stay idempotent) and they pick
+up your `categoryMap` entries for `buy`, `sell` and `savings-plan` — run `npm run setup -- --categories`
+first if those are not mapped yet. Use `npm run sync -- --dry-run` to preview them and the cash
+reconciliation.
 
 Adopting `sc` is a **clean break** from older experimental proxy workflows: use a fresh Lunch Money
 manual account (or clean up legacy rows yourself). Re-running sync on the current path is safe because
