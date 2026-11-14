@@ -9,11 +9,12 @@ import { forEachSequentially } from "../shared/sequential-profiles.js";
 import { writeAnonymisedTypeSummaryToPath } from "../shared/export-type-summary.js";
 import { anonymizeTypeExample } from "../shared/anonymize.js";
 import { readConfigFromDisk, readConfigFromDiskForCli, resolveConfigFilePath, type SyncConfig } from "../shared/config.js";
-import { loadDotenvFromCwd } from "../shared/load-dotenv.js";
-import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
+import { ensureLunchMoneyApiKeyForCli } from "../shared/bootstrap-lunch-money-api-key.js";
+import type { LunchMoneyApiKeyStore } from "../shared/lunch-money-api-key-store.js";
+import { createDefaultLunchMoneyApiKeyStore } from "../shared/lunch-money-api-key-store.js";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
-import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
+import type { CategoryMappingSetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
 import {
   SAVEBACK_CREATE_TEMPLATES,
   type SuggestedCategory,
@@ -39,11 +40,81 @@ function formatCreateCategoryConfirm(suggestion: SuggestedCategory): string {
   return `Create category "${suggestion.name}" (is_income=${suggestion.is_income}, exclude budget=${suggestion.exclude_from_budget}, exclude totals=${suggestion.exclude_from_totals})?`;
 }
 
-function allowsCreateCategory(canonicalType: CanonicalType, suggestion: SuggestedCategory | undefined): boolean {
-  if (canonicalType === "saveback") {
+/**
+ * Types that are always asked on their own even when another type shares their suggested category:
+ * Saveback needs an explicit treatment choice, and unknown rows (card spend, unclassified events)
+ * must be skippable without also skipping deposits/withdrawals/transfers.
+ */
+const STANDALONE_TYPES = new Set<CanonicalType>(["saveback", "unknown"]);
+
+/** Seen canonical types that share one suggested Lunch Money category and are asked about once. */
+export interface CategoryPromptGroup {
+  readonly types: readonly CanonicalType[];
+  readonly suggestion: SuggestedCategory | undefined;
+  /** Suggested tag → the types in this group that suggested it (tags stay scoped to those types). */
+  readonly suggestedTags: ReadonlyMap<string, readonly CanonicalType[]>;
+}
+
+function promptGroupKey(canonicalType: CanonicalType, suggestion: SuggestedCategory | undefined): string {
+  if (!suggestion || STANDALONE_TYPES.has(canonicalType)) {
+    return `type:${canonicalType}`;
+  }
+  return `category:${suggestion.name.trim().toLowerCase()}`;
+}
+
+/**
+ * Group seen types by their suggested category name (case-insensitive), e.g. buy / sell /
+ * savings-plan → "Investments", dividend / interest → "Income". Types without a suggestion, and
+ * {@link STANDALONE_TYPES}, stay on their own.
+ */
+export function groupTypesForCategoryPrompts(seenTypes: Iterable<CanonicalType>): CategoryPromptGroup[] {
+  const types = [...new Set(seenTypes)].toSorted((left, right) => left.localeCompare(right));
+  const groups = new Map<
+    string,
+    { types: CanonicalType[]; suggestion: SuggestedCategory | undefined; tags: Map<string, CanonicalType[]> }
+  >();
+  for (const canonicalType of types) {
+    canonicalTypeSchema.parse(canonicalType);
+    const suggestion = SUGGESTED_CATEGORIES[canonicalType];
+    const key = promptGroupKey(canonicalType, suggestion);
+    const group = groups.get(key) ?? { types: [], suggestion, tags: new Map<string, CanonicalType[]>() };
+    group.types.push(canonicalType);
+    for (const tag of SUGGESTED_TAGS[canonicalType] ?? []) {
+      group.tags.set(tag, [...(group.tags.get(tag) ?? []), canonicalType]);
+    }
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => ({
+    types: group.types,
+    suggestion: group.suggestion,
+    suggestedTags: group.tags,
+  }));
+}
+
+/** `type "deposit"` or `types "buy", "savings-plan", "sell"`. */
+export function formatGroupLabel(types: readonly CanonicalType[]): string {
+  const quoted = types.map((type) => `"${type}"`).join(", ");
+  return types.length === 1 ? `type ${quoted}` : `types ${quoted}`;
+}
+
+function groupHas(group: CategoryPromptGroup, canonicalType: CanonicalType): boolean {
+  return group.types.includes(canonicalType);
+}
+
+function allowsCreateCategory(group: CategoryPromptGroup): boolean {
+  if (groupHas(group, "saveback")) {
     return true;
   }
-  return suggestion !== undefined;
+  // 0.2.0 rule kept: unknown rows can be mapped to an existing category, never a new one.
+  if (groupHas(group, "unknown")) {
+    return false;
+  }
+  return group.suggestion !== undefined;
+}
+
+/** Unknown shares the transfer suggestion, so match it the way transfer types are matched. */
+function matchingTypeFor(group: CategoryPromptGroup): CanonicalType {
+  return groupHas(group, "unknown") ? "transfer" : (group.types[0] ?? "unknown");
 }
 
 async function pickSavebackCreateTemplate(prompter: SetupPrompter): Promise<SuggestedCategory | undefined> {
@@ -73,6 +144,7 @@ async function createCategoryFromTemplate(
 ): Promise<number | undefined> {
   const confirmed = await prompter.confirm(formatCreateCategoryConfirm(suggestion), false);
   if (!confirmed) {
+    prompter.print("  Not created — no category mapped.");
     return undefined;
   }
   const created = await client.categories.create({
@@ -115,92 +187,44 @@ async function confirmExistingCategoryFlags(
   return prompter.confirm("Use this category anyway?", false);
 }
 
-function printStandardSuggestion(
+/** Print the suggestion for a group and return the matching existing category, if any. */
+function findGroupMatch(
   prompter: SetupPrompter,
-  canonicalType: CanonicalType,
-  suggestion: SuggestedCategory,
+  group: CategoryPromptGroup,
   categoryRows: readonly SetupCategoryRow[],
-): void {
+): SetupCategoryRow | undefined {
+  const { suggestion } = group;
+  if (!suggestion) {
+    return undefined;
+  }
+  const label = formatGroupLabel(group.types);
   const { category: match, warnedMissingExclusion } = findSuggestedCategoryMatch(
     categoryRows,
     suggestion,
-    canonicalType,
+    matchingTypeFor(group),
   );
   if (match) {
     prompter.print(
-      `  Suggested category for ${canonicalType}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
+      `  Suggested category for ${label}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
     );
     if (warnedMissingExclusion) {
       prompter.print(
         "  Warning: this category does not have both Exclude from budget and Exclude from totals enabled.",
       );
     }
-    return;
+    return match;
   }
   prompter.print(
-    `  Suggested category for ${canonicalType}: "${suggestion.name}" (not found — pick id or create)`,
+    allowsCreateCategory(group)
+      ? `  Suggested category for ${label}: "${suggestion.name}" (not found — create it or pick another)`
+      : `  Suggested category for ${label}: "${suggestion.name}" (not found — pick an existing category or skip)`,
   );
+  return undefined;
 }
 
 const TRANSFER_PAIRING_TYPES = new Set<CanonicalType>(["deposit", "withdrawal", "transfer"]);
 
-function printTransferPairingReminder(prompter: SetupPrompter, canonicalType: CanonicalType): void {
-  if (!TRANSFER_PAIRING_TYPES.has(canonicalType)) {
-    return;
-  }
-  prompter.print(
-    '  Use the same excluded transfer category (ideally "Payment, Transfer") on the bank-side leg of this movement — this tool does not recategorise Plaid/bank transactions.',
-  );
-}
-
-function printTypeMappingGuidance(
-  prompter: SetupPrompter,
-  canonicalType: CanonicalType,
-  suggestion: SuggestedCategory | undefined,
-  categoryRows: readonly SetupCategoryRow[],
-): void {
-  printTransferPairingReminder(prompter, canonicalType);
-  if (canonicalType === "saveback") {
-    printSavebackGuidance(prompter, categoryRows);
-    return;
-  }
-  if (suggestion) {
-    printStandardSuggestion(prompter, canonicalType, suggestion, categoryRows);
-    return;
-  }
-  if (canonicalType === "unknown") {
-    prompter.print(
-      "  Unknown spend: leave uncategorised or pick an existing category — create-new is not offered for unknown types.",
-    );
-  }
-}
-
-async function validateExistingCategoryPick(
-  prompter: SetupPrompter,
-  categoryId: number,
-  picked: SetupCategoryRow | undefined,
-  suggestion: SuggestedCategory | undefined,
-  canonicalType: CanonicalType,
-): Promise<number | undefined> {
-  if (!picked) {
-    return categoryId;
-  }
-  if (picked.is_group) {
-    throw new Error(`Category id ${categoryId} is a category group — pick a child category, not the group`);
-  }
-  if (suggestion && canonicalType !== "saveback") {
-    const ok = await confirmExistingCategoryFlags(prompter, picked, suggestion);
-    if (!ok) {
-      return undefined;
-    }
-  }
-  return categoryId;
-}
-
-function printSavebackGuidance(
-  prompter: SetupPrompter,
-  categories: readonly SetupCategoryRow[],
-): void {
+function printSavebackGuidance(prompter: SetupPrompter, categories: readonly SetupCategoryRow[]): void {
   prompter.print(
     "  Saveback: map to income (Saveback income) or excluded savings/investment. The saveback tag stays on every row.",
   );
@@ -214,36 +238,94 @@ function printSavebackGuidance(
   }
 }
 
+function printGroupGuidance(
+  prompter: SetupPrompter,
+  group: CategoryPromptGroup,
+  categoryRows: readonly SetupCategoryRow[],
+): void {
+  if (group.types.some((type) => TRANSFER_PAIRING_TYPES.has(type))) {
+    prompter.print(
+      '  Use the same excluded transfer category (ideally "Payment, Transfer") on the bank-side leg of this movement — this tool does not recategorise Plaid/bank transactions.',
+    );
+  }
+  if (groupHas(group, "saveback")) {
+    printSavebackGuidance(prompter, categoryRows);
+  }
+  if (groupHas(group, "unknown")) {
+    prompter.print(
+      "  Unknown spend: defaults to your existing transfer category; choose Skip to leave it uncategorised (it keeps the needs-review tag) or pick an existing category — create-new is not offered for unknown types.",
+    );
+  }
+}
+
+/**
+ * Picker choices with the most sensible answer first so Enter does the right thing: the matching
+ * existing category, else "Create new category …" (when allowed), else Skip.
+ */
+function buildCategoryChoices(
+  group: CategoryPromptGroup,
+  categoryRows: readonly SetupCategoryRow[],
+  match: SetupCategoryRow | undefined,
+): PromptChoice[] {
+  const skipChoice: PromptChoice = { name: "Skip (no mapping)", value: SKIP_CATEGORY };
+  const createChoices: PromptChoice[] = [];
+  if (allowsCreateCategory(group)) {
+    createChoices.push({
+      name: group.suggestion
+        ? `Create new category "${group.suggestion.name}"`
+        : "Create new category (choose Saveback treatment)",
+      value: NEW_CATEGORY,
+    });
+  }
+  const rest = categoryRows
+    .filter((category) => !category.is_group && category.id !== match?.id)
+    .map((category) => ({ name: formatCategoryPickerLabel(category, categoryRows), value: String(category.id) }));
+  const leading = match
+    ? [{ name: formatCategoryPickerLabel(match, categoryRows), value: String(match.id) }, skipChoice, ...createChoices]
+    : [...createChoices, skipChoice];
+  return [...leading, ...rest];
+}
+
+async function validateExistingCategoryPick(
+  prompter: SetupPrompter,
+  categoryId: number,
+  picked: SetupCategoryRow | undefined,
+  group: CategoryPromptGroup,
+): Promise<number | undefined> {
+  if (!picked) {
+    return categoryId;
+  }
+  if (picked.is_group) {
+    throw new Error(`Category id ${categoryId} is a category group — pick a child category, not the group`);
+  }
+  // Unknown spend may legitimately land in any budget category, so its transfer default is not enforced.
+  if (group.suggestion && !groupHas(group, "unknown")) {
+    const ok = await confirmExistingCategoryFlags(prompter, picked, group.suggestion);
+    if (!ok) {
+      return undefined;
+    }
+  }
+  return categoryId;
+}
+
 async function pickCategoryId(
   prompter: SetupPrompter,
   client: CategoryMappingSetupClient,
-  canonicalType: CanonicalType,
+  group: CategoryPromptGroup,
 ): Promise<number | undefined> {
   const categories = await client.categories.getAll();
-  const suggestion = SUGGESTED_CATEGORIES[canonicalType];
   const categoryRows = categories as readonly SetupCategoryRow[];
-  printTypeMappingGuidance(prompter, canonicalType, suggestion, categoryRows);
-  const pickerChoices = [
-    { name: "Skip (no mapping)", value: SKIP_CATEGORY },
-    ...(allowsCreateCategory(canonicalType, suggestion)
-      ? [{ name: "Create new category", value: NEW_CATEGORY }]
-      : []),
-    ...categoryRows
-      .filter((category) => !category.is_group)
-      .map((category) => ({
-        name: formatCategoryPickerLabel(category, categoryRows),
-        value: String(category.id),
-      })),
-  ];
-  const choice = await prompter.search(`Category for type "${canonicalType}"`, pickerChoices);
+  printGroupGuidance(prompter, group, categoryRows);
+  const match = findGroupMatch(prompter, group, categoryRows);
+  const choice = await prompter.search(
+    `Category for ${formatGroupLabel(group.types)}`,
+    buildCategoryChoices(group, categoryRows, match),
+  );
   if (choice === SKIP_CATEGORY) {
     return undefined;
   }
   if (choice === NEW_CATEGORY) {
-    const template =
-      canonicalType === "saveback"
-        ? await pickSavebackCreateTemplate(prompter)
-        : suggestion;
+    const template = group.suggestion ?? (await pickSavebackCreateTemplate(prompter));
     if (!template) {
       return undefined;
     }
@@ -254,20 +336,89 @@ async function pickCategoryId(
     exists: (id) => categories.some((category) => category.id === id),
   });
   const picked = categoryRows.find((category) => category.id === categoryId);
-  return validateExistingCategoryPick(prompter, categoryId, picked, suggestion, canonicalType);
+  return validateExistingCategoryPick(prompter, categoryId, picked, group);
 }
 
-async function pickTags(prompter: SetupPrompter, canonicalType: CanonicalType): Promise<string[]> {
-  const defaults = [...(SUGGESTED_TAGS[canonicalType] ?? [])];
-  const tagChoices = [...new Set(defaults)];
-  const selected = await prompter.checkbox(
-    `Tags for "${canonicalType}"`,
-    tagChoices.map((tag) => ({ name: tag, value: tag })),
-  );
-  if (selected.length === 0) {
-    return defaults;
+/** Parse a comma-separated tag list typed by the operator (`" a, b ,, "` → `["a", "b"]`; blank → `[]`). */
+export function parseTagList(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+}
+
+function dedupeTags(tags: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return tags.filter((tag) => {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function suggestedTagLabel(tag: string, owners: readonly CanonicalType[], group: CategoryPromptGroup): string {
+  if (owners.length === group.types.length) {
+    return `${tag} (suggested)`;
   }
-  return selected;
+  return `${tag} (suggested, ${owners.join(", ")} only)`;
+}
+
+/**
+ * Tag step for one group, always offered: suggested tags (pre-ticked) plus the operator's existing
+ * Lunch Money tags, then free text. With no choices at all the checkbox is skipped (inquirer throws
+ * on an empty checkbox). Submitting nothing means "no tags" — never an error, never a silent default.
+ * Suggested tags apply only to the types that suggested them; every other tag applies to the group.
+ */
+export async function pickTagsForGroup(
+  prompter: SetupPrompter,
+  group: CategoryPromptGroup,
+  existingTagNames: readonly string[],
+): Promise<Map<CanonicalType, string[]>> {
+  const label = formatGroupLabel(group.types);
+  const suggestedKeys = new Set([...group.suggestedTags.keys()].map((tag) => tag.toLowerCase()));
+  const choices: PromptChoice[] = [
+    ...[...group.suggestedTags].map(([tag, owners]) => ({
+      name: suggestedTagLabel(tag, owners, group),
+      value: tag,
+      checked: true,
+    })),
+    ...dedupeTags(existingTagNames)
+      .filter((name) => !suggestedKeys.has(name.toLowerCase()))
+      .map((name) => ({ name, value: name })),
+  ];
+  const picked =
+    choices.length > 0
+      ? await prompter.checkbox(`Tags for ${label} (space to toggle, Enter to confirm)`, choices)
+      : [];
+  const extra = parseTagList(await prompter.input(`Other tags for ${label} (comma-separated, Enter for none)`, ""));
+  const result = new Map<CanonicalType, string[]>();
+  for (const canonicalType of group.types) {
+    const tags = [...picked, ...extra].filter((tag) => {
+      const owners = group.suggestedTags.get(tag);
+      return owners === undefined || owners.includes(canonicalType);
+    });
+    result.set(canonicalType, dedupeTags(tags));
+  }
+  return result;
+}
+
+async function loadExistingTagNames(
+  prompter: SetupPrompter,
+  client: CategoryMappingSetupClient,
+): Promise<string[]> {
+  if (!client.tags) {
+    return [];
+  }
+  try {
+    const tags = await client.tags.getAll();
+    return tags.map((tag) => tag.name).toSorted((left, right) => left.localeCompare(right));
+  } catch {
+    prompter.print("Could not load existing Lunch Money tags — you can still type tag names.");
+    return [];
+  }
 }
 
 async function mergeConfigOnDisk(
@@ -308,25 +459,38 @@ function printTypeGroups(prompter: SetupPrompter, groups: readonly TypeGroup[]):
   return seenTypes;
 }
 
+/**
+ * Ask once per {@link CategoryPromptGroup} and save after every group, so a crash or Ctrl-C keeps
+ * the answers given so far.
+ */
 async function configureMapsForTypes(
   seenTypes: ReadonlySet<CanonicalType>,
-  prompter: SetupPrompter,
-  client: CategoryMappingSetupClient,
+  context: {
+    readonly prompter: SetupPrompter;
+    readonly client: CategoryMappingSetupClient;
+    readonly filesystem: SetupFilesystem;
+  },
   categoryMap: SyncConfig["categoryMap"],
   tagMap: SyncConfig["tagMap"],
 ): Promise<void> {
-  const types = [...seenTypes].toSorted((left, right) => left.localeCompare(right));
-  await forEachSequentially(types, async (canonicalType) => {
-    canonicalTypeSchema.parse(canonicalType);
-    if (await prompter.confirm(`Map Lunch Money category for type "${canonicalType}"?`, true)) {
-      const categoryId = await pickCategoryId(prompter, client, canonicalType);
-      if (categoryId !== undefined) {
-        categoryMap[canonicalType] = categoryId;
+  const { prompter, client, filesystem } = context;
+  const existingTagNames = await loadExistingTagNames(prompter, client);
+  await forEachSequentially(groupTypesForCategoryPrompts(seenTypes), async (group) => {
+    prompter.print(`\nMapping ${formatGroupLabel(group.types)}`);
+    const categoryPatch: SyncConfig["categoryMap"] = {};
+    const tagPatch: SyncConfig["tagMap"] = {};
+    const categoryId = await pickCategoryId(prompter, client, group);
+    if (categoryId !== undefined) {
+      for (const canonicalType of group.types) {
+        categoryPatch[canonicalType] = categoryId;
       }
     }
-    if (await prompter.confirm(`Configure tags for type "${canonicalType}"?`, true)) {
-      tagMap[canonicalType] = await pickTags(prompter, canonicalType);
+    for (const [canonicalType, tags] of await pickTagsForGroup(prompter, group, existingTagNames)) {
+      tagPatch[canonicalType] = tags;
     }
+    Object.assign(categoryMap, categoryPatch);
+    Object.assign(tagMap, tagPatch);
+    await mergeConfigOnDisk(filesystem, { categoryMap: categoryPatch, tagMap: tagPatch });
   });
 }
 
@@ -338,16 +502,14 @@ export async function runCategoryMappingSetup(
     readConfig?: typeof readConfigFromDisk;
     createClient?: (apiKey: string) => CategoryMappingSetupClient;
     collectObservations?: typeof collectTypeObservations;
+    apiKeyStore?: LunchMoneyApiKeyStore;
   },
 ): Promise<CategoryMappingResult> {
   if (options.nonInteractive) {
     throw new Error("Category mapping requires an interactive terminal (omit --non-interactive)");
   }
-  loadDotenvFromCwd();
+  await ensureLunchMoneyApiKeyForCli(deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore());
   const apiKey = process.env["LUNCH_MONEY_API_KEY"]?.trim() ?? "";
-  if (apiKey.length === 0) {
-    throw new Error(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
-  }
   const createClient = deps.createClient;
   if (!createClient) {
     throw new Error("Category mapping requires a Lunch Money client factory");
@@ -373,9 +535,14 @@ export async function runCategoryMappingSetup(
   const categoryMap: SyncConfig["categoryMap"] = { ...config.categoryMap };
   const tagMap: SyncConfig["tagMap"] = { ...config.tagMap };
 
-  await configureMapsForTypes(seenTypes, deps.prompter, client, categoryMap, tagMap);
+  await configureMapsForTypes(
+    seenTypes,
+    { prompter: deps.prompter, client, filesystem: deps.filesystem },
+    categoryMap,
+    tagMap,
+  );
 
-  const configPath = await mergeConfigOnDisk(deps.filesystem, { categoryMap, tagMap });
+  const configPath = resolveConfigFilePath(CONFIG_FILENAME);
   printSuggestedLunchMoneyRules(deps.prompter, config, categoryMap);
 
   let exportPath: string | undefined;

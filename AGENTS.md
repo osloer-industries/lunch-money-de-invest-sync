@@ -18,7 +18,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Run `npm run check` before submitting a change. This runs Oxlint, the
   TypeScript compiler, coverage, and the production build.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
-- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.x.y` comment).
+- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.x.y` comment matching the release tag).
   Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.
 - GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
   `SONAR_TOKEN`, and `RELEASE_APP_PRIVATE_KEY` (with variable `OSLOER_RELEASE_APP_ID` for

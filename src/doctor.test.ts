@@ -101,25 +101,26 @@ describe("runDoctor", () => {
     expect(result.checks.find((c) => c.name === "sc-version")?.ok).toBe(false);
   });
 
-  it("validates .env permissions when present", async () => {
-    const cwd = process.cwd();
-    const loose = await runDoctor({
-      nodeVersion: "v24.0.0",
-      platform: "linux",
-      exists: (p) => p === `${cwd}/.env` || existsWithUvAndDeps()(p),
-      stat: async () => ({ mode: 0o644 }),
-      ...okRunners,
-    });
-    expect(loose.checks.find((c) => c.name === "dotenv")?.ok).toBe(false);
-
-    const strict = await runDoctor({
-      nodeVersion: "v24.0.0",
-      platform: "linux",
-      exists: (p) => p === `${cwd}/.env` || existsWithUvAndDeps()(p),
-      stat: async () => ({ mode: 0o600 }),
-      ...okRunners,
-    });
-    expect(strict.checks.find((c) => c.name === "dotenv")?.ok).toBe(true);
+  it("warns when .env still holds a plaintext Lunch Money API key", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const { chdir, cwd } = await import("node:process");
+    const originalCwd = cwd();
+    const dir = mkdtempSync(path.join(tmpdir(), "lm-doctor-env-"));
+    chdir(dir);
+    writeFileSync(".env", "LUNCH_MONEY_API_KEY=lm_plaintext_key\n", "utf8");
+    try {
+      const result = await runDoctor({
+        nodeVersion: "v24.0.0",
+        platform: "linux",
+        exists: existsWithUvAndDeps((p) => p.endsWith(".env")),
+        ...okRunners,
+      });
+      expect(result.checks.find((c) => c.name === "dotenv-api-key")?.ok).toBe(false);
+    } finally {
+      chdir(originalCwd);
+    }
   });
 
   it("skips config.json check when file is absent", async () => {

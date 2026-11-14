@@ -39,6 +39,13 @@ export const SAVEBACK_CREATE_TEMPLATES: readonly SuggestedCategory[] = [
   SAVEBACK_EXCLUDED_CATEGORY,
 ];
 
+/** Plain budget income — dividends and interest share one "Income" question during setup. */
+const INCOME_CATEGORY = budgetIncomeCategory("Income");
+
+/**
+ * Suggested Lunch Money category per canonical type. Setup asks once per suggested category name
+ * (case-insensitive), so types that share a suggestion share one question.
+ */
 export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCategory>> = {
   buy: INVESTMENTS_CATEGORY,
   sell: INVESTMENTS_CATEGORY,
@@ -46,8 +53,8 @@ export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCatego
   deposit: TRANSFER_CATEGORY,
   withdrawal: TRANSFER_CATEGORY,
   transfer: TRANSFER_CATEGORY,
-  dividend: budgetIncomeCategory("Investment income"),
-  interest: budgetIncomeCategory("Investment income"),
+  dividend: INCOME_CATEGORY,
+  interest: INCOME_CATEGORY,
   fee: budgetExpenseCategory("Bank fees"),
   tax: {
     name: "Investment tax",
@@ -55,14 +62,17 @@ export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCatego
     exclude_from_budget: true,
     exclude_from_totals: true,
   },
+  /** Unclassified rows default to the transfer category; asked separately (see run-category-mapping). */
+  unknown: TRANSFER_CATEGORY,
 };
 
+/**
+ * Tags that add information beyond the category (a tag that repeats the category, such as
+ * "investment" on Investments, is noise). Suggestions stay scoped to the type that proposed them.
+ */
 export const SUGGESTED_TAGS: Partial<Record<CanonicalType, readonly string[]>> = {
-  buy: ["investment"],
-  sell: ["investment"],
-  "savings-plan": ["investment"],
-  dividend: ["dividend", "investment"],
-  interest: ["investment"],
+  dividend: ["dividend"],
+  interest: ["interest"],
   saveback: ["saveback"],
   unknown: ["needs-review"],
 };
