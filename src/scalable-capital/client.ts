@@ -3,10 +3,10 @@ import {
   scalableCapitalTransactionSchema,
   type ScalableCapitalCliConfig,
   type ScalableCapitalTransaction,
+  type ScMachineEnvelope,
   type ScTransactionSummary,
 } from "./types.js";
 import { withPortfolioId } from "./sc-command.js";
-import type { ScMachineEnvelope } from "./types.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
 import type { BrokerLoginEventSink } from "../shared/cli-events.js";
 import { runScJsonCommand, type ScJsonCommandContext } from "./sc-command.js";
