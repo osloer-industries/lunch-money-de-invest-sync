@@ -46,7 +46,6 @@ export function formatMappingListLines(
   const configured = rows.filter(
     (row) => row.categoryId !== undefined || row.tags.length > 0,
   ).length;
-  lines.push("");
-  lines.push(`${configured} of ${rows.length} broker types have at least one mapping.`);
+  lines.push("", `${configured} of ${rows.length} broker types have at least one mapping.`);
   return lines;
 }
