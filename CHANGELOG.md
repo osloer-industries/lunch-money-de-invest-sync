@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.3...v0.2.4) (2026-11-14)
+
+
+### Features
+
+* sync portfolio market value and savings balances, fix Scalable cash ([#94](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/94)) ([15b9f4b](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/15b9f4bda36321391876aa86a51cfea8064809e5))
+
 ## [0.2.3](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.2...v0.2.3) (2026-11-14)
 
 
