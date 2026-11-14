@@ -1,35 +1,20 @@
-# Tooling rationale: ADR 0009 (docs/adr/0009-tooling-and-quality-gate-stack.md)
-name: SonarQube Cloud
+name: SonarCloud
+
 on:
   pull_request:
-  push:
-    branches: [main]
+
 permissions:
   contents: read
-  pull-requests: read
+
 concurrency:
-  group: sonar-${{ github.workflow }}-${{ github.ref }}
+  group: sonarcloud-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
-  analyze:
-    name: Analyze
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
+  zero-open-issues:
+    uses: osloer-industries/.github/.github/workflows/sonarcloud-zero-issues.yml@b62b0798a56e1fe7d5fd5535d59567f3d2974644 # main
+    with:
+      project-key: osloer-industries_lunch-money-de-invest-sync
+      reusables-ref: b62b0798a56e1fe7d5fd5535d59567f3d2974644
+    secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0, persist-credentials: false }
-      - if: env.SONAR_TOKEN != ''
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: { node-version-file: .nvmrc, cache: npm }
-      - if: env.SONAR_TOKEN != ''
-        run: npm ci --ignore-scripts
-      - if: env.SONAR_TOKEN != ''
-        run: npm run test:coverage
-      - if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      - if: env.SONAR_TOKEN == ''
-        run: echo "SonarQube Cloud analysis skipped because SONAR_TOKEN is not configured."
