@@ -18,11 +18,11 @@ Do not pass a `reusables-ref` input. Reusables that need their own scripts check
 | [`.github/workflows/codeql.yml`](../.github/workflows/codeql.yml) | `codeql-javascript-typescript.yml` | **Private repo today:** SARIF artifact mode (`code-scanning-upload: false`). After going public, consider enabling default upload for GitHub code scanning alerts. Check name: `Analyze JavaScript and TypeScript`. |
 | [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) | `semantic-pull-request.yml` | Accepts the org pin of `amannn/action-semantic-pull-request` (currently v6.1.1). Check name: `Semantic pull request`. |
 | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `release-please.yml` | Mints a release GitHub App token (`vars.OSLOER_RELEASE_APP_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`) with workflows write so Release Please can update refs. Check name: `Prepare or publish release`. |
-| [`.github/workflows/sonar.yml`](../.github/workflows/sonar.yml) | `sonarcloud-zero-issues.yml` | SonarCloud **automatic analysis** supplies scans; CI enforces zero open issues on pull requests via `SONAR_TOKEN`. Do not add a CI Sonar scan (it conflicts with Automatic Analysis). Check name: `SonarCloud zero open issues`. |
+| [`.github/workflows/sonar.yml`](../.github/workflows/sonar.yml) | `sonarcloud-zero-issues.yml` | Polls SonarCloud on pull requests and fails when open issues remain on the PR head commit. Check name: `SonarCloud zero open issues`. |
 
 Repo-specific jobs that stay inlined:
 
-- CI **Tests (macOS)** and **Tests (TZ=Europe/Berlin)** in [`ci.yml`](../.github/workflows/ci.yml)
+- CI **sonarcloud** (Node coverage + `SonarSource/sonarqube-scan-action` upload), **Tests (macOS)**, and **Tests (TZ=Europe/Berlin)** in [`ci.yml`](../.github/workflows/ci.yml)
 - [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) — GHAS-free `dependency-diff-audit.mjs` gate (`Review dependency changes`). Do not replace this with the org `dependency-review.yml` reusable.
 
 This repository does **not** call `node-setup-smoke.yml` (template-only) or `mutation-changed.yml` (no Stryker setup here).
@@ -46,8 +46,11 @@ Never store Trade Republic, Scalable Capital, Lunch Money API keys, or operator 
 ## SonarQube Cloud
 
 [`sonar-project.properties`](../sonar-project.properties) defines the SonarCloud project key
-`osloer-industries_lunch-money-de-invest-sync`. Analysis runs in SonarCloud via **Automatic Analysis** (no
-`SonarSource/sonarqube-scan-action` in CI — a CI scanner conflicts with automatic analysis).
+`osloer-industries_lunch-money-de-invest-sync`, sources/tests, and `sonar.javascript.lcov.reportPaths=coverage/lcov.info`.
+
+The **sonarcloud** job in [`ci.yml`](../.github/workflows/ci.yml) runs `npm run test:coverage` (Vitest → `coverage/lcov.info`)
+and uploads analysis with `SonarSource/sonarqube-scan-action`. SonarCloud **Automatic Analysis** must be disabled for that
+CI scan to succeed.
 
 The [`sonar.yml`](../.github/workflows/sonar.yml) caller polls SonarCloud on each pull request and fails when open
 issues remain on the PR head commit.
