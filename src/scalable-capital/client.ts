@@ -68,6 +68,7 @@ function normalizeCashItem(item: ScTransactionSummary): ScalableCapitalTransacti
     description: item.description?.trim() ?? "",
     amount: parseDecimalAmount(item.amount),
     currency: item.currency?.trim() || "EUR",
+    ...(item.cash_transaction_type?.trim() ? { cashTransactionType: item.cash_transaction_type.trim() } : {}),
   };
   return scalableCapitalTransactionSchema.parse(normalized);
 }

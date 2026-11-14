@@ -10,6 +10,8 @@ export const scalableCapitalTransactionSchema = z.object({
   amount: z.number(),
   currency: z.string().default("EUR"),
   isin: z.string().optional(),
+  /** Backend `cashTransactionType` (e.g. DEPOSIT, WITHDRAWAL, CASH_TRANSFER_IN) when the CLI provides it. */
+  cashTransactionType: z.string().optional(),
 });
 export type ScalableCapitalTransaction = z.infer<typeof scalableCapitalTransactionSchema>;
 
@@ -22,6 +24,12 @@ export const scTransactionSummarySchema = z.object({
   last_event_datetime: z.union([z.string(), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
   amount: z.union([z.string(), z.number(), z.null()]).optional(),
+  /** Cash rows: backend `cashTransactionType` (DEPOSIT, WITHDRAWAL, CASH_TRANSFER_IN, INTEREST, …). */
+  cash_transaction_type: z.union([z.string(), z.null()]).optional(),
+  /** Security rows: backend `securityTransactionType` (e.g. SAVINGS_PLAN). */
+  security_transaction_type: z.union([z.string(), z.null()]).optional(),
+  /** Security rows: order side (BUY / SELL). */
+  side: z.union([z.string(), z.null()]).optional(),
 });
 export type ScTransactionSummary = z.infer<typeof scTransactionSummarySchema>;
 

@@ -110,8 +110,9 @@ each question so an interrupted run keeps earlier answers.
 
 Types that share a suggested category are asked about once: buy / sell / savings-plan →
 **Investments**, dividend / interest → **Income**, deposit / withdrawal / transfer →
-**Payment, Transfer**. Saveback and `unknown` are always asked on their own (`unknown` defaults to
-your existing transfer category and can be skipped without affecting transfers). The first picker
+**Payment, Transfer**. Saveback and `unknown` are always asked on their own (for `unknown` the
+default is **Skip** — rows stay uncategorised with the `needs-review` tag — and your existing
+transfer category is listed next; skipping does not affect transfers). Otherwise the first picker
 entry is the sensible default (the matching existing category, else "Create new category …"). The
 tag step offers suggested tags (pre-ticked; `dividend`, `interest`, `saveback`, `needs-review`),
 your existing Lunch Money tags, and free text — pressing Enter with nothing selected means no tags.

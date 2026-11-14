@@ -127,6 +127,35 @@ describe("fetchAllScalableCapitalTransactions", () => {
     expect(result).toEqual([]);
   });
 
+  it("keeps the structured cash_transaction_type for classification", async () => {
+    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
+      data: { result: { items: unknown[] } };
+    };
+    body.data.result.items = [
+      {
+        id: "tx-internal",
+        summary_type: "BrokerCashTransactionSummary",
+        cash_transaction_type: " CASH_TRANSFER_IN ",
+        last_event_datetime: "2026-03-08T12:00:00Z",
+        description: "Interne Überweisung",
+        amount: "100",
+        currency: "EUR",
+      },
+      {
+        id: "tx-plain",
+        summary_type: "BrokerCashTransactionSummary",
+        cash_transaction_type: null,
+        last_event_datetime: "2026-03-08T12:00:00Z",
+        amount: "1",
+        currency: "EUR",
+      },
+    ];
+    const runner = runnerFromResponses([JSON.stringify(body)]);
+    const result = await fetchAllScalableCapitalTransactions(runner, {});
+    expect(result[0]?.cashTransactionType).toBe("CASH_TRANSFER_IN");
+    expect(result[1]).not.toHaveProperty("cashTransactionType");
+  });
+
   it("throws when a cash item is missing last_event_datetime", async () => {
     const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
       data: { result: { items: unknown[] } };

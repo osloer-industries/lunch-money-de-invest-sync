@@ -560,7 +560,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
-  it("defaults unknown to the existing transfer category without create-new or a flag warning", async () => {
+  it("defaults unknown to Skip, lists the transfer category next, and offers no create-new", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
     const confirm = vi.fn(() => Promise.resolve(false));
@@ -574,12 +574,30 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       collectObservations: () => Promise.resolve([observation("unknown")]),
     });
     const choices = search.mock.calls[0]?.[1] ?? [];
-    expect(choices[0]).toEqual({ name: "[99] Payment, Transfer", value: "99" });
+    expect(choices[0]).toEqual({ name: "Skip (no mapping)", value: "__skip__" });
+    expect(choices[1]).toEqual({ name: "[99] Payment, Transfer", value: "99" });
     expect(choices.some((choice) => choice.value === "__new__")).toBe(false);
-    expect(result.categoryMap.unknown).toBe(99);
+    expect(result.categoryMap.unknown).toBeUndefined();
     expect(result.tagMap.unknown).toEqual([]);
     expect(confirm).toHaveBeenCalledTimes(1); // only "Run a dry-run sync now?"
-    expect(print.mock.calls.some(([line]) => String(line).includes("Unknown spend"))).toBe(true);
+    expect(print.mock.calls.some(([line]) => String(line).includes("Unknown rows: Skip is the default"))).toBe(true);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
+  it("still lets unknown be mapped to the transfer category without a flag warning", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[1]!.value));
+    const confirm = vi.fn(() => Promise.resolve(false));
+    const result = await runCategoryMappingSetup(options, {
+      prompter: { ...prompter({}), search, confirm },
+      filesystem: memoryFilesystem(),
+      readConfig: trConfig,
+      createClient: () =>
+        stubCategoryClient(vi.fn().mockResolvedValue([category(99, "Payment, Transfer", { excluded: true })])),
+      collectObservations: () => Promise.resolve([observation("unknown")]),
+    });
+    expect(result.categoryMap.unknown).toBe(99);
+    expect(confirm).toHaveBeenCalledTimes(1);
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
