@@ -1,6 +1,8 @@
 import path from "node:path";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { loadConfig } from "../shared/config.js";
+import { ensureReadableConfigForSetup } from "./corrupt-config-recovery.js";
+import { promptSharedCardDigits, runSavedBrokerProfilesStep } from "./setup-profile-resume.js";
 import { readResumedProfiles } from "./resume-config.js";
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import { createLunchMoneyClient } from "../lunch-money/client.js";
@@ -18,10 +20,11 @@ import { formatPytrLoginCommand } from "./pytr-session.js";
 import { createPytrCliRunner, createScCliRunner } from "../shared/subprocess-cli.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import { parseSharedCardLast4Input } from "./shared-card-input.js";
+import { SHARED_CARD_PROMPT_EXPLANATION } from "../dry-run-review/shared-card-copy.js";
 import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse, type ManualAccountKind } from "./manual-account.js";
-import { statusError, statusOk } from "./setup-status.js";
+import { statusError, statusOk, statusWarn } from "./setup-status.js";
 import { forEachConfirmedRepeat, forEachSequentially } from "../shared/sequential-profiles.js";
 import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
 import { stripApiKeyFromDotenvFile } from "../shared/dotenv-api-key.js";
@@ -33,6 +36,7 @@ import type { SetupCliOptions } from "./setup-options.js";
 import type {
   CategoryMappingSetupClient,
   LunchMoneySetupClient,
+  PromptChoice,
   SetupBrokerRunners,
   SetupFilesystem,
   SetupPrompter,
@@ -61,7 +65,10 @@ async function promptApiKeyWithFactory(
 ): Promise<string> {
   const key = await prompter.password("Lunch Money API key (input hidden)");
   if (key.trim().length === 0) {
-    throw new Error("Lunch Money API key is required");
+    prompter.print(
+      statusWarn("Lunch Money API key cannot be empty — paste your developer key from Lunch Money settings"),
+    );
+    return promptApiKeyWithFactory(prompter, createClient);
   }
   try {
     await validateApiKey(createClient(key.trim()));
@@ -250,8 +257,12 @@ async function confirmOverwriteIfExists(
   refusalMessage: string,
 ): Promise<void> {
   if (filesystem.exists(filePath) && !overwrite) {
-    const ok = await prompter.confirm(`${basename} exists — overwrite?`, false);
-    if (!ok) {
+    const ok = await prompter.confirm(`${basename} exists — replace everything in it?`, false);
+    if (ok) {
+      return;
+    }
+    const keep = await prompter.confirm("Keep your saved settings and continue setup?", true);
+    if (!keep) {
       throw new Error(refusalMessage);
     }
   }
@@ -382,6 +393,58 @@ type SetupProgressWriter = (partial: {
   sharedCardLast4: string[];
 }) => Promise<void>;
 
+const BROKER_CHECKBOX_MESSAGE =
+  "Which brokers should this config include? (Space to select, Enter to confirm)";
+
+function brokerCheckboxChoices(
+  tradeRepublicProfiles: readonly TradeRepublicProfile[],
+  scalableCapitalProfiles: readonly ScalableCapitalProfile[],
+): PromptChoice[] {
+  return [
+    {
+      name: "Trade Republic (pytr)",
+      value: "trade-republic",
+      checked: tradeRepublicProfiles.length > 0,
+    },
+    {
+      name: "Scalable Capital (sc)",
+      value: "scalable-capital",
+      checked: scalableCapitalProfiles.length > 0,
+    },
+  ];
+}
+
+async function promptIncludedBrokers(
+  prompter: SetupPrompter,
+  tradeRepublicProfiles: readonly TradeRepublicProfile[],
+  scalableCapitalProfiles: readonly ScalableCapitalProfile[],
+  emptySelectionAlreadyWarned: boolean,
+): Promise<string[]> {
+  const brokers = await prompter.checkbox(
+    BROKER_CHECKBOX_MESSAGE,
+    brokerCheckboxChoices(tradeRepublicProfiles, scalableCapitalProfiles),
+  );
+  if (brokers.length > 0) {
+    return brokers;
+  }
+  if (emptySelectionAlreadyWarned) {
+    throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
+  }
+  prompter.print(statusWarn("Select at least one broker (Space to toggle, then Enter)"));
+  return promptIncludedBrokers(prompter, tradeRepublicProfiles, scalableCapitalProfiles, true);
+}
+
+function confirmDropSavedProfiles(
+  prompter: SetupPrompter,
+  brokerLabel: string,
+  profiles: readonly { owner: string }[],
+): Promise<boolean> {
+  if (profiles.length === 0) {
+    return Promise.resolve(true);
+  }
+  return prompter.confirm(`Remove saved ${brokerLabel} profile(s) (${profileLabels(profiles)})?`, false);
+}
+
 async function addTradeRepublicProfile(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
@@ -496,34 +559,45 @@ async function interactiveProfiles(
   tradeRepublicProfiles: TradeRepublicProfile[];
   scalableCapitalProfiles: ScalableCapitalProfile[];
 }> {
-  const resumed = readResumedProfiles(filesystem);
-  const { tradeRepublicProfiles, scalableCapitalProfiles } = resumed;
-  if (tradeRepublicProfiles.length > 0 || scalableCapitalProfiles.length > 0) {
-    prompter.print(statusOk("Resuming broker profiles from config.json"));
+  await ensureReadableConfigForSetup(filesystem, prompter);
+  const savedStep = await runSavedBrokerProfilesStep(prompter, filesystem, writeProgress);
+  if (savedStep.kind === "finished") {
+    return {
+      tradeRepublicProfiles: savedStep.tradeRepublicProfiles,
+      scalableCapitalProfiles: savedStep.scalableCapitalProfiles,
+    };
   }
+  const tradeRepublicProfiles = [...savedStep.tradeRepublicProfiles];
+  const scalableCapitalProfiles = [...savedStep.scalableCapitalProfiles];
 
-  const brokers = await prompter.checkbox(
-    "Which brokers should this config include? (Space to select, Enter to confirm)",
-    [
-      { name: "Trade Republic (pytr)", value: "trade-republic" },
-      { name: "Scalable Capital (sc)", value: "scalable-capital" },
-    ],
+  let brokers = await promptIncludedBrokers(
+    prompter,
+    tradeRepublicProfiles,
+    scalableCapitalProfiles,
+    false,
   );
-  if (brokers.length === 0) {
-    throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
-  }
 
-  // Profiles resumed from config.json: drop brokers the operator unticked, and re-check the broker
-  // sessions that remain (sessions expire, so a resumed config is no proof the login still works).
   if (!brokers.includes("trade-republic")) {
-    tradeRepublicProfiles.length = 0;
+    if (await confirmDropSavedProfiles(prompter, "Trade Republic", tradeRepublicProfiles)) {
+      tradeRepublicProfiles.length = 0;
+    } else {
+      brokers = [...brokers, "trade-republic"];
+    }
   }
   if (!brokers.includes("scalable-capital")) {
-    scalableCapitalProfiles.length = 0;
+    if (await confirmDropSavedProfiles(prompter, "Scalable Capital", scalableCapitalProfiles)) {
+      scalableCapitalProfiles.length = 0;
+    } else {
+      brokers = [...brokers, "scalable-capital"];
+    }
   }
   await recheckResumedSessions(prompter, _runners, options, tradeRepublicProfiles, scalableCapitalProfiles);
   if (await offerMissingBalanceAccounts(prompter, client, tradeRepublicProfiles, scalableCapitalProfiles)) {
-    await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: resumed.sharedCardLast4 });
+    await writeProgress({
+      tradeRepublicProfiles,
+      scalableCapitalProfiles,
+      sharedCardLast4: readResumedProfiles(filesystem).sharedCardLast4,
+    });
     prompter.print(statusOk("Balance tracking accounts saved to config.json"));
   }
 
@@ -647,12 +721,22 @@ async function finishSetup(
     { sharedCardLast4, ...profiles },
     options.yes,
     deps.prompter,
+    true,
   );
   process.env["LUNCH_MONEY_API_KEY"] = apiKey;
   let ranDryRun = false;
+  let readyForRealSync = false;
   if (!options.nonInteractive && (await deps.prompter.confirm("Run a dry-run sync now?", true))) {
     ranDryRun = true;
-    await (deps.runSync ?? runSyncCli)(["--dry-run"], {
+    const dryRunResult = await (deps.runSync ?? runSyncCli)(["--dry-run"], {
+      logger: deps.prompter.print.bind(deps.prompter),
+      prompter: deps.prompter,
+      filesystem: deps.filesystem,
+    });
+    readyForRealSync = dryRunResult?.dryRunProceed === true;
+  }
+  if (readyForRealSync && (await deps.prompter.confirm("Run a real sync now (writes to Lunch Money)?", false))) {
+    await (deps.runSync ?? runSyncCli)([], {
       logger: deps.prompter.print.bind(deps.prompter),
     });
   }
@@ -758,18 +842,17 @@ export async function runSetup(
         writeProgress,
       );
 
-  const resumedCards = options.nonInteractive ? [] : readResumedProfiles(deps.filesystem).sharedCardLast4;
-  let sharedRaw = "";
-  if (!options.nonInteractive && resumedCards.length === 0) {
-    sharedRaw = await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
-  }
-  const sharedCardLast4 =
-    resumedCards.length > 0 && !options.nonInteractive
-      ? resumedCards
-      : parseSharedCardLast4Input(sharedRaw);
-  if (resumedCards.length > 0 && !options.nonInteractive) {
-    deps.prompter.print(statusOk("Using shared card last-4 from config.json"));
-  }
+  const sharedCardLast4 = options.nonInteractive
+    ? []
+    : await promptSharedCardDigits(
+        deps.prompter,
+        readResumedProfiles(deps.filesystem).sharedCardLast4,
+        parseSharedCardLast4Input,
+        () => {
+          deps.prompter.print(SHARED_CARD_PROMPT_EXPLANATION);
+          return deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
+        },
+      );
   loadConfig({
     lunchMoneyApiKey: apiKey,
     sharedCardLast4,

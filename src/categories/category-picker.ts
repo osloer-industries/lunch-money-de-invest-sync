@@ -39,7 +39,10 @@ export function buildSingleTypeCategoryChoices(
     }));
   const leading: PromptChoice[] = [];
   if (match) {
-    leading.push({ name: formatCategoryPickerLabel(match, categoryRows), value: String(match.id) });
+    leading.push({
+      name: `${formatCategoryPickerLabel(match, categoryRows)} (suggested)`,
+      value: String(match.id),
+    });
   }
   leading.push(skipChoice, removeChoice);
   return [...leading, ...rest];

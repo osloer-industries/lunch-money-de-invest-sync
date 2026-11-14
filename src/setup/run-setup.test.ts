@@ -69,6 +69,7 @@ function defaultRunSetupDeps(
     nodeVersion: "v24.0.0",
     createLunchMoneyClient: () => fakeLmClient(),
     apiKeyStore: new MemoryLunchMoneyApiKeyStore(),
+    runSync: vi.fn().mockResolvedValue({ balanceFailures: 0, dryRunProceed: false }),
     ...overrides,
   };
 }
@@ -468,6 +469,47 @@ describe("runSetup", () => {
     );
   });
 
+  it("re-prompts when the Lunch Money API key input is empty", async () => {
+    const prompter = trInteractivePrompter({
+      confirms: (message) => pytrCredentialStorageAccepted(message) || message.includes("dry-run"),
+    });
+    (prompter.password as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("lm_test_key");
+    await expect(
+      runSetup(
+        baseSetupOptions(),
+        defaultRunSetupDeps({
+          prompter,
+          runSync: vi.fn().mockResolvedValue({ balanceFailures: 0, dryRunProceed: false }),
+        }),
+      ),
+    ).resolves.toMatchObject({ kind: "completed" });
+    expect(prompter.password).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not prompt to overwrite config saved incrementally during setup", async () => {
+    const confirms: string[] = [];
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter: trInteractivePrompter({
+          confirms: (message) => {
+            confirms.push(message);
+            return (
+              pytrCredentialStorageAccepted(message) ||
+              message.includes("dry-run") ||
+              message.includes("category mapping")
+            );
+          },
+        }),
+        runSync: vi.fn().mockResolvedValue({ balanceFailures: 0, dryRunProceed: false }),
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    expect(confirms.some((message) => message.includes("overwrite"))).toBe(false);
+  });
+
   it("offers a holdings account for Trade Republic and creates it on request", async () => {
     const lm = fakeLmClient();
     const result = await runSetup(
@@ -479,7 +521,7 @@ describe("runSetup", () => {
             message.startsWith("Track portfolio market value") ||
             message.includes('Create Lunch Money manual account "Trade Republic Holdings (operator-a)"'),
         }),
-        runSync: vi.fn().mockResolvedValue(undefined),
+        runSync: vi.fn().mockResolvedValue({ balanceFailures: 0 }),
         createLunchMoneyClient: () => lm,
       }),
     );
@@ -661,8 +703,10 @@ describe("runSetup with a resumed config.json", () => {
     const prompter = fakePrompter({
       password: "lm_test_key",
       brokers: ["trade-republic", "scalable-capital"],
-      selects: ["3"],
-      confirms: (message) => message.startsWith("Track portfolio market value"),
+      selects: ["edit", "3", "3", "keep"],
+      confirms: (message) =>
+        message.startsWith("Track portfolio market value") ||
+        message.startsWith("Track your Scalable overnight"),
     });
     const result = await runSetup(
       baseSetupOptions(),
@@ -693,7 +737,12 @@ describe("runSetup with a resumed config.json", () => {
     const result = await runSetup(
       baseSetupOptions({ skipBrokerCheck: false }),
       defaultRunSetupDeps({
-        prompter: fakePrompter({ password: "lm_test_key", brokers: ["scalable-capital"], confirms: () => false }),
+        prompter: fakePrompter({
+          password: "lm_test_key",
+          brokers: ["scalable-capital"],
+          selects: ["edit"],
+          confirms: (message) => message.includes("Remove saved Trade Republic"),
+        }),
         filesystem: resumedFilesystem(),
         runners: { sc },
         runSync: vi.fn(),

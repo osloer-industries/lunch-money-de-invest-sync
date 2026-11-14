@@ -28,16 +28,17 @@ import {
 } from "./category-matching.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import { printSuggestedLunchMoneyRules } from "./print-suggested-rules.js";
+import {
+  formatCategoryFlagMismatch,
+  formatCreateCategoryConfirm,
+  formatTypeGroupHeading,
+} from "./category-prompt-copy.js";
 
 const CONFIG_FILENAME = "config.json";
 const SKIP_CATEGORY = "__skip__";
 const NEW_CATEGORY = "__new__";
 const SAVEBACK_INCOME_CHOICE = "saveback-income";
 const SAVEBACK_EXCLUDED_CHOICE = "saveback-excluded";
-
-function formatCreateCategoryConfirm(suggestion: SuggestedCategory): string {
-  return `Create category "${suggestion.name}" (is_income=${suggestion.is_income}, exclude budget=${suggestion.exclude_from_budget}, exclude totals=${suggestion.exclude_from_totals})?`;
-}
 
 /**
  * Types that are always asked on their own even when another type shares their suggested category:
@@ -119,7 +120,7 @@ function matchingTypeFor(group: CategoryPromptGroup): CanonicalType {
 async function pickSavebackCreateTemplate(prompter: SetupPrompter): Promise<SuggestedCategory | undefined> {
   const choice = await prompter.select("Saveback category treatment", [
     {
-      name: "Saveback income — is_income=true, not excluded from budget/totals",
+      name: "Saveback income — counts as income and stays visible in budget totals",
       value: SAVEBACK_INCOME_CHOICE,
     },
     {
@@ -180,9 +181,7 @@ function confirmExistingCategoryFlags(
   if (categoryFlagsMatchTemplate(category, template)) {
     return Promise.resolve(true);
   }
-  prompter.print(
-    `  Warning: "${category.name}" has is_income=${category.is_income}, exclude budget=${category.exclude_from_budget}, exclude totals=${category.exclude_from_totals}; template expects is_income=${template.is_income}, exclude budget=${template.exclude_from_budget}, exclude totals=${template.exclude_from_totals}.`,
-  );
+  prompter.print(formatCategoryFlagMismatch(category, template));
   return prompter.confirm("Use this category anyway?", false);
 }
 
@@ -281,7 +280,14 @@ function buildCategoryChoices(
   const rest = categoryRows
     .filter((category) => !category.is_group && category.id !== match?.id)
     .map((category) => ({ name: formatCategoryPickerLabel(category, categoryRows), value: String(category.id) }));
-  const matchChoices = match ? [{ name: formatCategoryPickerLabel(match, categoryRows), value: String(match.id) }] : [];
+  const matchChoices = match
+    ? [
+        {
+          name: `${formatCategoryPickerLabel(match, categoryRows)} (suggested)`,
+          value: String(match.id),
+        },
+      ]
+    : [];
   let leading: PromptChoice[];
   if (groupHas(group, "unknown")) {
     leading = [skipChoice, ...matchChoices];
@@ -455,9 +461,7 @@ function printTypeGroups(prompter: SetupPrompter, groups: readonly TypeGroup[]):
   const seenTypes = new Set<CanonicalType>();
   for (const group of groups) {
     const example = anonymizeTypeExample(group.sample);
-    prompter.print(
-      `\n${group.source} · ${group.canonicalType} · ${group.brokerSubtype} · count=${group.count}`,
-    );
+    prompter.print(formatTypeGroupHeading(group.source, group.canonicalType, group.count));
     prompter.print(
       `  example: ${example.month} ${example.amountBucket} ${example.payee} ${example.notes ?? ""}`.trimEnd(),
     );

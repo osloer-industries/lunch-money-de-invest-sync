@@ -91,9 +91,12 @@ Apply stdout:
 ## `npm run sync`
 
 ```bash
-npm run sync -- --dry-run --json
+npm run sync -- --dry-run --json --non-interactive
+npm run sync -- --dry-run --since 2024-01-01 --json
 npm run sync -- --events --broker trade-republic
 ```
+
+On a TTY, `npm run sync -- --dry-run` runs the interactive review (#84) unless `--json` or `--non-interactive` is set.
 
 Sync stdout (`--json`):
 
@@ -101,6 +104,10 @@ Sync stdout (`--json`):
 {
   "ok": true,
   "balanceFailures": 0,
+  "dryRunReview": {
+    "aggregateUncategorisedShare": 0.08,
+    "uncategorisedShareExceedsThreshold": false
+  },
   "accounts": [
     {
       "owner": "operator-a",
@@ -111,27 +118,31 @@ Sync stdout (`--json`):
       "dryRun": true,
       "wouldInsert": 12,
       "wouldSkip": 0,
-      "dryRunSummary": null,
-      "brokerBalances": {
-        "holdings": { "ok": true, "value": 1200.5, "currency": "eur" },
-        "cash": { "ok": true, "value": 88.12, "currency": "eur" },
-        "notes": []
-      },
-      "balanceFailures": 0
+      "dryRunSummary": {
+        "broker": "trade-republic",
+        "owner": "operator-a",
+        "wouldInsert": 12,
+        "wouldSkip": 0,
+        "uncategorisedCount": 1,
+        "uncategorisedShare": 0.08,
+        "categoryBuckets": [],
+        "rows": [],
+        "balanceLines": ["Holdings value: 1,200.50 EUR"]
+      }
     }
   ]
 }
 ```
 
+With `--dry-run --json`, each account’s `dryRunSummary` matches the interactive dry-run review (rows to insert, category buckets, uncategorised share, and optional `balanceLines` for holdings, broker cash, and overnight savings). Top-level `dryRunReview.uncategorisedShareExceedsThreshold` is `true` when the aggregate uncategorised share exceeds 10% (same rule as the TTY warning).
+
+Non-dry-run `--json` omits `dryRunReview` and per-account `dryRunSummary` but can still include `brokerBalances` and `balanceFailures` from the sync pass.
+
 Top-level `balanceFailures` counts balance steps (holdings, overnight savings, cash reconciliation) that failed across all profiles. The CLI still exits `1` when this is greater than zero, even though transactions may already be synced.
 
-Per-account `brokerBalances` mirrors the broker snapshot after transaction sync (`holdings`, `cash`, optional `savings`, and operator `notes`). Each reading is either `{ "ok": true, "value", "currency", "asOf?" }` or `{ "ok": false, "error" }`. Per-account `balanceFailures` is how many of the three balance steps failed for that profile (omitted when live collectors have no balance readers).
+`--since YYYY-MM-DD` limits which broker transactions are considered (CLI flag or `syncSince` in `config.json`).
 
-Use `--reconcile-cash` on the CLI to set the Lunch Money cash manual account to the broker-reported cash when they differ by more than 1.00 (human logs describe mismatches; JSON includes the post-sync readings).
-
-`firstSyncForAccount` is `true` when the Lunch Money manual account has no rows whose `external_id` starts with `trade-republic:` or `scalable-capital:` yet. Re-syncs skip existing `external_id`s, so classification should be correct before the first non-dry-run sync.
-
-**HOOK(#84):** `dryRunSummary` is reserved for the structured dry-run preview module; it stays `null` until that PR lands.
+`firstSyncForAccount` is `true` when the Lunch Money manual account has no rows whose `external_id` starts with `trade-republic:` or `scalable-capital:` yet.
 
 ## Broker login NDJSON events (`--events`)
 

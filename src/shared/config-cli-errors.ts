@@ -3,7 +3,12 @@ import { ZodError, type ZodIssue } from "zod";
 export const MISSING_LUNCH_MONEY_API_KEY_MESSAGE =
   "Lunch Money API key is not stored — run npm run setup (or npm run setup -- --replace-api-key).";
 
-export const INVALID_CONFIG_JSON_MESSAGE = "config.json is invalid — fix or delete it and run npm run setup again.";
+export const CONFIG_JSON_BACKUP_FILENAME = "config.json.bak";
+
+export const CORRUPT_CONFIG_JSON_MESSAGE =
+  "Saved settings could not be read — setup can back them up and start fresh.";
+
+export const INVALID_CONFIG_JSON_MESSAGE = CORRUPT_CONFIG_JSON_MESSAGE;
 
 const REMOVED_CONFIG_KEY_FIX: Record<string, string> = {
   phoneNumber: "delete phoneNumber and run `pytr login` locally",
