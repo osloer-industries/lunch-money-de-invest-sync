@@ -16,13 +16,10 @@ concurrency:
 
 jobs:
   release-please:
-    name: Prepare or publish release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Create or update release pull request
-        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+    uses: osloer-industries/.github/.github/workflows/release-please.yml@0221b21f9d130eff47cb04ca9374220886198419 # main
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
