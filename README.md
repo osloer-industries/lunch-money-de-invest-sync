@@ -69,7 +69,7 @@ Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com
 - **Node.js 24** (see [`.nvmrc`](.nvmrc) / [`.node-version`](.node-version)); run `npm ci` after every clone
 - **macOS:** [Homebrew](https://brew.sh) for the Scalable tap (`eval "$(brew shellenv)"` so `brew` is on your PATH)
 - **[uv](https://github.com/astral-sh/uv)** (recommended) to run pytr with a supported Python (3.10+; macOS system Python 3.9 is too old)
-- [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per broker profile you sync
+- [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per broker profile you sync (type investment; synced transactions update **cash** balance, not market value — set starting cash in the Lunch Money UI if needed)
 - **Trade Republic:** [pytr](https://github.com/pytr-org/pytr) via `pytr`, `uvx pytr@0.4.10`, or `uv tool install pytr`
 - **Scalable Capital:** official CLI — `brew install ScalableCapital/tap/scalable-cli` (formula name `scalable-cli`, not `sc` alone) after enabling **Profile → Security → Agentic Investing** in the Scalable web app
 
@@ -112,7 +112,9 @@ Optional: `npm run setup -- --categories --export-type-summary types-summary.jso
 Lunch Money **categories** are created via the v2 API ([docs](https://lunchmoney.dev/docs),
 [`categories.create`](https://github.com/lunch-money/lunch-money-js-v2#categories)). Deposits,
 withdrawals, and internal transfers suggest **Payment, Transfer** (Lunch Money's default excluded
-transfer category). When mapping finishes, setup prints suggested Lunch Money **UI rules** for
+transfer category). Map the **bank-side** leg of the same movement to that category too (for
+example a €1,000 checking outflow and a brokerage deposit both in **Payment, Transfer**). When
+mapping finishes, setup prints suggested Lunch Money **UI rules** for
 `saveback` and `needs-review`, scoped to your brokerage manual accounts (v2 has no rules API).
 Inserts use `apply_rules: true`; broad payee rules can overwrite `categoryMap`. Kapitalertragsteuer
 and Soli suggest **Investment tax** (excluded from budget and totals), not a budgeted **Taxes**
