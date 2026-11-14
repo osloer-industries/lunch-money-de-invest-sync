@@ -15,6 +15,10 @@ import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
 import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
+import {
+  findSuggestedCategoryMatch,
+  type SetupCategoryRow,
+} from "./category-matching.js";
 import type { SetupCliOptions } from "./setup-options.js";
 
 const CONFIG_FILENAME = "config.json";
@@ -28,12 +32,22 @@ async function pickCategoryId(
 ): Promise<number | undefined> {
   const categories = await client.categories.getAll();
   const suggestion = SUGGESTED_CATEGORIES[canonicalType];
+  const categoryRows = categories as readonly SetupCategoryRow[];
   if (suggestion) {
-    const match = categories.find(
-      (category) => category.name.toLowerCase() === suggestion.name.toLowerCase(),
+    const { category: match, warnedMissingExclusion } = findSuggestedCategoryMatch(
+      categoryRows,
+      suggestion,
+      canonicalType,
     );
     if (match) {
-      prompter.print(`  Suggested category for ${canonicalType}: "${suggestion.name}" [id ${match.id}]`);
+      prompter.print(
+        `  Suggested category for ${canonicalType}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
+      );
+      if (warnedMissingExclusion) {
+        prompter.print(
+          "  Warning: this category does not have both Exclude from budget and Exclude from totals enabled.",
+        );
+      }
     } else {
       prompter.print(
         `  Suggested category for ${canonicalType}: "${suggestion.name}" (not found — pick id or create)`,
