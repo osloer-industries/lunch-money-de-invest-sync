@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+
+const runCategoryMappingSetup = vi.hoisted(() => vi.fn().mockResolvedValue({ kind: "completed" as const }));
+
+vi.mock("./run-category-mapping.js", () => ({
+  runCategoryMappingSetup,
+}));
+
 import { manualAccountChoices, runSetup } from "./run-setup.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type { LunchMoneySetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
@@ -355,6 +362,35 @@ describe("runSetup", () => {
         }),
       ),
     ).rejects.toThrow(/overwrite existing .env/);
+  });
+
+  it("offers category mapping with default Yes after a dry-run", async () => {
+    let categoryMappingDefault: boolean | undefined;
+    const prompter = trInteractivePrompter();
+    prompter.confirm = vi.fn(async (message: string, defaultYes?: boolean) => {
+      if (message.includes("category mapping")) {
+        categoryMappingDefault = defaultYes;
+        return false;
+      }
+      if (message.includes("dry-run")) {
+        return true;
+      }
+      if (pytrCredentialStorageAccepted(message)) {
+        return true;
+      }
+      return defaultYes ?? true;
+    });
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter,
+        runSync: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    expect(categoryMappingDefault).toBe(true);
+    expect(runCategoryMappingSetup).not.toHaveBeenCalled();
+    delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
   it("creates a Lunch Money manual account when the operator selects new", async () => {

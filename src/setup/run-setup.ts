@@ -419,7 +419,10 @@ async function finishSetup(
       logger: deps.prompter.print.bind(deps.prompter),
     });
   }
-  if (ranDryRun && (await deps.prompter.confirm("Run category mapping now (npm run setup -- --categories)?", false))) {
+  if (
+    ranDryRun &&
+    (await deps.prompter.confirm("Run category mapping now (npm run setup -- --categories)?", true))
+  ) {
     await runCategoryMappingSetup(options, {
       prompter: deps.prompter,
       filesystem: deps.filesystem,
