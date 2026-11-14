@@ -51,7 +51,7 @@ Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com
 ## How it works (local only)
 
 ```
-  config.json (gitignored)          LUNCH_MONEY_API_KEY (env / .env, gitignored)
+  config.json (gitignored)          OS keychain (Lunch Money API key)
            │                                      │
            └──────────────┬───────────────────────┘
                           │
@@ -83,7 +83,7 @@ git clone https://github.com/osloer-industries/lunch-money-de-invest-sync.git
 cd lunch-money-de-invest-sync
 npm ci
 npm run doctor          # prerequisites; prints fix commands for anything missing
-npm run setup           # interactive: .env (0600), config.json, broker login checks (offers category mapping after dry-run)
+npm run setup           # interactive onboarding (API key in OS keychain; dry-run review at the end)
 npm run setup -- --categories   # map broker types → Lunch Money categories/tags (read-only broker fetch)
 npm run categories -- list      # show saved category/tag mapping (see categories --help)
 npm run categories -- edit      # change mapping after setup (saves after each type)
@@ -91,9 +91,11 @@ npm run sync -- --dry-run
 npm run sync
 ```
 
-Store the Lunch Money API key in gitignored `.env` only (`npm run setup` writes it). Do not prefix `npm run sync` with `LUNCH_MONEY_API_KEY=...` on the command line (shell history).
+The first time you run `npm run setup`, you paste your Lunch Money API key once; it is stored in your OS keychain (not in `config.json` or a plaintext `.env`). Rotate or remove it with `npm run setup -- --replace-api-key` or `npm run setup -- --clear-api-key`. For scripts/CI you may still set `LUNCH_MONEY_API_KEY` in the environment.
 
-`npm run setup` runs `doctor`, validates your API key, detects `pytr` / `sc` launchers, walks broker login (including `pytr login --v2 --store_credentials` when you consent), writes incremental progress to `.env` and `config.json`, and can dry-run sync at the end.
+`npm run setup` validates your API key, detects `pytr` / `sc` launchers, walks broker login (including `pytr login --v2 --store_credentials` when you consent), saves answers incrementally to `config.json`, and can walk through an interactive **dry-run review** at the end (summary per profile, category drill-down, fix mappings in place) before you sync for real.
+
+`npm run sync -- --dry-run` uses the same review on a TTY instead of dumping hundreds of preview lines. Use `--since YYYY-MM-DD` (or set `syncSince` in `config.json` during review) to limit how much history you import on the first sync.
 
 ### Trade Republic privacy notes
 
@@ -192,7 +194,7 @@ updating already-synced manual-account rows to match the mapping; run without `-
 
 The `owner` string is a **local label** for logs only (e.g. `operator-a`, `operator-b`). It is not sent to brokers.
 
-`LUNCH_MONEY_API_KEY` is read from the environment (not from `config.json`). See [`.env.example`](.env.example).
+The Lunch Money API key is read from the OS keychain after setup (or from the environment for scripts). See [`.env.example`](.env.example) for optional non-secret settings only.
 
 ## Why these dependencies
 
@@ -216,7 +218,7 @@ field fails loudly with a clear error instead of silently inserting wrong amount
 
 ## Advanced / manual configuration
 
-Prefer [Quick start](#quick-start) (`npm run doctor`, then `npm run setup`). To edit files by hand, copy [`config.example.json`](config.example.json), set `LUNCH_MONEY_API_KEY` in `.env`, and run `npm run doctor` before sync. `config.json` and `.env` are gitignored — do not commit them.
+Prefer [Quick start](#quick-start) (`npm run doctor`, then `npm run setup`). To edit files by hand, copy [`config.example.json`](config.example.json) and run `npm run doctor` before sync. `config.json` is gitignored — do not commit it. Do **not** put the Lunch Money API key in `.env`.
 
 ### Trade Republic: pytr
 
@@ -224,7 +226,7 @@ Prefer [Quick start](#quick-start) (`npm run doctor`, then `npm run setup`). To 
    `uvx pytr@0.4.10` or pin via `pytrCommand` in config).
 2. Run `pytr login --v2 --store_credentials` once (interactive; see privacy notes above; data stays in `~/.pytr`, not in this repo).
 3. Optional: set `pytrHome` when the pytr data dir is not `~/.pytr` (path must end with `/.pytr`).
-4. Run `npm run sync` with `.env` present. Re-run pytr login when pytr reports an expired session.
+4. Run `npm run sync` after setup stored your API key. Re-run pytr login when pytr reports an expired session.
 
 Adopting pytr is a **clean break** from the old npm WebSocket client: use a fresh Lunch Money manual account
 (or clean up legacy rows yourself). Re-running sync is safe because `external_id` values are stable TR ids
@@ -240,7 +242,7 @@ category (this tool does not pick one silently). Lunch Money UI rules can still 
 3. Run `sc login --local-read-only` and complete the browser device-code flow (do not automate login).
 4. If needed, run `sc broker portfolios` and either `sc broker context select --portfolio-id <ID>`
    or set `portfolioId` on the matching `scalableCapitalProfiles` entry.
-5. Run `npm run sync` with `LUNCH_MONEY_API_KEY` set. Sessions refresh automatically but expire
+5. Run `npm run sync` after setup. Sessions refresh automatically but expire
    after idle/max lifetime documented in scalable-cli — re-run `sc login` when prompted.
 
 If `sc` is installed outside standard directories, set `scBinaryPath` in config to the absolute path from `which sc`.
@@ -262,7 +264,7 @@ manual account (or clean up legacy rows yourself). Re-running sync on the curren
 
 ## Security model
 
-- **Secrets stay local:** Lunch Money API keys belong in gitignored `.env` on your laptop; broker sessions live in pytr/`sc` config dirs.
+- **Secrets stay local:** Lunch Money API keys live in the OS keychain (or your shell env for scripts); broker sessions live in pytr/`sc` config dirs.
 - **CI is credential-free:** workflows lint, typecheck, test, audit, and scan code — they never call Lunch Money or brokers.
 - **CLI sessions stay local:** pytr (`~/.pytr`) and `sc` session files live only on the operator machine; this repo never reads or stores them.
 - **Reporting vulnerabilities:** see [SECURITY.md](SECURITY.md) (private GitHub Security Advisories).
@@ -295,8 +297,10 @@ transports; tests inject fakes.
 
 | Script | Description |
 | --- | --- |
-| `npm run setup` | Interactive onboarding (brokers, Lunch Money mapping, `.env` + `config.json`) |
-| `npm run sync` | Run a sync using `config.json` and `LUNCH_MONEY_API_KEY` (`--dry-run`, `--broker`, `--account`, `--reconcile-cash`) |
+| `npm run setup` | Interactive onboarding (API key in keychain, brokers, portfolio/savings accounts, dry-run review) |
+| `npm run setup -- --replace-api-key` | Store a new Lunch Money API key in the OS keychain |
+| `npm run setup -- --clear-api-key` | Remove the stored Lunch Money API key |
+| `npm run sync` | Run a sync (`--dry-run`, `--since`, `--broker`, `--account`, `--reconcile-cash`) |
 | `npm run check` | Lint, typecheck, coverage, and build (matches CI **Quality** job) |
 | `npm run lint` | Oxlint |
 | `npm run typecheck` | `tsc --noEmit` |
@@ -336,8 +340,7 @@ version (not jump to 1.0.0). Until `1.0.0`:
 Syncs are **manual and opt-in** on your own machine. Trade Republic needs periodic `pytr login`; Scalable needs
 periodic `sc login` on each operator laptop. There is no scheduled or GitHub-hosted sync workflow.
 
-Keep `config.json` on disk only (copy from `config.example.json`; it is gitignored). Set `LUNCH_MONEY_API_KEY` in your
-shell or a local `.env` file (also gitignored), then run `npm run sync` when you want fresh transactions.
+After `npm run setup`, run `npm run sync` when you want fresh transactions. You only need to touch `config.json` manually if you are following the [Advanced](#advanced--manual-configuration) path.
 
 ## Support
 

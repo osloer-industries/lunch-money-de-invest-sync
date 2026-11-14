@@ -3,7 +3,17 @@ import {
   API_KEY_STORE_ENV,
   createDefaultLunchMoneyApiKeyStore,
   disabledLunchMoneyApiKeyStore,
+  formatKeychainAccessError,
 } from "./lunch-money-api-key-store.js";
+
+describe("formatKeychainAccessError", () => {
+  it("includes plain-language guidance without stack traces", () => {
+    const error = formatKeychainAccessError("reading the Lunch Money API key", new Error("access denied"));
+    expect(error.message).toMatch(/keychain/i);
+    expect(error.message).toMatch(/--replace-api-key/);
+    expect(error.message).toContain("access denied");
+  });
+});
 
 describe("createDefaultLunchMoneyApiKeyStore", () => {
   const previous = process.env[API_KEY_STORE_ENV];
