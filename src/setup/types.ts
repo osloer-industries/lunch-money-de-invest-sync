@@ -6,6 +6,8 @@ export interface PromptChoice<T extends string = string> {
   readonly name: string;
   readonly value: T;
   readonly description?: string;
+  /** Pre-select this choice in checkbox prompts. */
+  readonly checked?: boolean;
 }
 
 export interface SetupPrompter {
@@ -36,7 +38,14 @@ export interface ScPortfolioSummary {
   readonly name: string;
 }
 
-export type CategoryMappingSetupClient = Pick<LunchMoneyClient, "categories">;
+/** Read-only slice of the tags API: setup lists existing tags; sync creates missing ones on insert. */
+export interface SetupTagsApi {
+  getAll(): Promise<ReadonlyArray<{ readonly name: string }>>;
+}
+
+export type CategoryMappingSetupClient = Pick<LunchMoneyClient, "categories"> & {
+  readonly tags?: SetupTagsApi;
+};
 
 export type LunchMoneySetupClient = Pick<LunchMoneyClient, "manualAccounts"> & CategoryMappingSetupClient;
 

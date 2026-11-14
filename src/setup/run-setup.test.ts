@@ -393,6 +393,30 @@ describe("runSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
+  it("hands a Lunch Money client factory to category mapping when the operator accepts", async () => {
+    runCategoryMappingSetup.mockClear();
+    const lm = fakeLmClient();
+    const prompter = trInteractivePrompter({
+      confirms: (message) => message.includes("dry-run") || message.includes("category mapping"),
+    });
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter,
+        runSync: vi.fn().mockResolvedValue(undefined),
+        createLunchMoneyClient: () => lm,
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    expect(runCategoryMappingSetup).toHaveBeenCalledTimes(1);
+    const deps = runCategoryMappingSetup.mock.calls[0]?.[1] as {
+      createClient?: (apiKey: string) => unknown;
+    };
+    expect(typeof deps.createClient).toBe("function");
+    expect(deps.createClient?.("lm_test_key")).toBe(lm);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
   it("creates a Lunch Money manual account when the operator selects new", async () => {
     const lm = fakeLmClient();
     const result = await runSetup(
