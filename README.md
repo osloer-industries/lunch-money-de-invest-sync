@@ -38,7 +38,7 @@
 | Broker | Integration | What gets synced |
 | --- | --- | --- |
 | **Trade Republic** | [pytr](https://github.com/pytr-org/pytr) (community CLI, unofficial) | pytr timeline events with non-zero cash amount (card spend, transfers, interest, saveback as one row, …) |
-| **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries only (security buy/sell activity is excluded) |
+| **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries only (security buy/sell/savings-plan rows are not inserted; category setup skips those types when only Scalable profiles exist — **Option A**) |
 
 Both broker surfaces can change without notice. Payloads are validated with **zod** at the boundary so schema drift
 should fail loudly instead of inserting wrong amounts.
