@@ -4,8 +4,9 @@ import { forEachConfirmedRepeat, forEachSequentially } from "./sequential-profil
 describe("forEachSequentially", () => {
   it("runs callbacks in list order, one at a time", async () => {
     const order: number[] = [];
-    const run = vi.fn(async (value: number) => {
+    const run = vi.fn((value: number) => {
       order.push(value);
+      return Promise.resolve();
     });
     await forEachSequentially([1, 2, 3], run);
     expect(order).toEqual([1, 2, 3]);

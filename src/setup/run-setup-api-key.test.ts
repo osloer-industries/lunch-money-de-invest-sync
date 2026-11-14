@@ -50,22 +50,22 @@ describe("runSetup API key storage", () => {
     const password = vi.fn();
     const prompter: SetupPrompter = {
       password,
-      input: vi.fn(async () => ""),
-      select: async <T extends string>(
+      input: vi.fn(() => Promise.resolve("")),
+      select: <T extends string>(
         _message: string,
         choices: readonly PromptChoice<T>[],
-      ): Promise<T> => choices[0]?.value as T,
-      checkbox: vi.fn(async () => []),
-      search: vi.fn(async () => ""),
-      confirm: vi.fn(async () => false),
+      ): Promise<T> => Promise.resolve(choices[0]?.value as T),
+      checkbox: vi.fn(() => Promise.resolve([])),
+      search: vi.fn(() => Promise.resolve("")),
+      confirm: vi.fn(() => Promise.resolve(false)),
       print: vi.fn(),
       waitForEnter: vi.fn(),
     };
     const filesystem: SetupFilesystem = {
       exists: () => false,
       readText: () => null,
-      writeText: async () => {},
-      chmod: async () => {},
+      writeText: () => Promise.resolve(),
+      chmod: () => Promise.resolve(),
     };
     await expect(
       runSetup(baseOptions(), {

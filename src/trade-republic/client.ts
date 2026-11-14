@@ -11,7 +11,7 @@ const PYTR_DOC = "https://github.com/pytr-org/pytr";
 
 export interface PytrFilesystem {
   mkdtemp(prefix: string): Promise<string>;
-  readFile(path: PathLike, encoding: BufferEncoding): Promise<string>;
+  readFile(path: PathLike, encoding: "utf8"): Promise<string>;
   rm(path: PathLike, options: { recursive: boolean; force: boolean }): Promise<void>;
 }
 

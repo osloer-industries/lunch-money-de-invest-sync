@@ -15,7 +15,7 @@ function lunchMoneyApiKeyEntry(): AsyncEntry {
 }
 
 export class KeyringLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
-  async get(): Promise<string | null> {
+  get(): Promise<string | null> {
     return lunchMoneyApiKeyEntry().getPassword();
   }
 
@@ -23,7 +23,7 @@ export class KeyringLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
     await lunchMoneyApiKeyEntry().setPassword(apiKey);
   }
 
-  async delete(): Promise<boolean> {
+  delete(): Promise<boolean> {
     return lunchMoneyApiKeyEntry().deletePassword();
   }
 
@@ -36,22 +36,23 @@ export class KeyringLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
 export class MemoryLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
   private value: string | null = null;
 
-  async get(): Promise<string | null> {
-    return this.value;
+  get(): Promise<string | null> {
+    return Promise.resolve(this.value);
   }
 
-  async set(apiKey: string): Promise<void> {
+  set(apiKey: string): Promise<void> {
     this.value = apiKey;
+    return Promise.resolve();
   }
 
-  async delete(): Promise<boolean> {
+  delete(): Promise<boolean> {
     const had = this.value !== null;
     this.value = null;
-    return had;
+    return Promise.resolve(had);
   }
 
-  async has(): Promise<boolean> {
-    return typeof this.value === "string" && this.value.trim().length > 0;
+  has(): Promise<boolean> {
+    return Promise.resolve(typeof this.value === "string" && this.value.trim().length > 0);
   }
 }
 

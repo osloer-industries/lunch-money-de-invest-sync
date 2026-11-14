@@ -27,8 +27,8 @@ function fakeCategoryFilesystem(): SetupFilesystem {
   return {
     exists: () => false,
     readText: () => null,
-    writeText: async () => {},
-    chmod: async () => {},
+    writeText: () => Promise.resolve(),
+    chmod: () => Promise.resolve(),
   };
 }
 
@@ -56,9 +56,9 @@ function prompter(config: {
     password: vi.fn(),
     input: vi.fn(),
     select: vi.fn(),
-    search: vi.fn(async () => config.searches?.[searchIndex++] ?? SKIP_PLACEHOLDER),
-    checkbox: vi.fn(async () => config.checkboxes?.[checkboxIndex++] ?? []),
-    confirm: vi.fn(async () => config.confirms?.[confirmIndex++] ?? false),
+    search: vi.fn(() => Promise.resolve(config.searches?.[searchIndex++] ?? SKIP_PLACEHOLDER)),
+    checkbox: vi.fn(() => Promise.resolve(config.checkboxes?.[checkboxIndex++] ?? [])),
+    confirm: vi.fn(() => Promise.resolve(config.confirms?.[confirmIndex++] ?? false)),
     print: vi.fn(),
     waitForEnter: vi.fn(),
   };
@@ -123,10 +123,11 @@ describe("runCategoryMappingSetup", () => {
     const filesystem: SetupFilesystem = {
       exists: () => true,
       readText: () => "{}",
-      writeText: async (_path, content) => {
+      writeText: (_path, content) => {
         writes.push(content);
+        return Promise.resolve();
       },
-      chmod: async () => {},
+      chmod: () => Promise.resolve(),
     };
     const result = await runCategoryMappingSetup(options, {
       prompter: prompter({
@@ -148,7 +149,7 @@ describe("runCategoryMappingSetup", () => {
             },
           ]),
         ),
-      collectObservations: async () => observations,
+      collectObservations: () => Promise.resolve(observations),
     });
     expect(result.categoryMap.deposit).toBe(99);
     expect(writes[0]).toContain("categoryMap");
@@ -179,7 +180,7 @@ describe("runCategoryMappingSetup", () => {
       readConfig: () =>
         readConfigFixture({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
-      collectObservations: async () => [savebackObservation],
+      collectObservations: () => Promise.resolve([savebackObservation]),
     });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Saveback income", is_income: true }),
@@ -209,7 +210,7 @@ describe("runCategoryMappingSetup", () => {
       readConfig: () =>
         readConfigFixture({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
-      collectObservations: async () => [unknownObservation],
+      collectObservations: () => Promise.resolve([unknownObservation]),
     });
     const choices = search.mock.calls[0]?.[1] as Array<{ value: string }>;
     expect(choices.some((choice) => choice.value === "__new__")).toBe(false);
@@ -239,7 +240,7 @@ describe("runCategoryMappingSetup", () => {
               },
             ]),
           ),
-        collectObservations: async () => observations,
+        collectObservations: () => Promise.resolve(observations),
       }),
     ).rejects.toThrow(/category group/);
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -275,7 +276,7 @@ describe("runCategoryMappingSetup", () => {
             },
           ]),
         ),
-      collectObservations: async () => observations,
+      collectObservations: () => Promise.resolve(observations),
     });
     expect(result.categoryMap.deposit).toBeUndefined();
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -287,15 +288,15 @@ describe("runCategoryMappingSetup", () => {
     await runCategoryMappingSetup(options, {
       prompter: {
         ...prompter({}),
-        search: vi.fn(async (message: string) => {
+        search: vi.fn((message: string) => {
           searchMessages.push(message);
-          return SKIP_PLACEHOLDER;
+          return Promise.resolve(SKIP_PLACEHOLDER);
         }),
       },
       filesystem: fakeCategoryFilesystem(),
       readConfig: () => readConfigFixture(),
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
-      collectObservations: async () => [buyObservation, observations[0]!],
+      collectObservations: () => Promise.resolve([buyObservation, observations[0]!]),
     });
     expect(searchMessages.some((message) => message.includes('"buy"'))).toBe(false);
     expect(searchMessages.some((message) => message.includes('"deposit"'))).toBe(true);
@@ -314,7 +315,7 @@ describe("runCategoryMappingSetup", () => {
       readConfig: () =>
         readConfigFixture({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
-      collectObservations: async () => [buyObservation],
+      collectObservations: () => Promise.resolve([buyObservation]),
     });
     expect(create).toHaveBeenCalled();
     expect(result.categoryMap.buy).toBe(42);
@@ -343,7 +344,7 @@ describe("runCategoryMappingSetup", () => {
         readConfig: () =>
           readConfigFixture({ scalableCapitalProfiles: [], tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
         createClient: () => stubCategoryClient(vi.fn()),
-        collectObservations: async () => [],
+        collectObservations: () => Promise.resolve([]),
       }),
     ).rejects.toThrow(/No classifiable/);
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -374,7 +375,7 @@ describe("runCategoryMappingSetup", () => {
               },
             ]),
           ),
-        collectObservations: async () => observations,
+        collectObservations: () => Promise.resolve(observations),
       }),
     ).rejects.toThrow(/positive integer/);
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -392,10 +393,11 @@ describe("runCategoryMappingSetup", () => {
         exists: () => true,
         readText: () =>
           JSON.stringify({ categoryMap: { sell: 5 }, tagMap: { sell: ["invest"] }, lunchMoneyApiKey: "k" }),
-        writeText: async (_path, content) => {
+        writeText: (_path, content) => {
           writes.push(content);
+          return Promise.resolve();
         },
-        chmod: async () => {},
+        chmod: () => Promise.resolve(),
       },
       readConfig: () => readConfigFixture({ categoryMap: { sell: 5 }, tagMap: { sell: ["invest"] } }),
       createClient: () =>
@@ -411,7 +413,7 @@ describe("runCategoryMappingSetup", () => {
             },
           ]),
         ),
-      collectObservations: async () => observations,
+      collectObservations: () => Promise.resolve(observations),
     });
     expect(result.categoryMap.deposit).toBe(99);
     expect(result.categoryMap.sell).toBe(5);
@@ -429,15 +431,16 @@ describe("runCategoryMappingSetup", () => {
         filesystem: {
           exists: () => false,
           readText: () => null,
-          writeText: async (filePath, content) => {
+          writeText: (filePath, content) => {
             writes.set(filePath, content);
+            return Promise.resolve();
           },
-          chmod: async () => {},
+          chmod: () => Promise.resolve(),
         },
         readConfig: () =>
           readConfigFixture({ scalableCapitalProfiles: [], tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
         createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
-        collectObservations: async () => observations,
+        collectObservations: () => Promise.resolve(observations),
       },
     );
     expect(result.exportPath).toContain("summary.json");
@@ -488,11 +491,12 @@ function memoryFilesystem(initial = "{}"): SetupFilesystem & { writes: string[] 
     writes,
     exists: () => true,
     readText: () => current,
-    writeText: async (_path, content) => {
+    writeText: (_path, content) => {
       current = content;
       writes.push(content);
+      return Promise.resolve();
     },
-    chmod: async () => {},
+    chmod: () => Promise.resolve(),
   };
 }
 
@@ -508,7 +512,7 @@ type Choice = { name: string; value: string; checked?: boolean };
 describe("runCategoryMappingSetup — grouped journey", () => {
   it("asks once for buy and savings-plan and maps both to the matching existing category", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    const search = vi.fn(async (_message: string, choices: readonly Choice[]) => choices[0]!.value);
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({ confirms: [false] }), search },
       filesystem: memoryFilesystem(),
@@ -517,7 +521,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
         stubCategoryClient(
           vi.fn().mockResolvedValue([category(5, "Groceries"), category(7, "Investments", { excluded: true })]),
         ),
-      collectObservations: async () => [observation("savings-plan"), observation("buy")],
+      collectObservations: () => Promise.resolve([observation("savings-plan"), observation("buy")]),
     });
     expect(search).toHaveBeenCalledTimes(1);
     expect(search.mock.calls[0]?.[0]).toBe('Category for types "buy", "savings-plan"');
@@ -530,16 +534,16 @@ describe("runCategoryMappingSetup — grouped journey", () => {
   it("offers create-new Income first for dividend + interest and scopes their suggested tags", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 31, name: "Income" });
-    const search = vi.fn(async (_message: string, choices: readonly Choice[]) => choices[0]!.value);
-    const checkbox = vi.fn(async (_message: string, choices: readonly Choice[]) =>
-      choices.filter((choice) => choice.checked).map((choice) => choice.value),
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
+    const checkbox = vi.fn((_message: string, choices: readonly Choice[]) =>
+      Promise.resolve(choices.filter((choice) => choice.checked).map((choice) => choice.value)),
     );
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({ confirms: [true, false] }), search, checkbox },
       filesystem: memoryFilesystem(),
       readConfig: trConfig,
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
-      collectObservations: async () => [observation("interest"), observation("dividend")],
+      collectObservations: () => Promise.resolve([observation("interest"), observation("dividend")]),
     });
     expect(search).toHaveBeenCalledTimes(1);
     expect(search.mock.calls[0]?.[1][0]).toEqual({ name: 'Create new category "Income"', value: "__new__" });
@@ -558,8 +562,8 @@ describe("runCategoryMappingSetup — grouped journey", () => {
 
   it("defaults unknown to the existing transfer category without create-new or a flag warning", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    const search = vi.fn(async (_message: string, choices: readonly Choice[]) => choices[0]!.value);
-    const confirm = vi.fn(async () => false);
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
+    const confirm = vi.fn(() => Promise.resolve(false));
     const print = vi.fn();
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({}), search, confirm, print },
@@ -567,7 +571,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       readConfig: trConfig,
       createClient: () =>
         stubCategoryClient(vi.fn().mockResolvedValue([category(99, "Payment, Transfer", { excluded: true })])),
-      collectObservations: async () => [observation("unknown")],
+      collectObservations: () => Promise.resolve([observation("unknown")]),
     });
     const choices = search.mock.calls[0]?.[1] ?? [];
     expect(choices[0]).toEqual({ name: "[99] Payment, Transfer", value: "99" });
@@ -582,9 +586,9 @@ describe("runCategoryMappingSetup — grouped journey", () => {
   it("keeps unknown separate from transfer types so it can be skipped on its own", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const searchMessages: string[] = [];
-    const search = vi.fn(async (message: string, choices: readonly Choice[]) => {
+    const search = vi.fn((message: string, choices: readonly Choice[]) => {
       searchMessages.push(message);
-      return message.includes("unknown") ? "__skip__" : choices[0]!.value;
+      return Promise.resolve(message.includes("unknown") ? "__skip__" : choices[0]!.value);
     });
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({ confirms: [false] }), search },
@@ -592,12 +596,13 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       readConfig: trConfig,
       createClient: () =>
         stubCategoryClient(vi.fn().mockResolvedValue([category(99, "Payment, Transfer", { excluded: true })])),
-      collectObservations: async () => [
-        observation("unknown"),
-        observation("deposit"),
-        observation("withdrawal"),
-        observation("transfer"),
-      ],
+      collectObservations: () =>
+        Promise.resolve([
+          observation("unknown"),
+          observation("deposit"),
+          observation("withdrawal"),
+          observation("transfer"),
+        ]),
     });
     expect(searchMessages).toEqual([
       'Category for types "deposit", "transfer", "withdrawal"',
@@ -616,8 +621,8 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       prompter: { ...prompter({ confirms: [false] }), checkbox, input },
       filesystem: memoryFilesystem(),
       readConfig: trConfig,
-      createClient: () => withTags(stubCategoryClient(vi.fn().mockResolvedValue([])), async () => []),
-      collectObservations: async () => [observation("fee"), observation("tax"), observation("deposit")],
+      createClient: () => withTags(stubCategoryClient(vi.fn().mockResolvedValue([])), () => Promise.resolve([])),
+      collectObservations: () => Promise.resolve([observation("fee"), observation("tax"), observation("deposit")]),
     });
     expect(checkbox).not.toHaveBeenCalled();
     expect(input).toHaveBeenCalledTimes(3);
@@ -628,18 +633,22 @@ describe("runCategoryMappingSetup — grouped journey", () => {
 
   it("offers existing Lunch Money tags plus free text, deduplicated case-insensitively", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    const checkbox = vi.fn(async (_message: string, _choices: readonly Choice[]) => ["saveback", "Holiday"]);
+    const checkbox = vi.fn((_message: string, _choices: readonly Choice[]) =>
+      Promise.resolve(["saveback", "Holiday"]),
+    );
     const input = vi.fn().mockResolvedValue(" broker , holiday ,, ");
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({ confirms: [false] }), checkbox, input },
       filesystem: memoryFilesystem(),
       readConfig: trConfig,
       createClient: () =>
-        withTags(stubCategoryClient(vi.fn().mockResolvedValue([])), async () => [
-          { name: "Holiday" },
-          { name: "SAVEBACK" },
-        ]),
-      collectObservations: async () => [observation("saveback")],
+        withTags(stubCategoryClient(vi.fn().mockResolvedValue([])), () =>
+          Promise.resolve([
+            { name: "Holiday" },
+            { name: "SAVEBACK" },
+          ]),
+        ),
+      collectObservations: () => Promise.resolve([observation("saveback")]),
     });
     expect(checkbox.mock.calls[0]?.[1]).toEqual([
       { name: "saveback (suggested)", value: "saveback", checked: true },
@@ -657,10 +666,10 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       filesystem: memoryFilesystem(),
       readConfig: trConfig,
       createClient: () =>
-        withTags(stubCategoryClient(vi.fn().mockResolvedValue([])), async () => {
-          throw new Error("network down");
-        }),
-      collectObservations: async () => [observation("fee")],
+        withTags(stubCategoryClient(vi.fn().mockResolvedValue([])), () =>
+          Promise.reject(new Error("network down")),
+        ),
+      collectObservations: () => Promise.resolve([observation("fee")]),
     });
     expect(print.mock.calls.some(([line]) => String(line).includes("Could not load existing"))).toBe(true);
     expect(result.tagMap.fee).toEqual(["manual"]);
@@ -681,7 +690,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
         readConfig: trConfig,
         createClient: () =>
           stubCategoryClient(vi.fn().mockResolvedValue([category(99, "Payment, Transfer", { excluded: true })])),
-        collectObservations: async () => [observation("deposit"), observation("fee")],
+        collectObservations: () => Promise.resolve([observation("deposit"), observation("fee")]),
       }),
     ).rejects.toThrow(/force closed/);
     expect(filesystem.writes).toHaveLength(1);
@@ -700,7 +709,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       filesystem: memoryFilesystem(),
       readConfig: trConfig,
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
-      collectObservations: async () => [observation("fee")],
+      collectObservations: () => Promise.resolve([observation("fee")]),
     });
     expect(create).not.toHaveBeenCalled();
     expect(result.categoryMap.fee).toBeUndefined();
@@ -720,7 +729,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       readConfig: trConfig,
       createClient: () =>
         stubCategoryClient(vi.fn().mockResolvedValue([category(12, "Saveback income", { is_income: true })]), create),
-      collectObservations: async () => [observation("saveback")],
+      collectObservations: () => Promise.resolve([observation("saveback")]),
     });
     expect(create).not.toHaveBeenCalled();
     expect(result.categoryMap.saveback).toBeUndefined();
@@ -731,9 +740,9 @@ describe("runCategoryMappingSetup — grouped journey", () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 13, name: "Investments" });
     let seenChoices: readonly Choice[] = [];
-    const search = vi.fn(async (_message: string, choices: readonly Choice[]) => {
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => {
       seenChoices = choices;
-      return "__new__";
+      return Promise.resolve("__new__");
     });
     const result = await runCategoryMappingSetup(options, {
       prompter: {
@@ -748,7 +757,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
           vi.fn().mockResolvedValue([category(20, "Money", { is_group: true }), { ...category(21, "Brokerage"), group_id: 20 }]),
           create,
         ),
-      collectObservations: async () => [observation("saveback")],
+      collectObservations: () => Promise.resolve([observation("saveback")]),
     });
     expect(seenChoices[0]).toEqual({ name: "Create new category (choose Saveback treatment)", value: "__new__" });
     expect(seenChoices).toContainEqual({ name: "[21] Brokerage (under Money)", value: "21" });
