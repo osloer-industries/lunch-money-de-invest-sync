@@ -1,5 +1,11 @@
 import type { PathLike } from "node:fs";
-import { createAppApprovalWatcher } from "./app-approval-alert.js";
+import {
+  appApprovalWatcherDeps,
+  createAppApprovalWatcher,
+  finalizeTradeRepublicApprovalFromRun,
+  type AppApprovalWatcherState,
+} from "./app-approval-alert.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +14,10 @@ import { isErrnoCode } from "../shared/errno.js";
 import { createPytrCliRunner, type PytrCliRunner } from "../shared/subprocess-cli.js";
 
 const PYTR_DOC = "https://github.com/pytr-org/pytr";
+
+export interface TradeRepublicFetchContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
 
 export interface PytrFilesystem {
   mkdtemp(prefix: string): Promise<string>;
@@ -202,11 +212,19 @@ export function actionablePytrFailure(
 export function createApprovalAwarePytrRun(
   runner: PytrCliRunner,
   childEnv: Record<string, string> | undefined,
+  context: TradeRepublicFetchContext = {},
 ): (argv: readonly string[]) => ReturnType<PytrCliRunner["run"]> {
-  const onOutputLine = createAppApprovalWatcher();
   return async (argv) => {
+    let state: AppApprovalWatcherState = { sawApprovalWait: false, approvalSettled: false };
+    const onOutputLine = createAppApprovalWatcher(
+      appApprovalWatcherDeps((next) => {
+        state = next;
+      }, context.loginEvents),
+    );
     try {
-      return await runner.run(argv, childEnv, { onOutputLine });
+      const result = await runner.run(argv, childEnv, { onOutputLine });
+      finalizeTradeRepublicApprovalFromRun(context.loginEvents, state, result.exitCode, result.stderr);
+      return result;
     } catch (error) {
       if (isErrnoCode(error, "ENOENT")) {
         throw new Error(`pytr was not found — install it from ${PYTR_DOC} (for example \`uvx pytr@0.4.10\`)`, {
@@ -222,6 +240,7 @@ async function runExport(
   runner: PytrCliRunner,
   config: TradeRepublicPytrConfig,
   filesystem: PytrFilesystem = defaultPytrFilesystem,
+  context: TradeRepublicFetchContext = {},
 ): Promise<string> {
   const childEnv = pytrHomeEnv(config.pytrHome);
   let outputDir: string | undefined;
@@ -230,7 +249,7 @@ async function runExport(
     outputDir = await filesystem.mkdtemp(path.join(os.tmpdir(), "lm-tr-sync-"));
     // Short session check first: if Trade Republic needs app approval it happens here (with an alert),
     // so the full-history export below starts on a fresh session with its whole timeout.
-    const runPytr = createApprovalAwarePytrRun(runner, childEnv);
+    const runPytr = createApprovalAwarePytrRun(runner, childEnv, context);
     const probeDir = await filesystem.mkdtemp(path.join(outputDir, "session-check-"));
     const probe = await runPytr([...buildExportArgv(probeDir, config), "--last_days", "1"]);
     if (probe.exitCode !== 0) {
@@ -268,8 +287,9 @@ export async function fetchTradeRepublicTimeline(
   runner: PytrCliRunner,
   config: TradeRepublicPytrConfig,
   filesystem: PytrFilesystem = defaultPytrFilesystem,
+  context: TradeRepublicFetchContext = {},
 ): Promise<ReturnType<typeof pytrAllEventsSchema.parse>> {
-  const raw = await runExport(runner, config, filesystem);
+  const raw = await runExport(runner, config, filesystem, context);
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;

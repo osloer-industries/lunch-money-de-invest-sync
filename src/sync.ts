@@ -28,6 +28,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { chmod, writeFile } from "node:fs/promises";
 import { runCliModuleMain } from "./shared/cli-main.js";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
+import { detectFirstSyncForAccount } from "./lunch-money/first-sync-for-account.js";
+import { createNdjsonEventWriter, type BrokerLoginEventSink } from "./shared/cli-events.js";
+import { writeStdoutJson } from "./shared/scriptable-cli.js";
+import type { SyncAccountResult, SyncRunJsonResult } from "./sync-result.js";
 import {
   readScalableCapitalBalances,
   readTradeRepublicBalances,
@@ -36,7 +40,12 @@ import {
 import type { ManualAccountBalanceApi } from "./lunch-money/manual-account-balance.js";
 import { syncBrokerBalances } from "./sync-balances.js";
 import { runDryRunCollection } from "./dry-run-review/collect.js";
-import { runDryRunTerminalReview, type DryRunTerminalReviewDeps } from "./dry-run-review/terminal-review.js";
+import {
+  dryRunAggregateUncategorisedShareExceedsThreshold,
+  runDryRunTerminalReview,
+  type DryRunTerminalReviewDeps,
+} from "./dry-run-review/terminal-review.js";
+import type { DryRunReviewSummary } from "./dry-run-review/types.js";
 import { filterTransactionsSince } from "./dry-run-review/since.js";
 import { createInquirerPrompter } from "./setup/inquirer-prompter.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./setup/types.js";
@@ -72,6 +81,8 @@ export interface RunSyncSelection {
   readonly dryRun: boolean;
   readonly since?: string;
   readonly exportTypeSummary?: string | null;
+  readonly json?: boolean;
+  readonly nonInteractive?: boolean;
   /** Set the Lunch Money cash balance to the broker value when they differ (opt-in). */
   readonly reconcileCash?: boolean;
 }
@@ -98,7 +109,53 @@ function effectiveSince(config: SyncConfig, selection: RunSyncSelection): string
 }
 
 function shouldUseInteractiveDryRunReview(selection: RunSyncSelection): boolean {
-  return selection.dryRun && (process.stdin.isTTY ?? false) && process.env["VITEST"] === undefined;
+  return (
+    selection.dryRun &&
+    !selection.json &&
+    selection.nonInteractive !== true &&
+    (process.stdin.isTTY ?? false) &&
+    process.env["VITEST"] === undefined
+  );
+}
+
+function lunchMoneyAssetIdForOwner(
+  config: SyncConfig,
+  broker: BrokerSource,
+  owner: string,
+): number {
+  const profiles =
+    broker === "trade-republic" ? config.tradeRepublicProfiles : config.scalableCapitalProfiles;
+  const profile = profiles.find((row) => row.owner === owner);
+  if (!profile) {
+    throw new Error(`No ${broker} profile for owner "${owner}"`);
+  }
+  return profile.lunchMoneyAssetId;
+}
+
+function syncAccountsFromDryRunReview(
+  config: SyncConfig,
+  client: LunchMoneySyncClient,
+  review: DryRunReviewSummary,
+): Promise<SyncAccountResult[]> {
+  return Promise.all(
+    review.profiles.map(async (profile) => {
+      const lunchMoneyAssetId = lunchMoneyAssetIdForOwner(config, profile.broker, profile.owner);
+      const firstSync = await detectFirstSyncForAccount(client, lunchMoneyAssetId, [
+        profile.broker === "trade-republic" ? "trade-republic:" : "scalable-capital:",
+      ]);
+      return {
+        owner: profile.owner,
+        source: profile.broker,
+        lunchMoneyAssetId,
+        firstSyncForAccount: firstSync.firstSyncForAccount,
+        existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+        dryRun: true,
+        wouldInsert: profile.wouldInsert,
+        wouldSkip: profile.wouldSkip,
+        dryRunSummary: profile,
+      };
+    }),
+  );
 }
 
 interface SyncOneAccountParams {
@@ -114,8 +171,17 @@ interface SyncOneAccountParams {
   readonly dryRun: boolean;
 }
 
-/** Returns the canonical sum of rows a dry-run would still insert (0 after a real sync). */
-async function syncOneAccount(params: SyncOneAccountParams): Promise<number> {
+const BROKER_EXTERNAL_ID_PREFIX: Record<BrokerSource, string> = {
+  "trade-republic": "trade-republic:",
+  "scalable-capital": "scalable-capital:",
+};
+
+interface SyncOneAccountOutcome {
+  readonly pendingCashDelta: number;
+  readonly account: SyncAccountResult;
+}
+
+async function syncOneAccount(params: SyncOneAccountParams): Promise<SyncOneAccountOutcome> {
   const {
     owner,
     source,
@@ -132,6 +198,7 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<number> {
     applyCategoryTagMappings(rawTransactions, categoryMap, tagMap),
     sharedCardLast4,
   );
+  const firstSync = await detectFirstSyncForAccount(client, lunchMoneyAssetId, [BROKER_EXTERNAL_ID_PREFIX[source]]);
   if (dryRun) {
     const preview = await previewUpsert(client, transactions, lunchMoneyAssetId);
     logger(
@@ -142,14 +209,43 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<number> {
         `  ${line.action === "insert" ? "+" : "="} ${line.date} ${line.amount} ${line.payee} (${line.externalId})`,
       );
     }
-    return pendingCanonicalDelta(preview.lines);
+    if (firstSync.firstSyncForAccount) {
+      logger(
+        `[${source}:${owner}] note: first sync for this Lunch Money account — classification is locked in after the first successful sync`,
+      );
+    }
+    return {
+      pendingCashDelta: pendingCanonicalDelta(preview.lines),
+      account: {
+        owner,
+        source,
+        lunchMoneyAssetId,
+        firstSyncForAccount: firstSync.firstSyncForAccount,
+        existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+        dryRun: true,
+        wouldInsert: preview.wouldInsert,
+        wouldSkip: preview.wouldSkip,
+      },
+    };
   }
   const tagIds = await resolveTagIds(client, uniqueTags(transactions));
   const summary = await upsertTransactions(client, transactions, lunchMoneyAssetId, tagIds);
   logger(
     `[${source}:${owner}] inserted ${summary.insertedCount}, skipped ${summary.skippedCount} duplicate(s)`,
   );
-  return 0;
+  return {
+    pendingCashDelta: 0,
+    account: {
+      owner,
+      source,
+      lunchMoneyAssetId,
+      firstSyncForAccount: firstSync.firstSyncForAccount,
+      existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+      dryRun: false,
+      insertedCount: summary.insertedCount,
+      skippedCount: summary.skippedCount,
+    },
+  };
 }
 
 function pendingCanonicalDelta(lines: ReadonlyArray<{ action: string; amount: number }>): number {
@@ -192,6 +288,33 @@ async function runInteractiveDryRunReview(
   return true;
 }
 
+async function runJsonDryRunSync(
+  config: SyncConfig,
+  client: LunchMoneySyncClient,
+  collectors: BrokerCollectors,
+  selection: RunSyncSelection,
+): Promise<SyncRunJsonResult> {
+  if (!client.categories) {
+    throw new Error("Dry-run JSON output requires a Lunch Money client with categories.getAll");
+  }
+  const since = effectiveSince(config, selection);
+  const review = await runDryRunCollection(config, client, collectors, {
+    includeBrokers: selection.includeBrokers,
+    owners: selection.owners,
+    ...(since === undefined ? {} : { since }),
+  });
+  const accounts = await syncAccountsFromDryRunReview(config, client, review);
+  return {
+    ok: true,
+    balanceFailures: 0,
+    accounts,
+    dryRunReview: {
+      aggregateUncategorisedShare: review.aggregateUncategorisedShare,
+      uncategorisedShareExceedsThreshold: dryRunAggregateUncategorisedShareExceedsThreshold(review),
+    },
+  };
+}
+
 export async function runSync(
   config: SyncConfig,
   client: LunchMoneySyncClient,
@@ -199,10 +322,14 @@ export async function runSync(
   logger: SyncLogger = defaultSyncLogger,
   selection: RunSyncSelection = createDefaultRunSyncSelection(),
   dryRunReview?: SyncDryRunReviewDeps,
-): Promise<SyncRunSummary> {
+): Promise<SyncRunSummary | SyncRunJsonResult> {
   if (shouldUseInteractiveDryRunReview(selection)) {
     const proceed = await runInteractiveDryRunReview(config, client, collectors, logger, selection, dryRunReview);
     return { balanceFailures: 0, dryRunProceed: proceed };
+  }
+
+  if (selection.dryRun && selection.json) {
+    return runJsonDryRunSync(config, client, collectors, selection);
   }
 
   const since = effectiveSince(config, selection);
@@ -232,6 +359,7 @@ export async function runSync(
     logger,
     dryRun: selection.dryRun,
     reconcileCash: selection.reconcileCash === true,
+    collectJsonAccounts: selection.json === true,
     ...(since === undefined ? {} : { since }),
   };
 
@@ -249,12 +377,23 @@ export async function runSync(
       readBalances: collectors.readScalableCapitalBalances,
     },
   ] as const;
+  const accounts: SyncAccountResult[] = [];
   let balanceFailures = 0;
   await forEachProfileSequentially(brokerSyncJobs, async (job) => {
-    balanceFailures += await syncProfilesForBroker(job.profiles, job.source, job.collect, job.readBalances, syncContext);
+    balanceFailures += await syncProfilesForBroker(
+      job.profiles,
+      job.source,
+      job.collect,
+      job.readBalances,
+      syncContext,
+      accounts,
+    );
   });
   if (balanceFailures > 0) {
     logger(`Transactions synced, but ${balanceFailures} balance step(s) failed — see the warnings above.`);
+  }
+  if (selection.json) {
+    return { ok: true, balanceFailures, accounts };
   }
   return { balanceFailures };
 }
@@ -279,8 +418,10 @@ async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
     logger: SyncLogger;
     dryRun: boolean;
     reconcileCash: boolean;
+    collectJsonAccounts: boolean;
     since?: string;
   },
+  jsonAccounts: SyncAccountResult[],
 ): Promise<number> {
   let failures = 0;
   await forEachProfileSequentially(profiles, async (profile) => {
@@ -288,7 +429,7 @@ async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
     if (context.since) {
       transactions = filterTransactionsSince(transactions, context.since);
     }
-    const pendingCashDelta = await syncOneAccount({
+    const { pendingCashDelta, account } = await syncOneAccount({
       owner: profile.owner,
       source,
       rawTransactions: transactions,
@@ -301,11 +442,15 @@ async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
       dryRun: context.dryRun,
     });
     if (!readBalances) {
+      if (context.collectJsonAccounts) {
+        jsonAccounts.push(account);
+      }
       return;
     }
-    failures += await syncBrokerBalances({
+    const snapshot = await readBalances(profile);
+    const balanceFailuresForProfile = await syncBrokerBalances({
       label: `[${source}:${profile.owner}]`,
-      snapshot: await readBalances(profile),
+      snapshot,
       cashAccountId: profile.lunchMoneyAssetId,
       holdingsAccountId: profile.holdingsAccountId,
       savingsAccountId: profile.savingsAccountId,
@@ -315,26 +460,33 @@ async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
       dryRun: context.dryRun,
       reconcileCash: context.reconcileCash,
     });
+    failures += balanceFailuresForProfile;
+    if (context.collectJsonAccounts) {
+      jsonAccounts.push({
+        ...account,
+        brokerBalances: snapshot,
+        balanceFailures: balanceFailuresForProfile,
+      });
+    }
   });
   return failures;
 }
 
-export function createLiveCollectors(): BrokerCollectors {
-  return liveCollectors;
+export function createLiveCollectors(loginEvents?: BrokerLoginEventSink): BrokerCollectors {
+  const brokerContext = loginEvents ? { loginEvents } : {};
+  return {
+    async collectTradeRepublic(profile) {
+      const events = await fetchTradeRepublicEventsForProfile(profile, brokerContext);
+      return mapTradeRepublicEvents(events);
+    },
+    async collectScalableCapital(profile) {
+      const transactions = await fetchScalableCashTransactionsForProfile(profile, brokerContext);
+      return mapScalableCapitalTransactions(transactions);
+    },
+    readTradeRepublicBalances,
+    readScalableCapitalBalances,
+  };
 }
-
-const liveCollectors: BrokerCollectors = {
-  async collectTradeRepublic(profile) {
-    const events = await fetchTradeRepublicEventsForProfile(profile);
-    return mapTradeRepublicEvents(events);
-  },
-  async collectScalableCapital(profile) {
-    const transactions = await fetchScalableCashTransactionsForProfile(profile);
-    return mapScalableCapitalTransactions(transactions);
-  },
-  readTradeRepublicBalances,
-  readScalableCapitalBalances,
-};
 
 function selectionFromCliOptions(
   cli: ReturnType<typeof parseSyncCliOptions>,
@@ -349,6 +501,8 @@ function selectionFromCliOptions(
     dryRun: cli.dryRun,
     ...(cli.since ? { since: cli.since } : {}),
     exportTypeSummary: cli.exportTypeSummary,
+    json: cli.json,
+    nonInteractive: cli.nonInteractive,
     reconcileCash: cli.reconcileCash,
   };
 }
@@ -368,6 +522,29 @@ export function createLiveSetupFilesystem(): SetupFilesystem {
   };
 }
 
+function summarizeRunSyncCliResult(result: SyncRunSummary | SyncRunJsonResult): SyncRunSummary {
+  const dryRunProceed = "dryRunProceed" in result ? result.dryRunProceed : undefined;
+  return dryRunProceed === undefined
+    ? { balanceFailures: result.balanceFailures }
+    : { balanceFailures: result.balanceFailures, dryRunProceed };
+}
+
+async function maybeWriteTypeSummaryExport(
+  exportPath: string | null,
+  config: SyncConfig,
+  logger: SyncLogger,
+): Promise<void> {
+  if (!exportPath) {
+    return;
+  }
+  const observations = await collectTypeObservations(config);
+  const groups = groupTypeObservations(observations);
+  const target = await writeAnonymisedTypeSummaryToPath(exportPath, groups, {
+    write: (absolutePath, body) => writeFile(absolutePath, body, "utf8"),
+  });
+  logger(`Wrote anonymised type summary to ${target}`);
+}
+
 export async function runSyncCli(
   argv: readonly string[],
   deps: {
@@ -385,25 +562,25 @@ export async function runSyncCli(
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return { balanceFailures: 0 };
   }
+  const humanLogger = deps.logger ?? defaultSyncLogger;
+  const logger = cli.json ? () => undefined : humanLogger;
   await ensureLunchMoneyApiKeyForCli(deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore());
   const config = (deps.readConfig ?? readConfigFromDiskForCli)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
-  if (cli.exportTypeSummary) {
-    const observations = await collectTypeObservations(config);
-    const groups = groupTypeObservations(observations);
-    const target = await writeAnonymisedTypeSummaryToPath(cli.exportTypeSummary, groups, {
-      write: (absolutePath, body) => writeFile(absolutePath, body, "utf8"),
-    });
-    (deps.logger ?? defaultSyncLogger)(`Wrote anonymised type summary to ${target}`);
-  }
-  return runSync(
+  const loginEvents = cli.events ? createNdjsonEventWriter() : undefined;
+  await maybeWriteTypeSummaryExport(cli.exportTypeSummary, config, logger);
+  const result = await runSync(
     config,
     client,
-    deps.collectors ?? liveCollectors,
-    deps.logger ?? defaultSyncLogger,
+    deps.collectors ?? createLiveCollectors(loginEvents),
+    logger,
     selectionFromCliOptions(cli),
     deps.prompter && deps.filesystem ? { prompter: deps.prompter, filesystem: deps.filesystem } : undefined,
   );
+  if (cli.json && "accounts" in result) {
+    writeStdoutJson(result);
+  }
+  return summarizeRunSyncCliResult(result);
 }
 
 runCliModuleMain(async () => {

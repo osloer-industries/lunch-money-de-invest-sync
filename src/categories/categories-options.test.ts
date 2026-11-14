@@ -6,10 +6,12 @@ describe("parseCategoriesCliOptions", () => {
     expect(parseCategoriesCliOptions(["--help"]).help).toBe(true);
   });
 
-  it("parses list, edit, and reapply", () => {
+  it("parses list, edit, reapply, apply, and list-lunch-money", () => {
     expect(parseCategoriesCliOptions(["list"]).command).toBe("list");
     expect(parseCategoriesCliOptions(["edit"]).command).toBe("edit");
     expect(parseCategoriesCliOptions(["reapply", "--dry-run"]).dryRun).toBe(true);
+    expect(parseCategoriesCliOptions(["apply", "--map", "deposit=1"]).command).toBe("apply");
+    expect(parseCategoriesCliOptions(["list-lunch-money", "--json"]).json).toBe(true);
   });
 
   it("rejects unknown commands", () => {

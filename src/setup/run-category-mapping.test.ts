@@ -21,6 +21,8 @@ const options: SetupCliOptions = {
   scalableSavingsAccountId: null,
   categories: true,
   exportTypeSummary: null,
+  json: false,
+  events: false,
   replaceApiKey: false,
   clearApiKey: false,
   help: false,

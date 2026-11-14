@@ -6,8 +6,14 @@ import {
   type ScMachineEnvelope,
   type ScTransactionSummary,
 } from "./types.js";
-import { runScJsonCommand, withPortfolioId } from "./sc-command.js";
+import { withPortfolioId } from "./sc-command.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
+import { runScJsonCommand, type ScJsonCommandContext } from "./sc-command.js";
+
+export interface ScalableFetchContext extends ScJsonCommandContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
 
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;
@@ -125,13 +131,14 @@ function buildTransactionsArgv(config: ScalableCapitalCliConfig, cursor?: string
 async function runTransactionsPage(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext,
   cursor?: string,
 ): Promise<{
   transactions: ScalableCapitalTransaction[];
   summaries: ScTransactionSummary[];
   cursor: string | null | undefined;
 }> {
-  const envelope = await runScJsonCommand(runner, config, buildTransactionsArgv(config, cursor));
+  const envelope = await runScJsonCommand(runner, config, buildTransactionsArgv(config, cursor), context);
   return parseTransactionsData(envelope);
 }
 
@@ -156,13 +163,23 @@ function parseTransactionsData(envelope: ScMachineEnvelope): {
 async function paginateBrokerTransactionPages<T>(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext,
   pick: (page: Awaited<ReturnType<typeof runTransactionsPage>>) => readonly T[],
 ): Promise<T[]> {
   const all: T[] = [];
   let cursor: string | undefined;
+  let sessionActiveEmitted = false;
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const result = await runTransactionsPage(runner, config, cursor);
+    const result = await runTransactionsPage(runner, config, context, cursor);
+    if (!sessionActiveEmitted) {
+      sessionActiveEmitted = true;
+      context.loginEvents?.({
+        kind: "broker_login",
+        broker: "scalable-capital",
+        phase: "session_active",
+      });
+    }
     all.push(...pick(result));
     if (!result.cursor) {
       return all;
@@ -177,16 +194,18 @@ async function paginateBrokerTransactionPages<T>(
 export function fetchAllScalableTransactionSummaries(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext = {},
 ): Promise<ScTransactionSummary[]> {
-  return paginateBrokerTransactionPages(runner, config, (page) => page.summaries);
+  return paginateBrokerTransactionPages(runner, config, context, (page) => page.summaries);
 }
 
 /** Fetches every page of cash-affecting broker transactions (cash rows + executed trades). */
 export function fetchAllScalableCapitalTransactions(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext = {},
 ): Promise<ScalableCapitalTransaction[]> {
-  return paginateBrokerTransactionPages(runner, config, (page) => page.transactions);
+  return paginateBrokerTransactionPages(runner, config, context, (page) => page.transactions);
 }
 
 export function createDefaultScCliRunner(config: ScalableCapitalCliConfig): ScCliRunner {

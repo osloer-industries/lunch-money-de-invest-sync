@@ -93,6 +93,8 @@ npm run sync
 
 The first time you run `npm run setup`, you paste your Lunch Money API key once; it is stored in your OS keychain (not in `config.json` or a plaintext `.env`). Rotate or remove it with `npm run setup -- --replace-api-key` or `npm run setup -- --clear-api-key`. For scripts/CI you may still set `LUNCH_MONEY_API_KEY` in the environment.
 
+For assistants and scripted tooling, commands support `--json`, `--events` (broker login NDJSON on stderr), and `--non-interactive`. See [docs/scriptable-cli.md](docs/scriptable-cli.md) for schemas. Non-interactive category mapping: `npm run categories -- apply --non-interactive --from mapping.json` (or `--map deposit=<categoryId>`).
+
 `npm run setup` validates your API key, detects `pytr` / `sc` launchers, walks broker login (including `pytr login --v2 --store_credentials` when you consent), saves answers incrementally to `config.json`, and can walk through an interactive **dry-run review** at the end (summary per profile, category drill-down, fix mappings in place) before you sync for real.
 
 `npm run sync -- --dry-run` uses the same review on a TTY instead of dumping hundreds of preview lines. Use `--since YYYY-MM-DD` (or set `syncSince` in `config.json` during review) to limit how much history you import on the first sync.

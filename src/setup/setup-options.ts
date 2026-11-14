@@ -1,5 +1,6 @@
 import type { ParseArgsConfig } from "node:util";
 import { exportTypeSummaryPath, parseCliArgv } from "../shared/cli-args.js";
+import { parseScriptableFlags, scriptableOptionConfig } from "../shared/scriptable-cli.js";
 
 export interface SetupCliOptions {
   readonly nonInteractive: boolean;
@@ -20,6 +21,8 @@ export interface SetupCliOptions {
   readonly replaceApiKey: boolean;
   readonly clearApiKey: boolean;
   readonly help: boolean;
+  readonly json: boolean;
+  readonly events: boolean;
 }
 
 const PARSE_CONFIG: ParseArgsConfig = {
@@ -42,6 +45,7 @@ const PARSE_CONFIG: ParseArgsConfig = {
     "replace-api-key": { type: "boolean", default: false },
     "clear-api-key": { type: "boolean", default: false },
     help: { type: "boolean", default: false, short: "h" },
+    ...scriptableOptionConfig(),
   },
   allowPositionals: false,
   strict: true,
@@ -71,6 +75,8 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --clear-api-key                Remove the stored Lunch Money API key
   --categories                   Map broker types to Lunch Money categories/tags (standalone)
   --export-type-summary <file>   Write anonymised type counts/examples (opt-in)
+  --json                         Machine-readable result on stdout (non-interactive flows)
+  --events                       Broker login NDJSON on stderr during broker checks
   -h, --help                     Show this help`;
 
 function parsePositiveIntFlag(values: Record<string, unknown>, key: string): number | null {
@@ -87,6 +93,7 @@ function parsePositiveIntFlag(values: Record<string, unknown>, key: string): num
 
 export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
   const parsed = parseCliArgv(argv, PARSE_CONFIG, "Invalid setup arguments");
+  const scriptable = parseScriptableFlags(argv);
   const values = parsed.values as Record<string, unknown>;
   const lunchMoneyAssetId = parsePositiveIntFlag(values, "lunch-money-asset-id");
   const tradeRepublicAssetId = parsePositiveIntFlag(values, "trade-republic-asset-id");
@@ -110,5 +117,7 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     replaceApiKey: values["replace-api-key"] === true,
     clearApiKey: values["clear-api-key"] === true,
     help: values.help === true,
+    json: scriptable.flags.json,
+    events: scriptable.flags.events,
   };
 }

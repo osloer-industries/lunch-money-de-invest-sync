@@ -18,9 +18,18 @@ import { buildMappingRows, formatMappingListLines } from "./mapping-view.js";
 import { runMappingEditSession } from "./mapping-edit-session.js";
 import { readMapsFromFilesystem, writeMapsToFilesystem } from "./mapping-store.js";
 import type { CategoryTagMaps } from "./mapping-mutations.js";
-import { parseCategoriesCliOptions, CATEGORIES_HELP_TEXT, type CategoriesCliOptions } from "./categories-options.js";
+import {
+  parseCategoriesCliOptions,
+  CATEGORIES_HELP_TEXT,
+  parsedCategoryAssignments,
+  parsedTagAssignments,
+  type CategoriesCliOptions,
+} from "./categories-options.js";
 import { executeReapplyChanges } from "./reapply-execute.js";
 import { planReapplyForAccount, summarizeReapplyPlan, type ReapplyChange } from "./reapply-plan.js";
+import { readFile } from "node:fs/promises";
+import { assertInteractiveTerminal, parseMappingFileJson, writeStdoutJson } from "../shared/scriptable-cli.js";
+import { applyMappingMutations, mapsAreEqual } from "./apply-mapping.js";
 
 export type CategoriesLogger = (line: string) => void;
 
@@ -58,6 +67,7 @@ async function listMappings(
   client: CategoryMappingSetupClient,
   maps: CategoryTagMaps,
   logger: CategoriesLogger,
+  json: boolean,
 ): Promise<void> {
   let categoryNameById = new Map<number, string>();
   let missingApi = false;
@@ -68,8 +78,53 @@ async function listMappings(
     missingApi = true;
   }
   const rows = buildMappingRows(maps, categoryNameById);
+  if (json) {
+    writeStdoutJson({
+      categoryMap: maps.categoryMap,
+      tagMap: maps.tagMap,
+      rows: rows.map((row) => ({
+        canonicalType: row.canonicalType,
+        categoryId: row.categoryId ?? null,
+        categoryName: row.categoryName ?? null,
+        tags: row.tags,
+      })),
+      missingApi,
+    });
+    return;
+  }
   for (const line of formatMappingListLines(rows, missingApi)) {
     logger(line);
+  }
+}
+
+async function listLunchMoneyCatalog(
+  client: LunchMoneyClient,
+  json: boolean,
+  logger: CategoriesLogger,
+): Promise<void> {
+  const [categories, tags] = await Promise.all([client.categories.getAll(), client.tags.getAll()]);
+  const payload = {
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      is_income: category.is_income,
+      exclude_from_budget: category.exclude_from_budget,
+      exclude_from_totals: category.exclude_from_totals,
+    })),
+    tags: tags.map((tag) => ({ id: tag.id, name: tag.name })),
+  };
+  if (json) {
+    writeStdoutJson(payload);
+    return;
+  }
+  logger("Lunch Money categories:");
+  for (const category of payload.categories) {
+    logger(`  ${category.id}: ${category.name}`);
+  }
+  logger("");
+  logger("Lunch Money tags:");
+  for (const tag of payload.tags) {
+    logger(`  ${tag.id}: ${tag.name}`);
   }
 }
 
@@ -193,11 +248,22 @@ async function loadAuthedClient(
   return { config, client };
 }
 
-function defaultConfirmReapply(deps: CategoriesCliDeps): (prompt: string) => Promise<boolean> {
+function defaultConfirmReapply(
+  deps: CategoriesCliDeps,
+  cli: CategoriesCliOptions,
+): (prompt: string) => Promise<boolean> {
   return (prompt: string) => {
+    if (cli.yes || cli.nonInteractive) {
+      if (!cli.yes) {
+        return Promise.reject(
+          new Error("Re-apply without --dry-run requires --yes in --non-interactive mode."),
+        );
+      }
+      return Promise.resolve(true);
+    }
     if (!process.stdin.isTTY) {
       return Promise.reject(
-        new Error("Re-apply without --dry-run needs an interactive terminal, or use --dry-run first."),
+        new Error("Re-apply without --dry-run needs an interactive terminal, or use --dry-run with --json."),
       );
     }
     const prompter = deps.prompter ?? createInquirerPrompter();
@@ -205,13 +271,50 @@ function defaultConfirmReapply(deps: CategoriesCliDeps): (prompt: string) => Pro
   };
 }
 
-async function runListCommand(deps: CategoriesCliDeps, maps: CategoryTagMaps): Promise<void> {
+async function runListCommand(deps: CategoriesCliDeps, maps: CategoryTagMaps, cli: CategoriesCliOptions): Promise<void> {
   const logger = deps.logger ?? defaultLogger;
   const { client } = await loadAuthedClient(deps);
-  await listMappings(client, maps, logger);
+  await listMappings(client, maps, logger, cli.json);
 }
 
-async function runEditCommand(deps: CategoriesCliDeps, maps: CategoryTagMaps): Promise<void> {
+async function runApplyCommand(deps: CategoriesCliDeps, cli: CategoriesCliOptions, maps: CategoryTagMaps): Promise<void> {
+  assertInteractiveTerminal("categories apply", cli.nonInteractive || cli.json);
+  if (!cli.applyFromPath && cli.categoryMapAssignments.length === 0 && cli.tagMapAssignments.length === 0) {
+    throw new Error("apply requires --from <mapping.json> and/or --map / --tag assignments");
+  }
+  let fromFile: { categoryMap?: Record<string, number>; tagMap?: Record<string, string[]> } | undefined;
+  if (cli.applyFromPath) {
+    const raw = await readFile(cli.applyFromPath, "utf8");
+    const parsed = parseMappingFileJson(raw, cli.applyFromPath);
+    fromFile = {
+      ...(parsed.categoryMap ? { categoryMap: parsed.categoryMap } : {}),
+      ...(parsed.tagMap ? { tagMap: parsed.tagMap } : {}),
+    };
+  }
+  const nextMaps = applyMappingMutations(maps, {
+    ...(fromFile ? { fromFile } : {}),
+    categoryAssignments: parsedCategoryAssignments(cli.categoryMapAssignments),
+    tagAssignments: parsedTagAssignments(cli.tagMapAssignments),
+  });
+  const unchanged = mapsAreEqual(maps, nextMaps);
+  if (!unchanged) {
+    await writeMapsToFilesystem(deps.filesystem, nextMaps);
+  }
+  const logger = deps.logger ?? defaultLogger;
+  if (cli.json) {
+    writeStdoutJson({
+      command: "apply",
+      changed: !unchanged,
+      categoryMap: nextMaps.categoryMap,
+      tagMap: nextMaps.tagMap,
+    });
+    return;
+  }
+  logger(unchanged ? "Mapping already up to date — no changes written." : "Saved category/tag mapping to config.json.");
+}
+
+async function runEditCommand(deps: CategoriesCliDeps, maps: CategoryTagMaps, cli: CategoriesCliOptions): Promise<void> {
+  assertInteractiveTerminal("categories edit", cli.nonInteractive);
   if (!process.stdin.isTTY && !deps.prompter) {
     throw new Error("Edit requires an interactive terminal.");
   }
@@ -224,7 +327,7 @@ async function runEditCommand(deps: CategoriesCliDeps, maps: CategoryTagMaps): P
 async function runReapplyCommand(deps: CategoriesCliDeps, cli: CategoriesCliOptions): Promise<void> {
   const logger = deps.logger ?? defaultLogger;
   const { config, client } = await loadAuthedClient(deps);
-  const confirm = deps.confirmReapply ?? defaultConfirmReapply(deps);
+  const confirm = deps.confirmReapply ?? defaultConfirmReapply(deps, cli);
   await reapplyMappings({
     config,
     client,
@@ -243,11 +346,21 @@ export async function runCategoriesCli(argv: readonly string[], deps: Categories
   }
   const maps = readMapsFromFilesystem(deps.filesystem);
   if (cli.command === "list") {
-    await runListCommand(deps, maps);
+    await runListCommand(deps, maps, cli);
+    return;
+  }
+  if (cli.command === "list-lunch-money") {
+    const logger = deps.logger ?? defaultLogger;
+    const { client } = await loadAuthedClient(deps);
+    await listLunchMoneyCatalog(client, cli.json, logger);
+    return;
+  }
+  if (cli.command === "apply") {
+    await runApplyCommand(deps, cli, maps);
     return;
   }
   if (cli.command === "edit") {
-    await runEditCommand(deps, maps);
+    await runEditCommand(deps, maps, cli);
     return;
   }
   await runReapplyCommand(deps, cli);

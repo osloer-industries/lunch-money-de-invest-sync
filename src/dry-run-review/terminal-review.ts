@@ -19,6 +19,11 @@ const BROKER_LABELS: Record<string, string> = {
 const PAGE_SIZE = 8;
 const UNCATEGORISED_THRESHOLD = 0.1;
 
+/** Same threshold as the interactive dry-run warning (exported for JSON parity). */
+export function dryRunAggregateUncategorisedShareExceedsThreshold(summary: DryRunReviewSummary): boolean {
+  return summary.aggregateUncategorisedShare > UNCATEGORISED_THRESHOLD;
+}
+
 const TYPE_CHOICES: PromptChoice<CanonicalType>[] = [
   { name: "buy", value: "buy" },
   { name: "sell", value: "sell" },
