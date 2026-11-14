@@ -104,7 +104,7 @@ async function chooseManualAccount(
     );
     if (choice === NEW_MANUAL_ACCOUNT) {
       const create = await prompter.confirm(
-        `Create Lunch Money manual account "${accountName}" (EUR, investment)?`,
+        `Create Lunch Money manual account "${accountName}" (EUR, investment, starting cash balance 0)? This account tracks cash movements from sync, not portfolio market value — set starting cash on the Accounts page if needed.`,
         false,
       );
       if (!create) {

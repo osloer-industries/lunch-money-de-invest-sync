@@ -142,12 +142,24 @@ function printStandardSuggestion(
   );
 }
 
+const TRANSFER_PAIRING_TYPES = new Set<CanonicalType>(["deposit", "withdrawal", "transfer"]);
+
+function printTransferPairingReminder(prompter: SetupPrompter, canonicalType: CanonicalType): void {
+  if (!TRANSFER_PAIRING_TYPES.has(canonicalType)) {
+    return;
+  }
+  prompter.print(
+    '  Use the same excluded transfer category (ideally "Payment, Transfer") on the bank-side leg of this movement — this tool does not recategorise Plaid/bank transactions.',
+  );
+}
+
 function printTypeMappingGuidance(
   prompter: SetupPrompter,
   canonicalType: CanonicalType,
   suggestion: SuggestedCategory | undefined,
   categoryRows: readonly SetupCategoryRow[],
 ): void {
+  printTransferPairingReminder(prompter, canonicalType);
   if (canonicalType === "saveback") {
     printSavebackGuidance(prompter, categoryRows);
     return;
