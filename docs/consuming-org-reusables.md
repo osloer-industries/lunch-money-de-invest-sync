@@ -3,7 +3,7 @@
 Shared GitHub Actions behavior lives in [osloer-industries/.github](https://github.com/osloer-industries/.github).
 This repository keeps **thin caller workflows** under `.github/workflows/` and pins each `uses:` ref to a full
 commit SHA with a `# main` comment. The org contract lives in
-[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/0221b21f9d130eff47cb04ca9374220886198419/docs/consuming-workflows.md)
+[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/eb1884c861aed5f39259adf8d02db11c2a196051/docs/consuming-workflows.md)
 on that repository.
 
 Do not pass a `reusables-ref` input. Reusables that need their own scripts check out
@@ -30,7 +30,7 @@ This repository does **not** call `node-setup-smoke.yml` (template-only) or `mut
 Dependabot `github-actions` updates on `/` bump Action SHAs and org reusable workflow SHAs together (`ci(deps)`).
 
 When adding org reusables as required branch protection checks, use the names from the
-[org workflow table](https://github.com/osloer-industries/.github/blob/0221b21f9d130eff47cb04ca9374220886198419/docs/consuming-workflows.md#available-reusables).
+[org workflow table](https://github.com/osloer-industries/.github/blob/eb1884c861aed5f39259adf8d02db11c2a196051/docs/consuming-workflows.md#available-reusables).
 Reusable jobs nested under `CI` may appear as `CI / <job id> / <job name>`. Confirm the exact required-check string after the first green run before locking rulesets.
 
 ## SonarQube Cloud

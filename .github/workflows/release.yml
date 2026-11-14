@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   release-please:
-    uses: osloer-industries/.github/.github/workflows/release-please.yml@0221b21f9d130eff47cb04ca9374220886198419 # main
+    uses: osloer-industries/.github/.github/workflows/release-please.yml@eb1884c861aed5f39259adf8d02db11c2a196051 # main
     permissions:
       contents: write
       issues: write
