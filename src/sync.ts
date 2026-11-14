@@ -24,11 +24,19 @@ import {
   SYNC_HELP_TEXT,
   type SyncBroker,
 } from "./sync-options.js";
-import { writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { chmod, writeFile } from "node:fs/promises";
 import { runCliModuleMain } from "./shared/cli-main.js";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
+import { runDryRunCollection } from "./dry-run-review/collect.js";
+import { runDryRunTerminalReview, type DryRunTerminalReviewDeps } from "./dry-run-review/terminal-review.js";
+import { filterTransactionsSince } from "./dry-run-review/since.js";
+import { createInquirerPrompter } from "./setup/inquirer-prompter.js";
+import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./setup/types.js";
 
-export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
+export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {
+  readonly categories?: CategoryMappingSetupClient["categories"];
+}
 
 export interface BrokerCollectors {
   collectTradeRepublic: (profile: TradeRepublicProfile) => Promise<CanonicalTransaction[]>;
@@ -45,7 +53,13 @@ export interface RunSyncSelection {
   readonly includeBrokers: ReadonlySet<SyncBroker>;
   readonly owners: readonly string[];
   readonly dryRun: boolean;
+  readonly since?: string;
   readonly exportTypeSummary?: string | null;
+}
+
+export interface SyncDryRunReviewDeps {
+  readonly prompter: SetupPrompter;
+  readonly filesystem: SetupFilesystem;
 }
 
 function createDefaultRunSyncSelection(): RunSyncSelection {
@@ -71,6 +85,14 @@ interface SyncOneAccountParams {
   readonly client: LunchMoneySyncClient;
   readonly logger: SyncLogger;
   readonly dryRun: boolean;
+}
+
+function effectiveSince(config: SyncConfig, selection: RunSyncSelection): string | undefined {
+  return selection.since ?? config.syncSince;
+}
+
+function shouldUseInteractiveDryRunReview(selection: RunSyncSelection): boolean {
+  return selection.dryRun && (process.stdin.isTTY ?? false) && process.env["VITEST"] === undefined;
 }
 
 async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
@@ -109,13 +131,49 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
   );
 }
 
+async function runInteractiveDryRunReview(
+  config: SyncConfig,
+  client: LunchMoneySyncClient,
+  collectors: BrokerCollectors,
+  logger: SyncLogger,
+  selection: RunSyncSelection,
+  dryRunReview?: SyncDryRunReviewDeps,
+): Promise<boolean> {
+  if (!client.categories) {
+    throw new Error("Dry-run review requires a Lunch Money client with categories.getAll");
+  }
+  const summary = await runDryRunCollection(config, client, collectors, selection);
+  const reviewDeps: DryRunTerminalReviewDeps = {
+    prompter: dryRunReview?.prompter ?? createInquirerPrompter(),
+    client: { categories: client.categories },
+    filesystem: dryRunReview?.filesystem ?? createLiveSetupFilesystem(),
+  };
+  const result = await runDryRunTerminalReview(
+    summary,
+    { categoryMap: config.categoryMap, tagMap: config.tagMap },
+    reviewDeps,
+  );
+  if (!result.proceed) {
+    logger("Dry-run review cancelled — no changes written to Lunch Money.");
+    return false;
+  }
+  return true;
+}
+
 export async function runSync(
   config: SyncConfig,
   client: LunchMoneySyncClient,
   collectors: BrokerCollectors,
   logger: SyncLogger = defaultSyncLogger,
   selection: RunSyncSelection = createDefaultRunSyncSelection(),
-): Promise<void> {
+  dryRunReview?: SyncDryRunReviewDeps,
+): Promise<boolean> {
+  if (shouldUseInteractiveDryRunReview(selection)) {
+    return runInteractiveDryRunReview(config, client, collectors, logger, selection, dryRunReview);
+  }
+
+  const since = effectiveSince(config, selection);
+
   const tradeProfiles =
     selection.includeBrokers.has("trade-republic")
       ? filterSyncConfig(config.tradeRepublicProfiles, selection.owners)
@@ -140,6 +198,7 @@ export async function runSync(
     client,
     logger,
     dryRun: selection.dryRun,
+    ...(since === undefined ? {} : { since }),
   };
 
   const brokerSyncJobs = [
@@ -157,6 +216,7 @@ export async function runSync(
   await forEachProfileSequentially(brokerSyncJobs, async (job) => {
     await syncProfilesForBroker(job.profiles, job.source, job.collect, syncContext);
   });
+  return false;
 }
 
 async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetId: number }>(
@@ -170,10 +230,14 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
     client: LunchMoneySyncClient;
     logger: SyncLogger;
     dryRun: boolean;
+    since?: string;
   },
 ): Promise<void> {
   await forEachProfileSequentially(profiles, async (profile) => {
-    const transactions = await collect(profile);
+    let transactions = await collect(profile);
+    if (context.since) {
+      transactions = filterTransactionsSince(transactions, context.since);
+    }
     await syncOneAccount({
       owner: profile.owner,
       source,
@@ -215,7 +279,23 @@ function selectionFromCliOptions(
     includeBrokers,
     owners: cli.owners,
     dryRun: cli.dryRun,
+    ...(cli.since ? { since: cli.since } : {}),
     exportTypeSummary: cli.exportTypeSummary,
+  };
+}
+
+export function createLiveSetupFilesystem(): SetupFilesystem {
+  return {
+    exists: existsSync,
+    readText(path) {
+      try {
+        return readFileSync(path, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    writeText: (path, content) => writeFile(path, content, "utf8"),
+    chmod,
   };
 }
 
@@ -227,12 +307,14 @@ export async function runSyncCli(
     collectors?: BrokerCollectors;
     logger?: SyncLogger;
     apiKeyStore?: LunchMoneyApiKeyStore;
+    prompter?: SetupPrompter;
+    filesystem?: SetupFilesystem;
   } = {},
-): Promise<void> {
+): Promise<boolean> {
   const cli = parseSyncCliOptions(argv);
   if (cli.help) {
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
-    return;
+    return false;
   }
   await ensureLunchMoneyApiKeyForCli(deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore());
   const config = (deps.readConfig ?? readConfigFromDiskForCli)();
@@ -245,12 +327,13 @@ export async function runSyncCli(
     });
     (deps.logger ?? defaultSyncLogger)(`Wrote anonymised type summary to ${target}`);
   }
-  await runSync(
+  return runSync(
     config,
     client,
     deps.collectors ?? liveCollectors,
     deps.logger ?? defaultSyncLogger,
     selectionFromCliOptions(cli),
+    deps.prompter && deps.filesystem ? { prompter: deps.prompter, filesystem: deps.filesystem } : undefined,
   );
 }
 

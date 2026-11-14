@@ -7,6 +7,7 @@ describe("parseSyncCliOptions", () => {
     expect(options.brokers).toEqual([]);
     expect(options.owners).toEqual([]);
     expect(options.dryRun).toBe(false);
+    expect(options.since).toBeNull();
   });
 
   it("accepts multiple broker flags", () => {
@@ -47,6 +48,15 @@ describe("parseSyncCliOptions", () => {
   it("parses export-type-summary", () => {
     const options = parseSyncCliOptions(["--export-type-summary", "types.json"]);
     expect(options.exportTypeSummary).toBe("types.json");
+  });
+
+  it("parses --since", () => {
+    const options = parseSyncCliOptions(["--since", "2024-01-15"]);
+    expect(options.since).toBe("2024-01-15");
+  });
+
+  it("rejects invalid --since values", () => {
+    expect(() => parseSyncCliOptions(["--since", "Jan-1"])).toThrow();
   });
 });
 

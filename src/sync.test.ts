@@ -215,6 +215,85 @@ describe("runSync", () => {
     expect(fetchAllScalableCapitalTransactions).toHaveBeenCalled();
   });
 
+  it("filters transactions with --since during dry-run", async () => {
+    const client = fakeClient();
+    client.transactions.getAll = vi.fn().mockResolvedValue({ transactions: [], hasMore: false });
+    const collectors: BrokerCollectors = {
+      collectTradeRepublic: vi.fn().mockResolvedValue([
+        tx({ externalId: "trade-republic:old", date: "2020-01-01" }),
+        tx({ externalId: "trade-republic:new", date: "2024-06-01" }),
+      ]),
+      collectScalableCapital: vi.fn(),
+    };
+    const logger = vi.fn();
+    await runSync(
+      baseConfig({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+      client,
+      collectors,
+      logger,
+      {
+        includeBrokers: new Set(["trade-republic"]),
+        owners: [],
+        dryRun: true,
+        since: "2024-01-01",
+      },
+    );
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("would insert 1"));
+  });
+
+  it("runs interactive dry-run review when stdin is a tty", async () => {
+    const vitestFlag = process.env["VITEST"];
+    const tty = process.stdin.isTTY;
+    try {
+      delete process.env["VITEST"];
+      Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+      const client = fakeClient();
+      client.transactions.getAll = vi.fn().mockResolvedValue({ transactions: [], hasMore: false });
+      Object.assign(client, {
+        categories: {
+          getAll: vi.fn().mockResolvedValue([{ id: 1, name: "Cash" }]),
+        },
+      });
+      const collectors: BrokerCollectors = {
+        collectTradeRepublic: vi.fn().mockResolvedValue([tx({ canonicalType: "deposit", categoryId: 1 })]),
+        collectScalableCapital: vi.fn(),
+      };
+      const logger = vi.fn();
+      const select = vi.fn().mockResolvedValue("next");
+      const confirm = vi.fn().mockResolvedValue(false);
+      const prompter = {
+        password: vi.fn(),
+        input: vi.fn().mockResolvedValue(""),
+        select,
+        checkbox: vi.fn().mockResolvedValue([]),
+        search: vi.fn(),
+        confirm,
+        print: vi.fn(),
+        waitForEnter: vi.fn(),
+      };
+      await runSync(
+        baseConfig({
+          tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
+          categoryMap: { deposit: 1 },
+        }),
+        client,
+        collectors,
+        logger,
+        { includeBrokers: new Set(["trade-republic"]), owners: [], dryRun: true },
+        { prompter, filesystem: { exists: () => true, readText: () => "{}", writeText: vi.fn(), chmod: vi.fn() } },
+      );
+      expect(confirm).toHaveBeenCalled();
+      expect(logger).toHaveBeenCalledWith(expect.stringContaining("cancelled"));
+    } finally {
+      if (vitestFlag === undefined) {
+        delete process.env["VITEST"];
+      } else {
+        process.env["VITEST"] = vitestFlag;
+      }
+      Object.defineProperty(process.stdin, "isTTY", { value: tty, configurable: true });
+    }
+  });
+
   it("dry-run uses GET preview and skips inserts", async () => {
     const client = fakeClient();
     client.transactions.getAll = vi.fn().mockResolvedValue({ transactions: [], hasMore: false });

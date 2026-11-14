@@ -53,6 +53,11 @@ export const syncConfigSchema = z.object({
   categoryMap: categoryMapSchema.default({}),
   /** Extra tags to apply per canonical type at sync time. */
   tagMap: tagMapSchema.default({}),
+  /** When set, only transactions on or after this UTC calendar day are synced (YYYY-MM-DD). */
+  syncSince: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export type SyncConfig = z.infer<typeof syncConfigSchema>;
@@ -122,6 +127,7 @@ export function readConfigFromDisk(configPath = CONFIG_BASENAME): SyncConfig {
     scalableCapitalProfiles: fromFile.scalableCapitalProfiles,
     categoryMap: fromFile.categoryMap,
     tagMap: fromFile.tagMap,
+    syncSince: fromFile.syncSince,
     lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
   });
 }

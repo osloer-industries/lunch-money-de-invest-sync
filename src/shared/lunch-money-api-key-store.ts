@@ -10,21 +10,43 @@ export interface LunchMoneyApiKeyStore {
   has(): Promise<boolean>;
 }
 
+const KEYCHAIN_ACCESS_HINT =
+  "Allow keychain access, or rerun with --replace-api-key (npm run setup -- --replace-api-key).";
+
 function lunchMoneyApiKeyEntry(): AsyncEntry {
   return new AsyncEntry(LUNCH_MONEY_API_KEY_SERVICE, LUNCH_MONEY_API_KEY_ACCOUNT);
 }
 
+export function formatKeychainAccessError(action: string, error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error);
+  return new Error(`Could not access the OS keychain while ${action}. ${KEYCHAIN_ACCESS_HINT} (${detail})`, {
+    cause: error,
+  });
+}
+
+async function withKeychainAccess<T>(action: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error: unknown) {
+    throw formatKeychainAccessError(action, error);
+  }
+}
+
 export class KeyringLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
   get(): Promise<string | null> {
-    return lunchMoneyApiKeyEntry().getPassword();
+    return withKeychainAccess("reading the Lunch Money API key", () => lunchMoneyApiKeyEntry().getPassword());
   }
 
   async set(apiKey: string): Promise<void> {
-    await lunchMoneyApiKeyEntry().setPassword(apiKey);
+    await withKeychainAccess("saving the Lunch Money API key", () =>
+      lunchMoneyApiKeyEntry().setPassword(apiKey),
+    );
   }
 
   delete(): Promise<boolean> {
-    return lunchMoneyApiKeyEntry().deletePassword();
+    return withKeychainAccess("removing the Lunch Money API key", () =>
+      lunchMoneyApiKeyEntry().deletePassword(),
+    );
   }
 
   async has(): Promise<boolean> {

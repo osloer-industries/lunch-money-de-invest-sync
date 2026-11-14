@@ -64,4 +64,9 @@ describe("category-picker", () => {
     expect(choices.some((choice) => choice.value === REMOVE_MAPPING)).toBe(true);
     expect(choices.some((choice) => choice.value === SKIP_CATEGORY)).toBe(true);
   });
+
+  it("marks the matched category as suggested", () => {
+    const choices = buildSingleTypeCategoryChoices("buy", rows);
+    expect(choices[0]?.name).toContain("(suggested)");
+  });
 });

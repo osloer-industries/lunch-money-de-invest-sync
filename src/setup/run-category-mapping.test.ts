@@ -525,7 +525,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
     });
     expect(search).toHaveBeenCalledTimes(1);
     expect(search.mock.calls[0]?.[0]).toBe('Category for types "buy", "savings-plan"');
-    expect(search.mock.calls[0]?.[1][0]).toEqual({ name: "[7] Investments", value: "7" });
+    expect(search.mock.calls[0]?.[1][0]).toEqual({ name: "[7] Investments (suggested)", value: "7" });
     expect(result.categoryMap).toMatchObject({ buy: 7, "savings-plan": 7 });
     expect(result.tagMap).toMatchObject({ buy: [], "savings-plan": [] });
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -575,7 +575,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
     });
     const choices = search.mock.calls[0]?.[1] ?? [];
     expect(choices[0]).toEqual({ name: "Skip (no mapping)", value: "__skip__" });
-    expect(choices[1]).toEqual({ name: "[99] Payment, Transfer", value: "99" });
+    expect(choices[1]).toEqual({ name: "[99] Payment, Transfer (suggested)", value: "99" });
     expect(choices.some((choice) => choice.value === "__new__")).toBe(false);
     expect(result.categoryMap.unknown).toBeUndefined();
     expect(result.tagMap.unknown).toEqual([]);
