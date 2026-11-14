@@ -142,6 +142,20 @@ describe("runDoctor", () => {
     expect(result.checks.find((c) => c.name === "uv")?.ok).toBe(false);
   });
 
+  it("warns when uv is missing but standalone pytr is available", async () => {
+    const result = await runDoctor({
+      nodeVersion: "v24.0.0",
+      platform: "linux",
+      exists: (p) => p.includes("node_modules") || p.endsWith("/pytr") || p.endsWith("/sc"),
+      ...okRunners,
+    });
+    const uv = result.checks.find((c) => c.name === "uv");
+    expect(uv?.ok).toBe(true);
+    expect(uv?.warning).toBe(true);
+    expect(uv?.detail).toMatch(/standalone pytr/);
+    expect(result.ok).toBe(true);
+  });
+
   it("reads pytr version from stderr when stdout is empty", async () => {
     const result = await runDoctor({
       nodeVersion: "v24.0.0",
@@ -248,5 +262,18 @@ describe("runDoctorCli", () => {
       ...okRunners,
     });
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("node:"));
+  });
+
+  it("prints a warning and exits successfully when uv is missing but pytr is present", async () => {
+    const logger = vi.fn();
+    await runDoctorCli([], {
+      nodeVersion: "v24.0.0",
+      platform: "linux",
+      exists: (p) => p.includes("node_modules") || p.endsWith("/pytr") || p.endsWith("/sc"),
+      logger,
+      ...okRunners,
+    });
+    expect(logger).toHaveBeenCalledWith(expect.stringMatching(/⚠ uv: .*standalone pytr/));
+    expect(logger).toHaveBeenCalledWith(expect.stringMatching(/^ {2}→ /));
   });
 });

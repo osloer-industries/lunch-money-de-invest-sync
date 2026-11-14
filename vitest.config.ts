@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     env: {
-      TZ: "UTC",
+      TZ: process.env.TZ ?? "UTC",
     },
     coverage: {
       provider: "v8",

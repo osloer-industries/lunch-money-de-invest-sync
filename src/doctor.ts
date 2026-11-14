@@ -8,13 +8,15 @@ import { detectPytrLauncher } from "./setup/detect-pytr-command.js";
 import { createPytrCliRunner, createScCliRunner, type PytrCliRunner, type ScCliRunner } from "./shared/subprocess-cli.js";
 import { runCliModuleMain } from "./shared/cli-main.js";
 import { assertNodeMajorVersion } from "./setup/broker-preflight.js";
-import { statusError, statusOk } from "./setup/setup-status.js";
+import { statusError, statusOk, statusWarn } from "./setup/setup-status.js";
 
 export interface DoctorCheck {
   readonly name: string;
   readonly ok: boolean;
   readonly detail: string;
   readonly fix?: string;
+  /** When true, the check passed with a warning and must not fail doctor. */
+  readonly warning?: boolean;
 }
 
 export interface DoctorDeps {
@@ -76,12 +78,33 @@ function homebrewCheck(platform: NodeJS.Platform, exists: (p: string) => boolean
   };
 }
 
-function toolOnPathCheck(name: string, exists: (p: string) => boolean, fix: string): DoctorCheck {
-  const dirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", path.join(process.env.HOME ?? "", ".local", "bin")];
-  const found = dirs.some((dir) => exists(path.join(dir, name)));
-  return found
-    ? { name, ok: true, detail: `${name} found under trusted paths` }
-    : { name, ok: false, detail: `${name} not found`, fix };
+function trustedToolDirs(): string[] {
+  return ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", path.join(process.env.HOME ?? "", ".local", "bin")];
+}
+
+function isOnTrustedPath(name: string, exists: (p: string) => boolean): boolean {
+  return trustedToolDirs().some((dir) => exists(path.join(dir, name)));
+}
+
+function uvCheck(exists: (p: string) => boolean): DoctorCheck {
+  if (isOnTrustedPath("uv", exists)) {
+    return { name: "uv", ok: true, detail: "uv found under trusted paths" };
+  }
+  if (isOnTrustedPath("pytr", exists)) {
+    return {
+      name: "uv",
+      ok: true,
+      warning: true,
+      detail: "uv not found; standalone pytr is available",
+      fix: "Optional: install uv to run `uvx pytr@0.4.10` (see README)",
+    };
+  }
+  return {
+    name: "uv",
+    ok: false,
+    detail: "uv not found",
+    fix: "Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` and ensure ~/.local/bin is on your PATH",
+  };
 }
 
 async function pytrVersionCheck(runner: PytrCliRunner): Promise<DoctorCheck> {
@@ -186,13 +209,7 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; c
     checks.push(brew);
   }
 
-  checks.push(
-    toolOnPathCheck(
-      "uv",
-      exists,
-      "Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` and ensure ~/.local/bin is on your PATH",
-    ),
-  );
+  checks.push(uvCheck(exists));
 
   const detected = detectPytrLauncher();
   checks.push({
@@ -242,9 +259,15 @@ export async function runDoctorCli(
   }
   const result = await runDoctor(deps);
   for (const check of result.checks) {
-    const line = check.ok ? statusOk(`${check.name}: ${check.detail}`) : statusError(`${check.name}: ${check.detail}`);
+    const summary = `${check.name}: ${check.detail}`;
+    let line = statusOk(summary);
+    if (!check.ok) {
+      line = statusError(summary);
+    } else if (check.warning) {
+      line = statusWarn(summary);
+    }
     logger(line);
-    if (!check.ok && check.fix) {
+    if (check.fix && (!check.ok || check.warning)) {
       logger(`  → ${check.fix}`);
     }
   }
