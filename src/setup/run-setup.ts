@@ -299,6 +299,28 @@ async function addTradeRepublicProfile(
   };
 }
 
+const BROKER_CHECKBOX_MESSAGE =
+  "Which brokers should this config include? (Space to select, Enter to confirm)";
+const BROKER_CHECKBOX_CHOICES = [
+  { name: "Trade Republic (pytr)", value: "trade-republic" },
+  { name: "Scalable Capital (sc)", value: "scalable-capital" },
+] as const;
+
+async function promptIncludedBrokers(
+  prompter: SetupPrompter,
+  emptySelectionAlreadyWarned: boolean,
+): Promise<string[]> {
+  const brokers = await prompter.checkbox(BROKER_CHECKBOX_MESSAGE, [...BROKER_CHECKBOX_CHOICES]);
+  if (brokers.length > 0) {
+    return brokers;
+  }
+  if (emptySelectionAlreadyWarned) {
+    throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
+  }
+  prompter.print(statusWarn("Select at least one broker (Space to toggle, then Enter)"));
+  return promptIncludedBrokers(prompter, true);
+}
+
 async function addScalableCapitalProfile(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
@@ -350,24 +372,7 @@ async function interactiveProfiles(
   let tradeRepublicProfiles = [...savedStep.tradeRepublicProfiles];
   let scalableCapitalProfiles = [...savedStep.scalableCapitalProfiles];
 
-  let brokers: string[] = [];
-  let emptyBrokerSelectionWarned = false;
-  while (brokers.length === 0) {
-    brokers = await prompter.checkbox(
-      "Which brokers should this config include? (Space to select, Enter to confirm)",
-      [
-        { name: "Trade Republic (pytr)", value: "trade-republic" },
-        { name: "Scalable Capital (sc)", value: "scalable-capital" },
-      ],
-    );
-    if (brokers.length === 0) {
-      if (emptyBrokerSelectionWarned) {
-        throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
-      }
-      emptyBrokerSelectionWarned = true;
-      prompter.print(statusWarn("Select at least one broker (Space to toggle, then Enter)"));
-    }
-  }
+  const brokers = await promptIncludedBrokers(prompter, false);
 
   if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
     const defaultOwner = DEFAULT_PROFILE_LABEL;

@@ -31,11 +31,11 @@ export async function promptSavedProfilesChoice(prompter: SetupPrompter): Promis
   ]);
 }
 
-async function applySavedProfilesChoice(
+function applySavedProfilesChoice(
   prompter: SetupPrompter,
   choice: SavedProfilesChoice,
   resumed: ReturnType<typeof readResumedProfiles>,
-): Promise<{ tradeRepublicProfiles: TradeRepublicProfile[]; scalableCapitalProfiles: ScalableCapitalProfile[] }> {
+): { tradeRepublicProfiles: TradeRepublicProfile[]; scalableCapitalProfiles: ScalableCapitalProfile[] } {
   if (choice === "keep") {
     prompter.print(statusOk("Keeping saved broker profiles"));
     return {
@@ -71,7 +71,7 @@ export async function runSavedBrokerProfilesStep(
     };
   }
   const choice = await promptSavedProfilesChoice(prompter);
-  const profiles = await applySavedProfilesChoice(prompter, choice, resumed);
+  const profiles = applySavedProfilesChoice(prompter, choice, resumed);
   if (choice === "reset") {
     await writeProgress({
       tradeRepublicProfiles: profiles.tradeRepublicProfiles,
