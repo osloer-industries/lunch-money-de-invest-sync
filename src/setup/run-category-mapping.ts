@@ -253,14 +253,16 @@ function printGroupGuidance(
   }
   if (groupHas(group, "unknown")) {
     prompter.print(
-      "  Unknown spend: defaults to your existing transfer category; choose Skip to leave it uncategorised (it keeps the needs-review tag) or pick an existing category — create-new is not offered for unknown types.",
+      "  Unknown rows: Skip is the default — they stay uncategorised and keep the needs-review tag so you can review them in Lunch Money. Your transfer category is listed next if these rows really are transfers; create-new is not offered for unknown types.",
     );
   }
 }
 
 /**
  * Picker choices with the most sensible answer first so Enter does the right thing: the matching
- * existing category, else "Create new category …" (when allowed), else Skip.
+ * existing category, else "Create new category …" (when allowed), else Skip. Unknown rows are the
+ * exception: Skip comes first so Enter never files unclassified rows (buys, dividends, card spend)
+ * as transfers — re-syncs skip existing rows, so a wrong first sync would stick.
  */
 function buildCategoryChoices(
   group: CategoryPromptGroup,
@@ -280,9 +282,15 @@ function buildCategoryChoices(
   const rest = categoryRows
     .filter((category) => !category.is_group && category.id !== match?.id)
     .map((category) => ({ name: formatCategoryPickerLabel(category, categoryRows), value: String(category.id) }));
-  const leading = match
-    ? [{ name: formatCategoryPickerLabel(match, categoryRows), value: String(match.id) }, skipChoice, ...createChoices]
-    : [...createChoices, skipChoice];
+  const matchChoices = match ? [{ name: formatCategoryPickerLabel(match, categoryRows), value: String(match.id) }] : [];
+  let leading: PromptChoice[];
+  if (groupHas(group, "unknown")) {
+    leading = [skipChoice, ...matchChoices];
+  } else if (match) {
+    leading = [...matchChoices, skipChoice, ...createChoices];
+  } else {
+    leading = [...createChoices, skipChoice];
+  }
   return [...leading, ...rest];
 }
 
@@ -298,7 +306,7 @@ async function validateExistingCategoryPick(
   if (picked.is_group) {
     throw new Error(`Category id ${categoryId} is a category group — pick a child category, not the group`);
   }
-  // Unknown spend may legitimately land in any budget category, so its transfer default is not enforced.
+  // Unknown rows may legitimately land in any budget category, so the transfer suggestion's flags are not enforced.
   if (group.suggestion && !groupHas(group, "unknown")) {
     const ok = await confirmExistingCategoryFlags(prompter, picked, group.suggestion);
     if (!ok) {

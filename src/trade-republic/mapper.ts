@@ -1,13 +1,13 @@
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { PytrTimelineEvent } from "./types.js";
-import { classifyTradeRepublicEvent } from "../shared/broker-type-classification.js";
+import { classifyTradeRepublicEvent, isCanceledTradeRepublicEvent } from "../shared/broker-type-classification.js";
 import { tradeRepublicEventCalendarDate } from "./event-calendar-date.js";
 import { isSavebackEventType } from "./saveback.js";
 
 const SAVEBACK_TAG = "saveback";
 
 export function isCashMovement(event: PytrTimelineEvent): boolean {
-  if (event.deleted === true) {
+  if (event.deleted === true || isCanceledTradeRepublicEvent(event)) {
     return false;
   }
   const value = event.amount?.value;

@@ -34,6 +34,7 @@ export function mapScalableCapitalTransaction(
     currency: transaction.currency,
     last_event_datetime: transaction.date,
     is_cancellation: false,
+    ...(transaction.cashTransactionType ? { cash_transaction_type: transaction.cashTransactionType } : {}),
   });
   if (!observed) {
     return null;
