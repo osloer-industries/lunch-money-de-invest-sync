@@ -544,11 +544,10 @@ export async function runSetup(
       );
 
   const resumedCards = options.nonInteractive ? [] : readResumedProfiles(deps.filesystem).sharedCardLast4;
-  const sharedRaw = options.nonInteractive
-    ? ""
-    : resumedCards.length > 0
-      ? ""
-      : await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
+  let sharedRaw = "";
+  if (!options.nonInteractive && resumedCards.length === 0) {
+    sharedRaw = await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
+  }
   const sharedCardLast4 =
     resumedCards.length > 0 && !options.nonInteractive
       ? resumedCards

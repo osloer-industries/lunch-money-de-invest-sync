@@ -58,9 +58,7 @@ export class MemoryLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
 let defaultStore: LunchMoneyApiKeyStore | undefined;
 
 export function createDefaultLunchMoneyApiKeyStore(): LunchMoneyApiKeyStore {
-  if (!defaultStore) {
-    defaultStore = new KeyringLunchMoneyApiKeyStore();
-  }
+  defaultStore ??= new KeyringLunchMoneyApiKeyStore();
   return defaultStore;
 }
 

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "./config-cli-errors.js";
-import { readApiKeyFromDotenvText, stripApiKeyFromDotenvFile } from "./dotenv-api-key.js";
+import { readApiKeyFromDotenvText } from "./dotenv-api-key.js";
 import type { LunchMoneyApiKeyStore } from "./lunch-money-api-key-store.js";
 import { createDefaultLunchMoneyApiKeyStore } from "./lunch-money-api-key-store.js";
 import { existsSync, readFileSync } from "node:fs";
@@ -37,7 +37,14 @@ async function migratePlaintextDotenvToStore(store: LunchMoneyApiKeyStore): Prom
     .split("\n")
     .filter((line) => !line.trim().startsWith("LUNCH_MONEY_API_KEY="))
     .join("\n");
-  const body = stripped.length === 0 ? "" : stripped.endsWith("\n") ? stripped : `${stripped}\n`;
+  let body: string;
+  if (stripped.length === 0) {
+    body = "";
+  } else if (stripped.endsWith("\n")) {
+    body = stripped;
+  } else {
+    body = `${stripped}\n`;
+  }
   await writeFile(dotenvPath, body, "utf8");
   if (body.length > 0) {
     await chmod(dotenvPath, 0o600);
@@ -75,7 +82,7 @@ export async function clearStoredLunchMoneyApiKey(
   return store.delete();
 }
 
-export async function requireLunchMoneyApiKeyInProcessEnv(): Promise<void> {
+export function requireLunchMoneyApiKeyInProcessEnv(): void {
   if (!lunchMoneyApiKeyConfiguredInProcessEnv()) {
     throw new Error(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
   }
@@ -85,7 +92,7 @@ export async function ensureLunchMoneyApiKeyForCli(
   store: LunchMoneyApiKeyStore = createDefaultLunchMoneyApiKeyStore(),
 ): Promise<void> {
   await bootstrapLunchMoneyApiKey(store);
-  await requireLunchMoneyApiKeyInProcessEnv();
+  requireLunchMoneyApiKeyInProcessEnv();
 }
 
-export { stripApiKeyFromDotenvFile };
+export { stripApiKeyFromDotenvFile } from "./dotenv-api-key.js";

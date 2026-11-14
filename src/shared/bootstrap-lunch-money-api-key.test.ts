@@ -43,7 +43,7 @@ describe("bootstrapLunchMoneyApiKey", () => {
 
   it("throws a message without the key when missing", async () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
-    await expect(requireLunchMoneyApiKeyInProcessEnv()).rejects.toThrow(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
-    await expect(requireLunchMoneyApiKeyInProcessEnv()).rejects.not.toThrow(/lm_/);
+    expect(() => requireLunchMoneyApiKeyInProcessEnv()).toThrow(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
+    expect(() => requireLunchMoneyApiKeyInProcessEnv()).not.toThrow(/lm_/);
   });
 });

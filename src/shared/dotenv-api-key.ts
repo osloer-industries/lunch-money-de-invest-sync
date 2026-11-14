@@ -31,7 +31,7 @@ export async function stripApiKeyFromDotenvFile(filesystem: SetupFilesystem, cwd
     return false;
   }
   const text = filesystem.readText(envPath);
-  if (text === null || !text.includes(API_KEY_PREFIX)) {
+  if (!text?.includes(API_KEY_PREFIX)) {
     return false;
   }
   const stripped = stripApiKeyFromDotenvText(text);

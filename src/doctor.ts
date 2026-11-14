@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readConfigFromDiskForCli } from "./shared/config.js";
 import { bootstrapLunchMoneyApiKey } from "./shared/bootstrap-lunch-money-api-key.js";
@@ -7,7 +7,6 @@ import {
   createDefaultLunchMoneyApiKeyStore,
   type LunchMoneyApiKeyStore,
 } from "./shared/lunch-money-api-key-store.js";
-import { readFileSync } from "node:fs";
 import { resolveScExecutable } from "./shared/subprocess-cli.js";
 import { detectPytrLauncher } from "./setup/detect-pytr-command.js";
 import { createPytrCliRunner, createScCliRunner, type PytrCliRunner, type ScCliRunner } from "./shared/subprocess-cli.js";
