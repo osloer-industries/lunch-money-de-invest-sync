@@ -280,6 +280,27 @@ describe("runCategoryMappingSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
+  it("does not prompt for Scalable security types when only Scalable profiles exist", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const confirmMessages: string[] = [];
+    await runCategoryMappingSetup(options, {
+      prompter: {
+        ...prompter({ confirms: [false, false] }),
+        confirm: vi.fn(async (message: string) => {
+          confirmMessages.push(message);
+          return false;
+        }),
+      },
+      filesystem: fakeCategoryFilesystem(),
+      readConfig: () => readConfigFixture(),
+      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
+      collectObservations: async () => [buyObservation, observations[0]!],
+    });
+    expect(confirmMessages.some((message) => message.includes('"buy"'))).toBe(false);
+    expect(confirmMessages.some((message) => message.includes('"deposit"'))).toBe(true);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
   it("creates a category when the operator confirms new", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 42, name: "Investments" });
@@ -289,7 +310,8 @@ describe("runCategoryMappingSetup", () => {
         searches: ["__new__"],
       }),
       filesystem: fakeCategoryFilesystem(),
-      readConfig: () => readConfigFixture(),
+      readConfig: () =>
+        readConfigFixture({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
       collectObservations: async () => [buyObservation],
     });
