@@ -7,13 +7,13 @@ function listClient(pages: Array<{ external_id?: string | null }[]>): Transactio
   return {
     transactions: {
       create: vi.fn(),
-      getAll: vi.fn(async () => {
+      getAll: vi.fn(() => {
         const chunk = pages[call];
         call += 1;
         if (!chunk) {
-          return { transactions: [], hasMore: false };
+          return Promise.resolve({ transactions: [], hasMore: false });
         }
-        return { transactions: chunk, hasMore: call < pages.length };
+        return Promise.resolve({ transactions: chunk, hasMore: call < pages.length });
       }),
     },
   };

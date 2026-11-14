@@ -173,13 +173,13 @@ function formatCategoryPickerLabel(
   return label;
 }
 
-async function confirmExistingCategoryFlags(
+function confirmExistingCategoryFlags(
   prompter: SetupPrompter,
   category: SetupCategoryRow,
   template: SuggestedCategory,
 ): Promise<boolean> {
   if (categoryFlagsMatchTemplate(category, template)) {
-    return true;
+    return Promise.resolve(true);
   }
   prompter.print(
     `  Warning: "${category.name}" has is_income=${category.is_income}, exclude budget=${category.exclude_from_budget}, exclude totals=${category.exclude_from_totals}; template expects is_income=${template.is_income}, exclude budget=${template.exclude_from_budget}, exclude totals=${template.exclude_from_totals}.`,

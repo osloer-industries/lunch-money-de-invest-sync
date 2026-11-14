@@ -3,7 +3,7 @@
 1. Install Node.js 24.22.0 (see `.nvmrc`).
 2. Run `npm ci`.
 3. Create a focused branch and add tests with the change.
-4. Run `npm run check` and `npm audit --omit=dev`.
+4. Run `npm run check` (or `npm run precommit` — same gate as CI and the lefthook hook) and `npm audit --omit=dev`.
 5. Open a pull request using the provided template and a Conventional Commit title.
 
 Coverage must remain at least 80% for branches, functions, lines, and statements. Keep dependencies exact and commit lockfile changes. Never commit secrets or generated output.

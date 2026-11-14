@@ -46,10 +46,12 @@ function fakeClient(): LunchMoneySyncClient {
   return {
     tags: {
       getAll: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockImplementation(async ({ name }: { name: string }) => ({
-        id: nextTagId++,
-        name,
-      })),
+      create: vi.fn().mockImplementation(({ name }: { name: string }) =>
+        Promise.resolve({
+          id: nextTagId++,
+          name,
+        }),
+      ),
     },
     transactions: {
       create: vi.fn().mockResolvedValue({ transactions: [{ id: 1 }], skipped_duplicates: [] }),

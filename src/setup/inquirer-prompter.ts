@@ -43,26 +43,26 @@ function filterChoices(choices: readonly PromptChoice[], term: string | undefine
 
 export function createInquirerPrompter(): SetupPrompter {
   return {
-    async password(message) {
+    password(message) {
       return passwordPrompt({ message });
     },
-    async input(message, defaultValue) {
+    input(message, defaultValue) {
       return inputPrompt({ message, default: defaultValue });
     },
     async select<T extends string>(message: string, choices: readonly PromptChoice<T>[]) {
       const picked = await selectPrompt({ message, choices: mapPromptChoices(choices) });
       return choiceValueFromPick(picked, choices);
     },
-    async checkbox(message, choices) {
+    checkbox(message, choices) {
       return checkboxPrompt({ message, choices: mapPromptChoices(choices) });
     },
-    async search(message, choices) {
+    search(message, choices) {
       return searchPrompt({
         message,
         source: (term) => filterChoices(choices, term),
       });
     },
-    async confirm(message, defaultYes = false) {
+    confirm(message, defaultYes = false) {
       return confirmPrompt({ message, default: defaultYes });
     },
     print(line) {

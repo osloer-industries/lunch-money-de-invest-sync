@@ -7,9 +7,7 @@ export async function forEachSequentially<TItem>(
   items: readonly TItem[],
   run: (item: TItem) => Promise<void>,
 ): Promise<void> {
-  for (const item of items) {
-    await run(item);
-  }
+  await items.reduce<Promise<void>>((chain, item) => chain.then(() => run(item)), Promise.resolve());
 }
 
 /** @see forEachSequentially — same contract for configured broker profiles. */

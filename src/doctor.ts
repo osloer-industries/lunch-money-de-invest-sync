@@ -126,6 +126,8 @@ async function pytrVersionCheck(runner: PytrCliRunner): Promise<DoctorCheck> {
   return { name: "pytr-version", ok: true, detail: versionLine || "pytr responded to `-V`" };
 }
 
+const SCALABLE_CLI_INSTALL_FIX = "Install scalable-cli: `brew install ScalableCapital/tap/scalable-cli`";
+
 async function scVersionCheck(runner: ScCliRunner): Promise<DoctorCheck> {
   try {
     const run = await runner.run(["--version"]);
@@ -134,7 +136,7 @@ async function scVersionCheck(runner: ScCliRunner): Promise<DoctorCheck> {
         name: "sc-version",
         ok: false,
         detail: "Scalable CLI `--version` failed",
-        fix: "Install scalable-cli: `brew install ScalableCapital/tap/scalable-cli`",
+        fix: SCALABLE_CLI_INSTALL_FIX,
       };
     }
     const line = run.stdout.trim().split("\n")[0] ?? "sc";
@@ -144,7 +146,7 @@ async function scVersionCheck(runner: ScCliRunner): Promise<DoctorCheck> {
       name: "sc-version",
       ok: false,
       detail: "Scalable CLI (`sc`) not found",
-      fix: "Install scalable-cli: `brew install ScalableCapital/tap/scalable-cli`",
+      fix: SCALABLE_CLI_INSTALL_FIX,
     };
   }
 }
@@ -214,20 +216,10 @@ async function configCheck(store: LunchMoneyApiKeyStore): Promise<DoctorCheck | 
   }
 }
 
-export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; checks: DoctorCheck[] }> {
-  const cwd = process.cwd();
-  const exists = deps.exists ?? existsSync;
-  const checks: DoctorCheck[] = [];
-
-  checks.push(nodeMajorOk(deps.nodeVersion ?? process.version), npmCiCheck(exists, cwd));
-
-  const brew = homebrewCheck(deps.platform ?? process.platform, exists);
-  if (brew) {
-    checks.push(brew);
-  }
-
-  checks.push(uvCheck(exists));
-
+async function appendBrokerCliChecks(
+  checks: DoctorCheck[],
+  deps: DoctorDeps,
+): Promise<void> {
   const detected = detectPytrLauncher();
   checks.push({
     name: "pytr-launcher",
@@ -246,7 +238,14 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; c
   }
   const scRunner = (deps.createScRunner ?? createScCliRunner)(scBinary);
   checks.push(await scVersionCheck(scRunner));
+}
 
+async function appendLunchMoneyChecks(
+  checks: DoctorCheck[],
+  deps: DoctorDeps,
+  exists: (p: string) => boolean,
+  cwd: string,
+): Promise<void> {
   const plaintextEnv = dotenvPlaintextApiKeyCheck(exists, cwd);
   if (plaintextEnv) {
     checks.push(plaintextEnv);
@@ -261,6 +260,23 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; c
       checks.push(cfg);
     }
   }
+}
+
+export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; checks: DoctorCheck[] }> {
+  const cwd = process.cwd();
+  const exists = deps.exists ?? existsSync;
+  const checks: DoctorCheck[] = [];
+
+  checks.push(nodeMajorOk(deps.nodeVersion ?? process.version), npmCiCheck(exists, cwd));
+
+  const brew = homebrewCheck(deps.platform ?? process.platform, exists);
+  if (brew) {
+    checks.push(brew);
+  }
+
+  checks.push(uvCheck(exists));
+  await appendBrokerCliChecks(checks, deps);
+  await appendLunchMoneyChecks(checks, deps, exists, cwd);
 
   const ok = checks.every((check) => check.ok);
   return { ok, checks };
@@ -278,11 +294,13 @@ export async function runDoctorCli(
   const result = await runDoctor(deps);
   for (const check of result.checks) {
     const summary = `${check.name}: ${check.detail}`;
-    let line = statusOk(summary);
+    let line: string;
     if (!check.ok) {
       line = statusError(summary);
     } else if (check.warning) {
       line = statusWarn(summary);
+    } else {
+      line = statusOk(summary);
     }
     logger(line);
     if (check.fix && (!check.ok || check.warning)) {

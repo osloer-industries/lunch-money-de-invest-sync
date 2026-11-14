@@ -7,7 +7,7 @@ import {
 } from "../scalable-capital/client.js";
 import { createDefaultPytrCliRunner, fetchTradeRepublicTimeline } from "../trade-republic/client.js";
 
-async function runProfileCliFetch<TProfile, TConfig, TRunner, TResult>(
+function runProfileCliFetch<TProfile, TConfig, TRunner, TResult>(
   profile: TProfile,
   configFromProfile: (value: TProfile) => TConfig,
   createRunner: (config: TConfig) => TRunner,

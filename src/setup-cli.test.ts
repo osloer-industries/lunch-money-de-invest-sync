@@ -85,14 +85,14 @@ describe("runSetupCli", () => {
 
   it("prints setup help without a TTY", async () => {
     const logger = vi.fn();
-    await withStdinIsTTY(false, async () => runSetupCli(["--help"], { logger }));
+    await withStdinIsTTY(false, () => runSetupCli(["--help"], { logger }));
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("--categories"));
     expect(runSetup).not.toHaveBeenCalled();
     expect(runCategoryMappingSetup).not.toHaveBeenCalled();
   });
 
   it("routes --categories to category mapping", async () => {
-    await withStdinIsTTY(true, async () =>
+    await withStdinIsTTY(true, () =>
       runSetupCli(["--categories"], {
         prompter: stubPrompter(),
         filesystem: stubFilesystem(),
@@ -103,7 +103,7 @@ describe("runSetupCli", () => {
   });
 
   it("runs full setup when --categories is omitted", async () => {
-    await withStdinIsTTY(true, async () =>
+    await withStdinIsTTY(true, () =>
       runSetupCli([], {
         prompter: stubPrompter(),
         filesystem: stubFilesystem(),
@@ -119,7 +119,7 @@ describe("runSetupCli", () => {
     delete process.env.VITEST;
     const logger = vi.fn();
     try {
-      await withStdinIsTTY(true, async () =>
+      await withStdinIsTTY(true, () =>
         runSetupCli([], {
           prompter: stubPrompter(),
           filesystem: stubFilesystem(),
@@ -147,7 +147,7 @@ describe("runSetupCli", () => {
     delete process.env.VITEST;
     const logger = vi.fn();
     try {
-      await withStdinIsTTY(true, async () =>
+      await withStdinIsTTY(true, () =>
         runSetupCli([], {
           prompter: stubPrompter(),
           filesystem: stubFilesystem(),

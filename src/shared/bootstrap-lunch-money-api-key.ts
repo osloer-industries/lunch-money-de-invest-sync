@@ -76,7 +76,7 @@ export async function bootstrapLunchMoneyApiKey(
   }
 }
 
-export async function clearStoredLunchMoneyApiKey(
+export function clearStoredLunchMoneyApiKey(
   store: LunchMoneyApiKeyStore = createDefaultLunchMoneyApiKeyStore(),
 ): Promise<boolean> {
   return store.delete();
