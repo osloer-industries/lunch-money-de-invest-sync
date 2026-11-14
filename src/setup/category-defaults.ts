@@ -15,7 +15,7 @@ const INVESTMENTS_CATEGORY: SuggestedCategory = {
 };
 
 const TRANSFER_CATEGORY: SuggestedCategory = {
-  name: "Transfer",
+  name: "Payment, Transfer",
   is_income: false,
   exclude_from_budget: true,
   exclude_from_totals: true,

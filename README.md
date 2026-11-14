@@ -109,8 +109,10 @@ Optional: `npm run setup -- --categories --export-type-summary types-summary.jso
 (never written by default).
 
 Lunch Money **categories** are created via the v2 API ([docs](https://lunchmoney.dev/docs),
-[`categories.create`](https://github.com/lunch-money/lunch-money-js-v2#categories)). The tool does
-**not** create transaction rules; categorisation applies only to rows this sync inserts.
+[`categories.create`](https://github.com/lunch-money/lunch-money-js-v2#categories)). Deposits,
+withdrawals, and internal transfers suggest **Payment, Transfer** (Lunch Money's default excluded
+transfer category). The tool does **not** create transaction rules; categorisation applies only to
+rows this sync inserts.
 
 ## Configuration
 

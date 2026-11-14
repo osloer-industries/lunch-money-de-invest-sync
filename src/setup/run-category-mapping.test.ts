@@ -134,7 +134,19 @@ describe("runCategoryMappingSetup", () => {
       }),
       filesystem,
       readConfig: () => readConfigFixture(),
-      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([{ id: 99, name: "Transfer" }])),
+      createClient: () =>
+        stubCategoryClient(
+          vi.fn().mockResolvedValue([
+            {
+              id: 99,
+              name: "Payment, Transfer",
+              is_income: false,
+              exclude_from_budget: true,
+              exclude_from_totals: true,
+              is_group: false,
+            },
+          ]),
+        ),
       collectObservations: async () => observations,
     });
     expect(result.categoryMap.deposit).toBe(99);
@@ -200,7 +212,19 @@ describe("runCategoryMappingSetup", () => {
         filesystem: fakeCategoryFilesystem(),
         readConfig: () =>
           readConfigFixture({ scalableCapitalProfiles: [], tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
-        createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([{ id: 1, name: "Transfer" }])),
+        createClient: () =>
+          stubCategoryClient(
+            vi.fn().mockResolvedValue([
+              {
+                id: 1,
+                name: "Payment, Transfer",
+                is_income: false,
+                exclude_from_budget: true,
+                exclude_from_totals: true,
+                is_group: false,
+              },
+            ]),
+          ),
         collectObservations: async () => observations,
       }),
     ).rejects.toThrow(/positive integer/);
@@ -226,7 +250,19 @@ describe("runCategoryMappingSetup", () => {
         chmod: async () => {},
       },
       readConfig: () => readConfigFixture({ categoryMap: { sell: 5 }, tagMap: { sell: ["invest"] } }),
-      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([{ id: 99, name: "Transfer" }])),
+      createClient: () =>
+        stubCategoryClient(
+          vi.fn().mockResolvedValue([
+            {
+              id: 99,
+              name: "Payment, Transfer",
+              is_income: false,
+              exclude_from_budget: true,
+              exclude_from_totals: true,
+              is_group: false,
+            },
+          ]),
+        ),
       collectObservations: async () => observations,
     });
     expect(result.categoryMap.deposit).toBe(99);
