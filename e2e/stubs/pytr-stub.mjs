@@ -98,6 +98,7 @@ async function handleExportTransactions() {
       break;
     case "missing_session_then_ok":
       await exportMissingSessionThenOk();
+      await exportDefaultOk(outputDir);
       break;
     case "approval_wait":
       await exportApprovalWait(outputDir);

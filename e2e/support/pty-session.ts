@@ -90,6 +90,15 @@ export class PtySession {
     this.write("n\r");
   }
 
+  /** Waits for an inquirer yes/no prompt defaulting to No, then answers Yes. */
+  async confirmYes(timeoutMs = 60_000): Promise<void> {
+    await this.waitFor(/overwrite\? \(y\/N\)/, timeoutMs);
+    await delay(150);
+    this.write("y");
+    await delay(50);
+    this.sendEnter();
+  }
+
   async waitFor(pattern: RegExp, timeoutMs: number): Promise<void> {
     const mismatchMessage = () =>
       `Timed out after ${timeoutMs}ms waiting for ${pattern.toString()} in PTY output:\n${this.text.slice(-4000)}`;

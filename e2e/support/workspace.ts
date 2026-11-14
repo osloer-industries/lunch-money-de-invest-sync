@@ -1,5 +1,4 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { e2eFixturesDir, e2eStubsDir, repoRoot } from "./paths.js";
@@ -86,8 +85,6 @@ export function cliEntryArgs(
   entry: "doctor" | "setup" | "sync",
   scriptArgs: readonly string[] = [],
 ): { readonly command: string; readonly args: readonly string[] } {
-  const require = createRequire(import.meta.url);
-  const tsxCli = require.resolve("tsx/cli");
-  const script = path.join(repoRoot, "src", `${entry}.ts`);
-  return { command: process.execPath, args: [tsxCli, script, ...scriptArgs] };
+  const script = path.join(repoRoot, "dist", `${entry}.js`);
+  return { command: process.execPath, args: [script, ...scriptArgs] };
 }

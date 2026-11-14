@@ -20,7 +20,7 @@
     "sync": "tsx src/sync.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "vitest run -c vitest.e2e.config.ts",
+    "test:e2e": "npm run build && vitest run -c vitest.e2e.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
