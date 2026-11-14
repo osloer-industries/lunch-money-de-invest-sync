@@ -58,7 +58,24 @@ export class MemoryLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
 
 let defaultStore: LunchMoneyApiKeyStore | undefined;
 
+/** Set `LUNCH_MONEY_API_KEY_STORE=none` to keep a process away from the OS keychain (hermetic tests, CI). */
+export const API_KEY_STORE_ENV = "LUNCH_MONEY_API_KEY_STORE";
+
+/** A store that never holds a key; writes are refused so nothing is silently lost. */
+export const disabledLunchMoneyApiKeyStore: LunchMoneyApiKeyStore = {
+  get: () => Promise.resolve(null),
+  has: () => Promise.resolve(false),
+  delete: () => Promise.resolve(false),
+  set: () =>
+    Promise.reject(
+      new Error(`OS credential store is disabled (${API_KEY_STORE_ENV}=none) — unset it to save the API key`),
+    ),
+};
+
 export function createDefaultLunchMoneyApiKeyStore(): LunchMoneyApiKeyStore {
+  if (process.env[API_KEY_STORE_ENV] === "none") {
+    return disabledLunchMoneyApiKeyStore;
+  }
   defaultStore ??= new KeyringLunchMoneyApiKeyStore();
   return defaultStore;
 }
