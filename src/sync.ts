@@ -132,30 +132,30 @@ function lunchMoneyAssetIdForOwner(
   return profile.lunchMoneyAssetId;
 }
 
-async function syncAccountsFromDryRunReview(
+function syncAccountsFromDryRunReview(
   config: SyncConfig,
   client: LunchMoneySyncClient,
   review: DryRunReviewSummary,
 ): Promise<SyncAccountResult[]> {
-  const accounts: SyncAccountResult[] = [];
-  for (const profile of review.profiles) {
-    const lunchMoneyAssetId = lunchMoneyAssetIdForOwner(config, profile.broker, profile.owner);
-    const firstSync = await detectFirstSyncForAccount(client, lunchMoneyAssetId, [
-      profile.broker === "trade-republic" ? "trade-republic:" : "scalable-capital:",
-    ]);
-    accounts.push({
-      owner: profile.owner,
-      source: profile.broker,
-      lunchMoneyAssetId,
-      firstSyncForAccount: firstSync.firstSyncForAccount,
-      existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
-      dryRun: true,
-      wouldInsert: profile.wouldInsert,
-      wouldSkip: profile.wouldSkip,
-      dryRunSummary: profile,
-    });
-  }
-  return accounts;
+  return Promise.all(
+    review.profiles.map(async (profile) => {
+      const lunchMoneyAssetId = lunchMoneyAssetIdForOwner(config, profile.broker, profile.owner);
+      const firstSync = await detectFirstSyncForAccount(client, lunchMoneyAssetId, [
+        profile.broker === "trade-republic" ? "trade-republic:" : "scalable-capital:",
+      ]);
+      return {
+        owner: profile.owner,
+        source: profile.broker,
+        lunchMoneyAssetId,
+        firstSyncForAccount: firstSync.firstSyncForAccount,
+        existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+        dryRun: true,
+        wouldInsert: profile.wouldInsert,
+        wouldSkip: profile.wouldSkip,
+        dryRunSummary: profile,
+      };
+    }),
+  );
 }
 
 interface SyncOneAccountParams {
