@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ScalableCapitalTransaction } from "./types.js";
 import {
   isCashMovement,
+  isSecurityTrade,
   mapScalableCapitalTransaction,
   mapScalableCapitalTransactions,
   utcCalendarDateFromEventTimestamp,
@@ -26,6 +27,7 @@ describe("isCashMovement", () => {
 
   it("is false for security trades", () => {
     expect(isCashMovement(transaction({ type: "BrokerSecurityTransaction" }))).toBe(false);
+    expect(isSecurityTrade(transaction({ type: "BrokerSecurityTransaction" }))).toBe(true);
   });
 });
 
@@ -53,8 +55,45 @@ describe("mapScalableCapitalTransaction", () => {
     });
   });
 
-  it("returns null for a security trade", () => {
-    expect(mapScalableCapitalTransaction(transaction({ type: "BrokerSecurityTransaction" }))).toBeNull();
+  it("returns null for unsupported transaction types", () => {
+    expect(mapScalableCapitalTransaction(transaction({ type: "BrokerCryptoTransaction" }))).toBeNull();
+  });
+
+  it("returns null for zero-amount rows", () => {
+    expect(mapScalableCapitalTransaction(transaction({ type: "BrokerSecurityTransaction", amount: 0 }))).toBeNull();
+  });
+
+  it.each([
+    { label: "buy (negative amount)", side: "BUY", amount: -50, type: "buy", expected: -50 },
+    { label: "buy (positive amount)", side: "BUY", amount: 50, type: "buy", expected: -50 },
+    { label: "sell (positive amount)", side: "SELL", amount: 80, type: "sell", expected: 80 },
+    { label: "sell (negative amount)", side: "SELL", amount: -80, type: "sell", expected: 80 },
+  ])("maps a security $label as a cash movement with the trade-direction sign", ({ side, amount, type, expected }) => {
+    const tx = mapScalableCapitalTransaction(
+      transaction({ id: "trade-1", type: "BrokerSecurityTransaction", description: "Example ETF", side, amount }),
+    );
+    expect(tx).toEqual({
+      externalId: "scalable-capital:trade-1",
+      date: "2026-07-01",
+      amount: expected,
+      currency: "eur",
+      payee: "Example ETF",
+      canonicalType: type,
+      source: "scalable-capital",
+    });
+  });
+
+  it("maps a savings-plan execution as an outflow typed savings-plan", () => {
+    const tx = mapScalableCapitalTransaction(
+      transaction({
+        type: "BrokerSecurityTransaction",
+        description: "Example ETF",
+        securityTransactionType: "SAVINGS_PLAN",
+        side: "BUY",
+        amount: 25,
+      }),
+    );
+    expect(tx).toMatchObject({ canonicalType: "savings-plan", amount: -25 });
   });
 
   it("falls back to a generic payee when the description is empty", () => {
@@ -70,12 +109,15 @@ describe("mapScalableCapitalTransaction", () => {
 });
 
 describe("mapScalableCapitalTransactions", () => {
-  it("filters out non-cash transactions while mapping the rest", () => {
-    const result = mapScalableCapitalTransactions([
+  it("maps cash rows and security trades with stable external ids and drops other types", () => {
+    const rows = [
       transaction({ id: "a", type: "BrokerCashTransaction" }),
-      transaction({ id: "b", type: "BrokerSecurityTransaction" }),
-    ]);
-    expect(result).toHaveLength(1);
-    expect(result[0]?.externalId).toBe("scalable-capital:a");
+      transaction({ id: "b", type: "BrokerSecurityTransaction", side: "BUY" }),
+      transaction({ id: "c", type: "BrokerCryptoTransaction" }),
+    ];
+    const first = mapScalableCapitalTransactions(rows);
+    expect(first.map((tx) => tx.externalId)).toEqual(["scalable-capital:a", "scalable-capital:b"]);
+    // Re-running a sync produces the same external ids, so Lunch Money skips them as duplicates.
+    expect(mapScalableCapitalTransactions(rows)).toEqual(first);
   });
 });

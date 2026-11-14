@@ -28,6 +28,11 @@ describe("parseSyncCliOptions", () => {
     expect(options.dryRun).toBe(true);
   });
 
+  it("parses the opt-in --reconcile-cash flag", () => {
+    expect(parseSyncCliOptions([]).reconcileCash).toBe(false);
+    expect(parseSyncCliOptions(["--reconcile-cash"]).reconcileCash).toBe(true);
+  });
+
   it("rejects unknown flags", () => {
     expect(() => parseSyncCliOptions(["--nope"])).toThrow(/Invalid sync arguments/);
   });

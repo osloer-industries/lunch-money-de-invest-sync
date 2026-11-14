@@ -68,6 +68,12 @@ function printProfileSummary(prompter: SetupPrompter, profile: DryRunProfileSumm
     prompter.print(`Dates ${profile.dateFrom} through ${profile.dateTo}.`);
   }
   prompter.print(`Money in: ${profile.inTotalPlain}. Money out: ${profile.outTotalPlain}.`);
+  if (profile.balanceLines && profile.balanceLines.length > 0) {
+    prompter.print("Broker balances:");
+    for (const line of profile.balanceLines) {
+      prompter.print(`  ${line}`);
+    }
+  }
   prompter.print("By category:");
   for (const bucket of profile.categoryBuckets) {
     prompter.print(`  ${bucket.categoryLabel}: ${bucket.count}`);

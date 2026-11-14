@@ -109,9 +109,8 @@ describe("Scalable Capital mapper → Lunch Money v2 insert amount", () => {
 });
 
 /**
- * Security buy/sell rows are not synced today (`mapScalableCapitalTransaction` filters them out).
- * These helpers use classification fixture amounts and the same canonical shape as cash rows so
- * sign conversion stays covered if security mapping is enabled later.
+ * Security buy/sell/savings-plan rows are synced as cash movements. These helpers build the
+ * canonical shape from classification fixture amounts so v2 sign conversion stays covered.
  */
 function canonicalFromScalableSummary(
   id: string,

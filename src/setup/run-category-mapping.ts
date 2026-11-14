@@ -27,7 +27,6 @@ import {
   type SetupCategoryRow,
 } from "./category-matching.js";
 import type { SetupCliOptions } from "./setup-options.js";
-import { filterInsertableTypeObservations } from "./filter-insertable-observations.js";
 import { printSuggestedLunchMoneyRules } from "./print-suggested-rules.js";
 import {
   formatCategoryFlagMismatch,
@@ -533,10 +532,7 @@ export async function runCategoryMappingSetup(
   }
 
   deps.prompter.print("Fetching broker history (read-only)…");
-  const observations = filterInsertableTypeObservations(
-    await (deps.collectObservations ?? collectTypeObservations)(config),
-    config,
-  );
+  const observations = await (deps.collectObservations ?? collectTypeObservations)(config);
   const groups = groupTypeObservations(observations);
   if (groups.length === 0) {
     throw new Error("No classifiable broker transactions were found");

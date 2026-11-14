@@ -24,6 +24,18 @@ function runnerFromResponses(responses: string[]): ScCliRunner {
   };
 }
 
+function security(id: string, extra: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id,
+    summary_type: "BrokerSecurityTransactionSummary",
+    last_event_datetime: "2026-03-08T12:00:00Z",
+    description: "Example ETF",
+    amount: "-50",
+    currency: "EUR",
+    ...extra,
+  };
+}
+
 describe("fetchAllScalableCapitalTransactions", () => {
   it("returns normalized cash transactions from a single page", async () => {
     const runner = runnerFromResponses([loadFixture("broker-transactions-page-2.json")]);
@@ -36,13 +48,17 @@ describe("fetchAllScalableCapitalTransactions", () => {
     });
   });
 
-  it("follows cursor pagination and skips non-cash summaries", async () => {
+  it("follows cursor pagination and includes executed security trades", async () => {
     const runner = runnerFromResponses([
       loadFixture("broker-transactions-page-1.json"),
       loadFixture("broker-transactions-page-2.json"),
     ]);
     const result = await fetchAllScalableCapitalTransactions(runner, {});
-    expect(result.map((tx) => tx.id)).toEqual(["tx-cash-1", "tx-cash-2"]);
+    expect(result.map((tx) => [tx.id, tx.type])).toEqual([
+      ["tx-cash-1", "BrokerCashTransaction"],
+      ["tx-security-1", "BrokerSecurityTransaction"],
+      ["tx-cash-2", "BrokerCashTransaction"],
+    ]);
     expect(runner.run).toHaveBeenCalledTimes(2);
     const secondArgs = (runner.run as ReturnType<typeof vi.fn>).mock.calls[1]?.[0] as string[];
     expect(secondArgs).toContain("--cursor");
@@ -125,6 +141,43 @@ describe("fetchAllScalableCapitalTransactions", () => {
     const runner = runnerFromResponses([JSON.stringify(body)]);
     const result = await fetchAllScalableCapitalTransactions(runner, {});
     expect(result).toEqual([]);
+  });
+
+  it("keeps security type and side, and skips trades that moved no cash", async () => {
+    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
+      data: { result: { items: unknown[] } };
+    };
+    body.data.result.items = [
+      security("sp-1", { status: "SETTLED", security_transaction_type: " SAVINGS_PLAN ", side: "BUY" }),
+      security("sell-1", { status: "filled", side: "SELL" }),
+      security("confirmed-1", { status: "CONFIRMED" }),
+      security("no-status-1", {}),
+      security("pending-1", { status: "PENDING" }),
+      security("partial-1", { status: "partial filled" }),
+      security("cancelled-1", { status: "CANCELLED" }),
+      security("rejected-1", { status: "REJECTED" }),
+      security("expired-1", { status: "EXPIRED" }),
+      security("storno-1", { status: "FILLED", is_cancellation: true }),
+      security("delivery-1", { status: "SETTLED", security_transaction_type: "TRANSFER_IN" }),
+      security("swap-1", { status: "SETTLED", security_transaction_type: "SWAP_OUT" }),
+      { id: "other-1", summary_type: "BrokerCryptoTransactionSummary", amount: "1" },
+    ];
+    const result = await fetchAllScalableCapitalTransactions(runnerFromResponses([JSON.stringify(body)]), {});
+    expect(result.map((tx) => tx.id)).toEqual(["sp-1", "sell-1", "confirmed-1", "no-status-1"]);
+    expect(result[0]).toMatchObject({ securityTransactionType: "SAVINGS_PLAN", side: "BUY", amount: -50 });
+    expect(result[2]).not.toHaveProperty("side");
+  });
+
+  it("throws when an executed security trade is missing last_event_datetime", async () => {
+    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
+      data: { result: { items: unknown[] } };
+    };
+    body.data.result.items = [
+      { id: "tx-sec", summary_type: "BrokerSecurityTransactionSummary", status: "FILLED", amount: "-1" },
+    ];
+    await expect(
+      fetchAllScalableCapitalTransactions(runnerFromResponses([JSON.stringify(body)]), {}),
+    ).rejects.toThrow("Scalable CLI security transaction tx-sec is missing last_event_datetime");
   });
 
   it("keeps the structured cash_transaction_type for classification", async () => {

@@ -38,6 +38,8 @@ export interface DryRunProfileSummary {
   readonly outTotalPlain: string;
   readonly categoryBuckets: readonly DryRunCategoryBucket[];
   readonly rows: readonly DryRunReviewRow[];
+  /** Broker-reported balances when configured for this profile (holdings, cash, savings). */
+  readonly balanceLines?: readonly string[];
 }
 
 /** Aggregate dry-run review payload across all profiles in a sync pass. */

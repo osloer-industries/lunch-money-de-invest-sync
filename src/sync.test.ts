@@ -446,6 +446,99 @@ describe("runSync", () => {
     );
   });
 
+  it("applies broker balances after each profile and passes --reconcile-cash through", async () => {
+    const client = fakeClient();
+    client.manualAccounts = {
+      get: vi.fn().mockResolvedValue({ balance: "500", currency: "eur" }),
+      update: vi.fn().mockResolvedValue({}),
+    };
+    const readScalableCapitalBalances = vi.fn().mockResolvedValue({
+      holdings: { ok: true, value: 900, currency: "eur" },
+      cash: { ok: true, value: 5, currency: "eur" },
+      notes: [],
+    });
+    const logger = vi.fn();
+    const summary = await runSync(
+      baseConfig({
+        scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 3, holdingsAccountId: 7 }],
+      }),
+      client,
+      {
+        collectTradeRepublic: vi.fn(),
+        collectScalableCapital: vi.fn().mockResolvedValue([]),
+        readScalableCapitalBalances,
+      },
+      logger,
+      { includeBrokers: new Set(["scalable-capital"]), owners: [], dryRun: false, reconcileCash: true },
+    );
+    expect(summary).toEqual({ balanceFailures: 0 });
+    expect(readScalableCapitalBalances).toHaveBeenCalledWith(expect.objectContaining({ holdingsAccountId: 7 }));
+    expect(client.manualAccounts.update).toHaveBeenCalledWith(7, { balance: "900.00" });
+    expect(client.manualAccounts.update).toHaveBeenCalledWith(3, { balance: "5.00" });
+    expect(logger).toHaveBeenCalledWith("[scalable-capital:operator-a] holdings value set to 900.00 EUR");
+  });
+
+  it("keeps syncing after a failed balance read and reports the failure count", async () => {
+    const client = fakeClient();
+    client.manualAccounts = { get: vi.fn(), update: vi.fn() };
+    const failed = { ok: false, error: "pytr session expired" };
+    const logger = vi.fn();
+    const collectTradeRepublic = vi.fn().mockResolvedValue([tx()]);
+    const summary = await runSync(
+      baseConfig({
+        tradeRepublicProfiles: [
+          { owner: "operator-a", lunchMoneyAssetId: 1, holdingsAccountId: 2 },
+          { owner: "operator-b", lunchMoneyAssetId: 4 },
+        ],
+      }),
+      client,
+      {
+        collectTradeRepublic,
+        collectScalableCapital: vi.fn(),
+        readTradeRepublicBalances: vi.fn().mockResolvedValue({ holdings: failed, cash: failed, notes: [] }),
+      },
+      logger,
+    );
+    expect(collectTradeRepublic).toHaveBeenCalledTimes(2);
+    expect(summary).toEqual({ balanceFailures: 3 });
+    expect(logger).toHaveBeenCalledWith(
+      "Transactions synced, but 3 balance step(s) failed — see the warnings above.",
+    );
+  });
+
+  it("dry-run reconciliation accounts for rows that would still be inserted", async () => {
+    const client = fakeClient();
+    client.transactions.getAll = vi.fn().mockResolvedValue({ transactions: [], hasMore: false });
+    client.manualAccounts = {
+      get: vi.fn().mockResolvedValue({ balance: "100", currency: "eur" }),
+      update: vi.fn(),
+    };
+    const logger = vi.fn();
+    await runSync(
+      baseConfig({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+      client,
+      {
+        collectTradeRepublic: vi.fn().mockResolvedValue([tx({ amount: -40 })]),
+        collectScalableCapital: vi.fn(),
+        readTradeRepublicBalances: vi
+          .fn()
+          .mockResolvedValue({ cash: { ok: true, value: 60, currency: "eur" }, notes: [] }),
+      },
+      logger,
+      { includeBrokers: new Set(["trade-republic"]), owners: [], dryRun: true },
+    );
+    expect(client.manualAccounts.update).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledWith(
+      "[trade-republic:operator-a] cash reconciled: Lunch Money (after pending inserts) 60.00 EUR, broker 60.00 EUR",
+    );
+  });
+
+  it("exposes live balance readers", () => {
+    const collectors = createLiveCollectors();
+    expect(typeof collectors.readTradeRepublicBalances).toBe("function");
+    expect(typeof collectors.readScalableCapitalBalances).toBe("function");
+  });
+
   it("does nothing and logs nothing when no profiles are configured", async () => {
     const client = fakeClient();
     const collectors: BrokerCollectors = {

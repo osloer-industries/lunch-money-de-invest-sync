@@ -23,6 +23,7 @@ export interface BuildDryRunProfileInput {
   readonly categoryIdToName: Readonly<Record<number, string>>;
   readonly stepIndex: number;
   readonly stepTotal: number;
+  readonly balanceLines?: readonly string[];
 }
 
 function categoryLabelForTransaction(
@@ -147,6 +148,7 @@ export function buildDryRunProfileSummary(input: BuildDryRunProfileInput): DryRu
     outTotalPlain: totals.outTotalPlain,
     categoryBuckets: buildCategoryBuckets(rows, input.transactions),
     rows,
+    ...(input.balanceLines?.length ? { balanceLines: input.balanceLines } : {}),
   };
 }
 

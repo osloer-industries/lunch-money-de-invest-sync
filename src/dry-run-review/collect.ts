@@ -1,5 +1,6 @@
 import { previewUpsert } from "../lunch-money/preview.js";
 import { applyCategoryTagMappings } from "../shared/apply-mappings.js";
+import type { BrokerBalanceSnapshot } from "../shared/broker-balances.js";
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import type { SyncBroker } from "../sync-options.js";
 import { filterSyncConfig } from "../sync-options.js";
@@ -8,6 +9,7 @@ import type { BrokerSource, CanonicalTransaction } from "../shared/transaction.j
 import { forEachProfileSequentially } from "../shared/sequential-profiles.js";
 import type { TransactionsApi } from "../lunch-money/upsert.js";
 import { buildDryRunProfileSummary, buildDryRunReviewSummary } from "./build-summary.js";
+import { brokerBalanceLines } from "./balance-lines.js";
 import { filterTransactionsSince } from "./since.js";
 import type { DryRunProfileSummary, DryRunReviewSummary } from "./types.js";
 
@@ -20,6 +22,12 @@ export interface DryRunCollectionSelection {
 export interface DryRunBrokerCollectors {
   readonly collectTradeRepublic: (profile: TradeRepublicProfile) => Promise<CanonicalTransaction[]>;
   readonly collectScalableCapital: (profile: ScalableCapitalProfile) => Promise<CanonicalTransaction[]>;
+  readonly readTradeRepublicBalances?: (
+    profile: TradeRepublicProfile,
+  ) => Promise<BrokerBalanceSnapshot>;
+  readonly readScalableCapitalBalances?: (
+    profile: ScalableCapitalProfile,
+  ) => Promise<BrokerBalanceSnapshot>;
 }
 
 type DryRunCollectionClient = TransactionsApi & {
@@ -32,6 +40,7 @@ interface CollectProfileSummaryParams<T extends { owner: string; lunchMoneyAsset
   readonly profile: T;
   readonly broker: BrokerSource;
   readonly collect: (profile: T) => Promise<CanonicalTransaction[]>;
+  readonly readBalances?: (profile: T) => Promise<BrokerBalanceSnapshot>;
   readonly config: SyncConfig;
   readonly client: DryRunCollectionClient;
   readonly categoryIdToName: Readonly<Record<number, string>>;
@@ -70,6 +79,14 @@ async function collectProfileSummary<T extends { owner: string; lunchMoneyAssetI
   const raw = await params.collect(params.profile);
   const transactions = prepareTransactions(raw, params.config, params.since);
   const preview = await previewUpsert(params.client, transactions, params.profile.lunchMoneyAssetId);
+  let balanceLines: readonly string[] | undefined;
+  if (params.readBalances) {
+    try {
+      balanceLines = brokerBalanceLines(await params.readBalances(params.profile));
+    } catch {
+      balanceLines = ["Balances: could not read from the broker"];
+    }
+  }
   return buildDryRunProfileSummary({
     broker: params.broker,
     owner: params.profile.owner,
@@ -78,6 +95,7 @@ async function collectProfileSummary<T extends { owner: string; lunchMoneyAssetI
     categoryIdToName: params.categoryIdToName,
     stepIndex: params.stepIndex,
     stepTotal: params.stepTotal,
+    ...(balanceLines?.length ? { balanceLines } : {}),
   });
 }
 
@@ -85,6 +103,7 @@ interface CollectForBrokerParams<T extends { owner: string; lunchMoneyAssetId: n
   readonly broker: BrokerSource;
   readonly profiles: readonly T[];
   readonly collect: (profile: T) => Promise<CanonicalTransaction[]>;
+  readonly readBalances?: (profile: T) => Promise<BrokerBalanceSnapshot>;
   readonly config: SyncConfig;
   readonly client: DryRunCollectionClient;
   readonly categoryIdToName: Readonly<Record<number, string>>;
@@ -104,6 +123,7 @@ async function collectForBroker<T extends { owner: string; lunchMoneyAssetId: nu
         profile,
         broker: params.broker,
         collect: params.collect,
+        ...(params.readBalances ? { readBalances: params.readBalances } : {}),
         config: params.config,
         client: params.client,
         categoryIdToName: params.categoryIdToName,
@@ -152,6 +172,9 @@ export async function runDryRunCollection(
       broker: "trade-republic",
       profiles: tradeProfiles,
       collect: collectors.collectTradeRepublic,
+      ...(collectors.readTradeRepublicBalances
+        ? { readBalances: collectors.readTradeRepublicBalances }
+        : {}),
       config,
       client,
       categoryIdToName,
@@ -166,6 +189,9 @@ export async function runDryRunCollection(
       broker: "scalable-capital",
       profiles: scalableProfiles,
       collect: collectors.collectScalableCapital,
+      ...(collectors.readScalableCapitalBalances
+        ? { readBalances: collectors.readScalableCapitalBalances }
+        : {}),
       config,
       client,
       categoryIdToName,
