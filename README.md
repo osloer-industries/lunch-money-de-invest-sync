@@ -82,6 +82,8 @@ npm ci
 npm run doctor          # prerequisites; prints fix commands for anything missing
 npm run setup           # interactive: .env (0600), config.json, broker login checks (offers category mapping after dry-run)
 npm run setup -- --categories   # map broker types → Lunch Money categories/tags (read-only broker fetch)
+npm run categories -- list      # show saved category/tag mapping (see categories --help)
+npm run categories -- edit      # change mapping after setup (saves after each type)
 npm run sync -- --dry-run
 npm run sync
 ```
@@ -145,6 +147,11 @@ Copy [`config.example.json`](config.example.json) to `config.json` in the repo r
 | `scalableCapitalProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `portfolioId`, `scBinaryPath`, `scConfigDir` |
 | `categoryMap` | Canonical type → Lunch Money `category_id` (see `npm run setup -- --categories`) |
 | `tagMap` | Canonical type → extra tag names applied at sync (unknown types always get `needs-review`) |
+
+After setup, use `npm run categories -- list` or `npm run categories -- edit` to view or change
+`categoryMap` / `tagMap` without re-running setup. `npm run categories -- reapply --dry-run` previews
+updating already-synced manual-account rows to match the mapping; run without `--dry-run` to apply
+(idempotent). Mapping files store category ids and tag names only — no API keys.
 
 The `owner` string is a **local label** for logs only (e.g. `operator-a`, `operator-b`). It is not sent to brokers.
 

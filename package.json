@@ -10,6 +10,7 @@
   "packageManager": "npm@11.19.1",
   "scripts": {
     "doctor": "tsx src/doctor.ts",
+    "categories": "tsx src/categories.ts",
     "build": "tsc -p tsconfig.build.json",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "lint": "oxlint -c .oxlintrc.json src && npm run lint:sonarjs",
