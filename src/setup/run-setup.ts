@@ -16,14 +16,13 @@ import { detectPytrLauncher } from "./detect-pytr-command.js";
 import { detectScBinaryPath } from "./detect-sc-binary.js";
 import { formatPytrLoginCommand } from "./pytr-session.js";
 import { createPytrCliRunner, createScCliRunner } from "../shared/subprocess-cli.js";
-import { forEachSequentially } from "../shared/sequential-profiles.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import { parseSharedCardLast4Input } from "./shared-card-input.js";
 import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse } from "./manual-account.js";
 import { statusError, statusOk } from "./setup-status.js";
-import { forEachConfirmedRepeat } from "../shared/sequential-profiles.js";
+import { forEachConfirmedRepeat, forEachSequentially } from "../shared/sequential-profiles.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
   LunchMoneySetupClient,
