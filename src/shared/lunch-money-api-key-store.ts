@@ -1,4 +1,4 @@
-import keytar from "keytar";
+import { AsyncEntry } from "@napi-rs/keyring";
 
 export const LUNCH_MONEY_API_KEY_SERVICE = "lunch-money-de-invest-sync";
 export const LUNCH_MONEY_API_KEY_ACCOUNT = "lunch-money-api-key";
@@ -10,17 +10,21 @@ export interface LunchMoneyApiKeyStore {
   has(): Promise<boolean>;
 }
 
-export class KeytarLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
+function lunchMoneyApiKeyEntry(): AsyncEntry {
+  return new AsyncEntry(LUNCH_MONEY_API_KEY_SERVICE, LUNCH_MONEY_API_KEY_ACCOUNT);
+}
+
+export class KeyringLunchMoneyApiKeyStore implements LunchMoneyApiKeyStore {
   async get(): Promise<string | null> {
-    return keytar.getPassword(LUNCH_MONEY_API_KEY_SERVICE, LUNCH_MONEY_API_KEY_ACCOUNT);
+    return lunchMoneyApiKeyEntry().getPassword();
   }
 
   async set(apiKey: string): Promise<void> {
-    await keytar.setPassword(LUNCH_MONEY_API_KEY_SERVICE, LUNCH_MONEY_API_KEY_ACCOUNT, apiKey);
+    await lunchMoneyApiKeyEntry().setPassword(apiKey);
   }
 
   async delete(): Promise<boolean> {
-    return keytar.deletePassword(LUNCH_MONEY_API_KEY_SERVICE, LUNCH_MONEY_API_KEY_ACCOUNT);
+    return lunchMoneyApiKeyEntry().deletePassword();
   }
 
   async has(): Promise<boolean> {
@@ -55,7 +59,7 @@ let defaultStore: LunchMoneyApiKeyStore | undefined;
 
 export function createDefaultLunchMoneyApiKeyStore(): LunchMoneyApiKeyStore {
   if (!defaultStore) {
-    defaultStore = new KeytarLunchMoneyApiKeyStore();
+    defaultStore = new KeyringLunchMoneyApiKeyStore();
   }
   return defaultStore;
 }
