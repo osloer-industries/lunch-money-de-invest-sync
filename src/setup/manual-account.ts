@@ -1,18 +1,26 @@
 import type { LunchMoneySetupClient, SetupPrompter } from "./types.js";
 import { isDuplicateAssetDisplayName } from "./lunch-money-errors.js";
 
+/** Lunch Money v2 account type (and optional subtype) for a manual account created by setup. */
+export interface ManualAccountKind {
+  readonly type: "investment" | "cash";
+  readonly subtype?: string;
+}
+
 export async function createManualAccountOrReuse(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
   displayName: string,
   brokerLabel: string,
+  kind: ManualAccountKind = { type: "investment" },
 ): Promise<number | null> {
   try {
     const created = await client.manualAccounts.create({
       name: displayName,
       currency: "eur",
       institution_name: brokerLabel,
-      type: "investment",
+      type: kind.type,
+      ...(kind.subtype ? { subtype: kind.subtype } : {}),
       balance: "0",
     });
     return created.id;

@@ -5,30 +5,13 @@ import {
   type ScalableCapitalTransaction,
   type ScTransactionSummary,
 } from "./types.js";
-import { parseScMachineEnvelopeStdout } from "./sc-envelope.js";
+import { runScJsonCommand, withPortfolioId } from "./sc-command.js";
+import type { ScMachineEnvelope } from "./types.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
 
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;
 const CASH_SUMMARY_TYPE = "BrokerCashTransactionSummary";
-
-function cliErrorMessage(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): string {
-  const code = envelope.error?.code ?? "unknown";
-  const hint = envelope.hints?.[0];
-  return hint
-    ? `Scalable CLI command failed (${code}): ${hint}`
-    : `Scalable CLI command failed (${code})`;
-}
-
-function assertSuccessEnvelope(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): void {
-  if (envelope.ok) {
-    return;
-  }
-  if (envelope.error?.code === "no_session") {
-    throw new Error("Scalable CLI has no active session — run `sc login` on this machine first");
-  }
-  throw new Error(cliErrorMessage(envelope));
-}
 
 function parseDecimalAmount(value: string | number | null | undefined): number {
   if (typeof value === "number") {
@@ -74,28 +57,14 @@ function normalizeCashItem(item: ScTransactionSummary): ScalableCapitalTransacti
 }
 
 function buildTransactionsArgv(config: ScalableCapitalCliConfig, cursor?: string): string[] {
-  const argv = ["broker", "transactions", "--json", "--page-size", String(DEFAULT_PAGE_SIZE)];
-  if (config.portfolioId) {
-    argv.push("--portfolio-id", config.portfolioId);
-  }
+  const argv = withPortfolioId(
+    ["broker", "transactions", "--json", "--page-size", String(DEFAULT_PAGE_SIZE)],
+    config,
+  );
   if (cursor) {
     argv.push("--cursor", cursor);
   }
   return argv;
-}
-
-function isErrnoCode(error: unknown, code: string): boolean {
-  if (typeof error !== "object" || error === null) {
-    return false;
-  }
-  return Reflect.get(error, "code") === code;
-}
-
-function childEnv(config: ScalableCapitalCliConfig): Record<string, string> | undefined {
-  if (!config.scConfigDir) {
-    return undefined;
-  }
-  return { SC_CONFIG_DIR: config.scConfigDir };
 }
 
 async function runTransactionsPage(
@@ -107,32 +76,11 @@ async function runTransactionsPage(
   summaries: ScTransactionSummary[];
   cursor: string | null | undefined;
 }> {
-  const argv = buildTransactionsArgv(config, cursor);
-  const env = childEnv(config);
-  let run: Awaited<ReturnType<ScCliRunner["run"]>>;
-  try {
-    run = await runner.run(argv, env);
-  } catch (error) {
-    if (isErrnoCode(error, "ENOENT")) {
-      throw new Error(
-        "Scalable CLI (`sc`) was not found — install it from https://github.com/ScalableCapital/scalable-cli",
-        { cause: error },
-      );
-    }
-    throw error;
-  }
-  const envelope = parseScMachineEnvelopeStdout(run.stdout);
-  if (!envelope.ok && envelope.error?.code === "refresh_retryable") {
-    const retry = await runner.run(argv, env);
-    const retryEnvelope = parseScMachineEnvelopeStdout(retry.stdout);
-    assertSuccessEnvelope(retryEnvelope);
-    return parseTransactionsData(retryEnvelope);
-  }
-  assertSuccessEnvelope(envelope);
+  const envelope = await runScJsonCommand(runner, config, buildTransactionsArgv(config, cursor));
   return parseTransactionsData(envelope);
 }
 
-function parseTransactionsData(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): {
+function parseTransactionsData(envelope: ScMachineEnvelope): {
   transactions: ScalableCapitalTransaction[];
   summaries: ScTransactionSummary[];
   cursor: string | null | undefined;

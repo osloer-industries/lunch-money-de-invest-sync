@@ -125,6 +125,9 @@ function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOpt
     tradeRepublicAssetId: null,
     scalableAssetId: null,
     portfolioId: null,
+    tradeRepublicHoldingsAccountId: null,
+    scalableHoldingsAccountId: null,
+    scalableSavingsAccountId: null,
     categories: false,
     exportTypeSummary: null,
     replaceApiKey: false,
@@ -201,6 +204,32 @@ describe("runSetup", () => {
     const written = String((filesystem.writeText as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] ?? "");
     expect(written).not.toContain("lm_test_key");
     expect(written).not.toContain("lunchMoneyApiKey");
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
+  it("writes balance tracking account ids from non-interactive flags", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const result = await runSetup(
+      baseSetupOptions({
+        nonInteractive: true,
+        tradeRepublic: true,
+        scalableCapital: true,
+        owner: "operator-a",
+        tradeRepublicAssetId: 3,
+        scalableAssetId: 4,
+        tradeRepublicHoldingsAccountId: 5,
+        scalableHoldingsAccountId: 6,
+        scalableSavingsAccountId: 7,
+      }),
+      defaultRunSetupDeps(),
+    );
+    expect(result).toMatchObject({
+      kind: "completed",
+      config: {
+        tradeRepublicProfiles: [{ lunchMoneyAssetId: 3, holdingsAccountId: 5 }],
+        scalableCapitalProfiles: [{ lunchMoneyAssetId: 4, holdingsAccountId: 6, savingsAccountId: 7 }],
+      },
+    });
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
@@ -322,6 +351,7 @@ describe("runSetup", () => {
           brokers: ["scalable-capital"],
           inputs: ["operator-b", "[]"],
           selects: ["3", "portfolio-operator-b"],
+          confirms: (message) => !message.startsWith("Track") && !message.startsWith("Add another"),
         }),
         runners: { sc: scRunner },
         runSync: vi.fn().mockResolvedValue(undefined),
@@ -365,6 +395,9 @@ describe("runSetup", () => {
       }
       if (message.includes("dry-run")) {
         return Promise.resolve(true);
+      }
+      if (message.startsWith("Track")) {
+        return Promise.resolve(false);
       }
       if (pytrCredentialStorageAccepted(message)) {
         return Promise.resolve(true);
@@ -431,6 +464,70 @@ describe("runSetup", () => {
         institution_name: "Trade Republic",
       }),
     );
+  });
+
+  it("offers a holdings account for Trade Republic and creates it on request", async () => {
+    const lm = fakeLmClient();
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter: trInteractivePrompter({
+          selects: ["3", "__new__"],
+          confirms: (message) =>
+            message.startsWith("Track portfolio market value") ||
+            message.includes('Create Lunch Money manual account "Trade Republic Holdings (operator-a)"'),
+        }),
+        runSync: vi.fn().mockResolvedValue(undefined),
+        createLunchMoneyClient: () => lm,
+      }),
+    );
+    expect(lm.manualAccounts.create).toHaveBeenCalledWith({
+      name: "Trade Republic Holdings (operator-a)",
+      currency: "eur",
+      institution_name: "Trade Republic",
+      type: "investment",
+      balance: "0",
+    });
+    expect(result).toMatchObject({
+      kind: "completed",
+      config: { tradeRepublicProfiles: [{ lunchMoneyAssetId: 3, holdingsAccountId: 99 }] },
+    });
+  });
+
+  it("offers holdings and overnight savings accounts for Scalable Capital", async () => {
+    const lm = fakeLmClient();
+    (lm.manualAccounts.getAll as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 3, name: "Scalable Capital (operator-b)" },
+      { id: 4, name: "Scalable Capital Holdings (operator-b)" },
+    ]);
+    const scRunner = {
+      run: vi.fn().mockResolvedValue({
+        stdout: JSON.stringify({ ok: true, command: "broker.portfolios", data: { portfolios: [] } }),
+        stderr: "",
+        exitCode: 0,
+      }),
+    };
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter: fakePrompter({
+          password: "lm_test_key",
+          brokers: ["scalable-capital"],
+          inputs: ["operator-b", "[]"],
+          selects: ["3", "4", "__new__"],
+          confirms: (message) => !message.startsWith("Add another") && !message.includes("dry-run"),
+        }),
+        runners: { sc: scRunner },
+        createLunchMoneyClient: () => lm,
+      }),
+    );
+    expect(lm.manualAccounts.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Scalable Tagesgeld (operator-b)", type: "cash", subtype: "savings" }),
+    );
+    expect(result).toMatchObject({
+      kind: "completed",
+      config: { scalableCapitalProfiles: [{ lunchMoneyAssetId: 3, holdingsAccountId: 4, savingsAccountId: 99 }] },
+    });
   });
 
   it("defaults the profile label to me and uses it in the manual account name", async () => {
@@ -547,6 +644,46 @@ describe("runSetup with a resumed config.json", () => {
     const printed = (prompter.print as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]));
     expect(printed.some((line) => line.includes("Using existing Trade Republic profile(s)"))).toBe(true);
     expect(printed.some((line) => line.includes("Using existing Scalable Capital profile(s)"))).toBe(true);
+  });
+
+  it("offers missing balance accounts to resumed profiles once and saves them incrementally", async () => {
+    const pytr = { run: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "pytr 0.4.10\n", stderr: "" }) };
+    const sc = { run: vi.fn().mockResolvedValue({ exitCode: 0, stdout: scOkEnvelope, stderr: "" }) };
+    const filesystem = resumedFilesystem();
+    const configPath = `${process.cwd()}/config.json`;
+    const resumed = JSON.parse(filesystem.readText(configPath) ?? "{}");
+    resumed.sharedCardLast4 = ["0000"];
+    resumed.scalableCapitalProfiles[0].holdingsAccountId = 8;
+    await filesystem.writeText(configPath, JSON.stringify(resumed));
+    const lm = fakeLmClient();
+    const prompter = fakePrompter({
+      password: "lm_test_key",
+      brokers: ["trade-republic", "scalable-capital"],
+      selects: ["3"],
+      confirms: (message) => message.startsWith("Track portfolio market value"),
+    });
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({ prompter, filesystem, runners: { pytr, sc }, runSync: vi.fn(), createLunchMoneyClient: () => lm }),
+    );
+    const confirmMessages = (prompter.confirm as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]));
+    expect(confirmMessages.filter((message) => message.startsWith("Track portfolio market value"))).toHaveLength(1);
+    expect(confirmMessages.filter((message) => message.startsWith("Track your Scalable overnight"))).toHaveLength(1);
+    const progressWrite = (filesystem.writeText as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => JSON.parse(String(call[1])))
+      .find((written) => written.tradeRepublicProfiles?.[0]?.holdingsAccountId === 3);
+    expect(progressWrite).toMatchObject({
+      sharedCardLast4: ["0000"],
+      scalableCapitalProfiles: [{ holdingsAccountId: 8 }],
+    });
+    expect(result).toMatchObject({
+      kind: "completed",
+      config: {
+        sharedCardLast4: ["0000"],
+        tradeRepublicProfiles: [{ holdingsAccountId: 3 }],
+        scalableCapitalProfiles: [{ holdingsAccountId: 8 }],
+      },
+    });
   });
 
   it("drops resumed profiles for brokers the operator unticked", async () => {

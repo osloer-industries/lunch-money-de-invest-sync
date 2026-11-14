@@ -71,7 +71,8 @@ These rules apply to every agent (Cursor, Grok Bot, any other) working in this r
   overridable per profile via `pytrHome`). Operators run `pytr login` locally. Never commit pytr
   session files or operator config with secrets. CI uses fixtures and mocked `PytrCliRunner` only.
 - Optional profile fields: `pytrCommand` (argv prefix, e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`),
-  `pytrHome`, `account`, `pytrMinVersion`. pytr login always uses `--v2` (app approval); do not add WAF or Playwright login paths.
+  `pytrHome`, `account`, `pytrMinVersion`, `holdingsAccountId` (market value from `pytr portfolio --v2`,
+  run with the same pytr home, timeout and app-approval relay as `export_transactions`). pytr login always uses `--v2` (app approval); do not add WAF or Playwright login paths.
 - **Saveback:** emit one Lunch Money row per saveback timeline event (tag `saveback`), not separate
  deposit and buy rows. `npm run setup -- --categories` offers **Saveback income** (`is_income`) or an
  excluded Investments-style category; it does not pick one silently (see issue #16).
@@ -93,7 +94,9 @@ These rules apply to every agent (Cursor, Grok Bot, any other) working in this r
   after enabling Agentic Investing in the Scalable web profile. Never commit `sc` session
   files, tokens, or operator config with secrets. CI uses fixtures and mocked `ScCliRunner`
   only — no live `sc` or broker calls.
-- Optional profile fields: `portfolioId`, `scBinaryPath`, `scConfigDir` (`SC_CONFIG_DIR`).
+- Optional profile fields: `portfolioId`, `scBinaryPath`, `scConfigDir` (`SC_CONFIG_DIR`),
+  `holdingsAccountId` (`sc broker overview`), `savingsAccountId` (`sc overnight`). Balance reads
+  validate only the fields they use; never log account identifiers (IBANs, savings account ids).
 - **Clean break:** the old HTTP proxy integration is removed entirely (no `proxyUrl`,
   no migration shims). Assume operators use a fresh Lunch Money manual account when adopting
   `sc`; `external_id` format `scalable-capital:{id}` is for idempotent re-sync only.
