@@ -49,7 +49,12 @@ export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCatego
   dividend: budgetIncomeCategory("Investment income"),
   interest: budgetIncomeCategory("Investment income"),
   fee: budgetExpenseCategory("Bank fees"),
-  tax: budgetExpenseCategory("Taxes"),
+  tax: {
+    name: "Investment tax",
+    is_income: false,
+    exclude_from_budget: true,
+    exclude_from_totals: true,
+  },
 };
 
 export const SUGGESTED_TAGS: Partial<Record<CanonicalType, readonly string[]>> = {

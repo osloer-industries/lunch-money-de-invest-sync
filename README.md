@@ -114,8 +114,14 @@ Lunch Money **categories** are created via the v2 API ([docs](https://lunchmoney
 withdrawals, and internal transfers suggest **Payment, Transfer** (Lunch Money's default excluded
 transfer category). When mapping finishes, setup prints suggested Lunch Money **UI rules** for
 `saveback` and `needs-review`, scoped to your brokerage manual accounts (v2 has no rules API).
-Inserts use `apply_rules: true`; broad payee rules can overwrite `categoryMap`. The tool does
-**not** create rules via the API; categorisation applies only to rows this sync inserts.
+Inserts use `apply_rules: true`; broad payee rules can overwrite `categoryMap`. Kapitalertragsteuer
+and Soli suggest **Investment tax** (excluded from budget and totals), not a budgeted **Taxes**
+expense. The tool does **not** create rules via the API; categorisation applies only to rows this
+sync inserts.
+
+**Dividend reinvestment (DRIP):** a dividend in **Investment income** followed by a savings-plan
+**buy** in excluded **Investments** still counts the dividend as income even though cash stayed in
+the brokerage — that may be what you want; adjust categories or rules if not.
 
 ## Configuration
 
