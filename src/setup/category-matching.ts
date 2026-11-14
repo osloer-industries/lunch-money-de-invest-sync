@@ -43,6 +43,17 @@ export function findTransferCategoryCandidate(
   );
 }
 
+export function categoryFlagsMatchTemplate(
+  category: SetupCategoryRow,
+  template: SuggestedCategory,
+): boolean {
+  return (
+    category.is_income === template.is_income &&
+    category.exclude_from_budget === template.exclude_from_budget &&
+    category.exclude_from_totals === template.exclude_from_totals
+  );
+}
+
 export function findSuggestedCategoryMatch(
   categories: readonly SetupCategoryRow[],
   suggestion: SuggestedCategory,

@@ -215,6 +215,71 @@ describe("runCategoryMappingSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
+  it("rejects mapping to a category group id", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    await expect(
+      runCategoryMappingSetup(options, {
+        prompter: prompter({
+          confirms: [true, true, false],
+          searches: ["200"],
+        }),
+        filesystem: fakeCategoryFilesystem(),
+        readConfig: () => readConfigFixture(),
+        createClient: () =>
+          stubCategoryClient(
+            vi.fn().mockResolvedValue([
+              {
+                id: 200,
+                name: "Investments",
+                is_income: false,
+                exclude_from_budget: true,
+                exclude_from_totals: true,
+                is_group: true,
+              },
+            ]),
+          ),
+        collectObservations: async () => observations,
+      }),
+    ).rejects.toThrow(/category group/);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
+  it("warns when an existing category has different flags than the template", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const result = await runCategoryMappingSetup(options, {
+      prompter: prompter({
+        confirms: [true, false, false],
+        searches: ["101"],
+      }),
+      filesystem: fakeCategoryFilesystem(),
+      readConfig: () => readConfigFixture(),
+      createClient: () =>
+        stubCategoryClient(
+          vi.fn().mockResolvedValue([
+            {
+              id: 101,
+              name: "Savings",
+              is_income: false,
+              exclude_from_budget: false,
+              exclude_from_totals: false,
+              is_group: false,
+            },
+            {
+              id: 99,
+              name: "Payment, Transfer",
+              is_income: false,
+              exclude_from_budget: true,
+              exclude_from_totals: true,
+              is_group: false,
+            },
+          ]),
+        ),
+      collectObservations: async () => observations,
+    });
+    expect(result.categoryMap.deposit).toBeUndefined();
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
   it("creates a category when the operator confirms new", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 42, name: "Investments" });
