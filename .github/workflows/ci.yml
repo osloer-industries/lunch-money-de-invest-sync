@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   workflow-security:
-    uses: osloer-industries/.github/.github/workflows/workflow-security.yml@65dc7ba5e001dc552cada5a8d2aa88be7f425638 # main
+    uses: osloer-industries/.github/.github/workflows/workflow-security.yml@0221b21f9d130eff47cb04ca9374220886198419 # main
     permissions:
       contents: read
       actions: read

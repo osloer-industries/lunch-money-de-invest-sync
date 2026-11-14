@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   zero-open-issues:
-    uses: osloer-industries/.github/.github/workflows/sonarcloud-zero-issues.yml@65dc7ba5e001dc552cada5a8d2aa88be7f425638 # main
+    uses: osloer-industries/.github/.github/workflows/sonarcloud-zero-issues.yml@0221b21f9d130eff47cb04ca9374220886198419 # main
     with:
       project-key: osloer-industries_lunch-money-de-invest-sync
     secrets:

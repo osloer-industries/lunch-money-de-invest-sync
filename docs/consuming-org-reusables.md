@@ -3,7 +3,7 @@
 Shared GitHub Actions behavior lives in [osloer-industries/.github](https://github.com/osloer-industries/.github).
 This repository keeps **thin caller workflows** under `.github/workflows/` and pins each `uses:` ref to a full
 commit SHA. The org contract lives in
-[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/65dc7ba5e001dc552cada5a8d2aa88be7f425638/docs/consuming-workflows.md)
+[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/0221b21f9d130eff47cb04ca9374220886198419/docs/consuming-workflows.md)
 on that repository.
 
 ## Callers in this repository
@@ -20,7 +20,7 @@ pull request title validation, and Release Please.
 Dependabot `github-actions` updates on `/` bump Action SHAs and org reusable workflow SHAs together (`ci(deps)`).
 
 When adding org reusables as required branch protection checks, use the names from the
-[org workflow table](https://github.com/osloer-industries/.github/blob/65dc7ba5e001dc552cada5a8d2aa88be7f425638/docs/consuming-workflows.md#available-reusables).
+[org workflow table](https://github.com/osloer-industries/.github/blob/0221b21f9d130eff47cb04ca9374220886198419/docs/consuming-workflows.md#available-reusables).
 For `workflow-security` on `CI`, the check is typically `CI / workflow-security / Workflow security`.
 For CodeQL, the reusable job name is `Analyze JavaScript and TypeScript`.
 For SonarCloud, the reusable job name is `SonarCloud zero open issues`.
