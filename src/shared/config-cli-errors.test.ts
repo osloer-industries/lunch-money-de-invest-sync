@@ -15,6 +15,22 @@ describe("formatConfigLoadError", () => {
     expect(formatConfigLoadError(parsed.error)).toBe(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
   });
 
+  it("names unrecognized config keys without echoing secrets", () => {
+    const parsed = z
+      .object({ tradeRepublicProfiles: z.array(z.object({ owner: z.string() }).strict()) })
+      .strict()
+      .safeParse({
+        tradeRepublicProfiles: [{ owner: "operator-a", phoneNumber: "+490000000000" }],
+      });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) {
+      throw new Error("expected validation failure");
+    }
+    const message = formatConfigLoadError(parsed.error);
+    expect(message).toMatch(/phoneNumber/);
+    expect(message).not.toMatch(/\+49/);
+  });
+
   it("maps invalid JSON errors", () => {
     expect(formatConfigLoadError(new Error("config.json contains invalid JSON"))).toBe(
       "config.json is invalid — fix or delete it and run npm run setup again.",

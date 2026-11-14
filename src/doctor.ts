@@ -1,8 +1,13 @@
 import { existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
 import path from "node:path";
-import { loadDotenvFromCwd } from "./shared/load-dotenv.js";
 import { readConfigFromDiskForCli } from "./shared/config.js";
+import { bootstrapLunchMoneyApiKey } from "./shared/bootstrap-lunch-money-api-key.js";
+import { readApiKeyFromDotenvText } from "./shared/dotenv-api-key.js";
+import {
+  createDefaultLunchMoneyApiKeyStore,
+  type LunchMoneyApiKeyStore,
+} from "./shared/lunch-money-api-key-store.js";
+import { readFileSync } from "node:fs";
 import { resolveScExecutable } from "./shared/subprocess-cli.js";
 import { detectPytrLauncher } from "./setup/detect-pytr-command.js";
 import { createPytrCliRunner, createScCliRunner, type PytrCliRunner, type ScCliRunner } from "./shared/subprocess-cli.js";
@@ -27,6 +32,7 @@ export interface DoctorDeps {
   readonly createPytrRunner?: (command: readonly string[]) => PytrCliRunner;
   readonly createScRunner?: (binary: string) => ScCliRunner;
   readonly logger?: (line: string) => void;
+  readonly apiKeyStore?: LunchMoneyApiKeyStore;
 }
 
 function defaultLogger(line: string): void {
@@ -144,36 +150,49 @@ async function scVersionCheck(runner: ScCliRunner): Promise<DoctorCheck> {
   }
 }
 
-async function envFileCheck(
-  exists: (p: string) => boolean,
-  statFn: (p: string) => Promise<{ mode: number }>,
-  cwd: string,
-): Promise<DoctorCheck | null> {
+function dotenvPlaintextApiKeyCheck(exists: (p: string) => boolean, cwd: string): DoctorCheck | null {
   const envPath = path.join(cwd, ".env");
   if (!exists(envPath)) {
-    return {
-      name: "dotenv",
-      ok: false,
-      detail: ".env missing",
-      fix: "Run `npm run setup` to create .env with mode 0600",
-    };
+    return null;
   }
-  const { mode } = await statFn(envPath);
-  const permissions = mode & 0o777;
-  if (permissions > 0o600) {
-    return {
-      name: "dotenv",
-      ok: false,
-      detail: `.env permissions are ${permissions.toString(8)} (expected 0600 or stricter)`,
-      fix: "Run `chmod 600 .env`",
-    };
+  try {
+    const text = readFileSync(envPath, "utf8");
+    if (readApiKeyFromDotenvText(text)) {
+      return {
+        name: "dotenv-api-key",
+        ok: false,
+        detail: "LUNCH_MONEY_API_KEY is still stored in plaintext .env",
+        fix: "Run `npm run setup` to move the key into secure storage and remove it from .env",
+      };
+    }
+  } catch {
+    return null;
   }
-  return { name: "dotenv", ok: true, detail: ".env present (mode 0600 or stricter)" };
+  return null;
 }
 
-function configCheck(): DoctorCheck | null {
+async function lunchMoneyApiKeyCheck(store: LunchMoneyApiKeyStore): Promise<DoctorCheck> {
+  if (process.env["LUNCH_MONEY_API_KEY"]?.trim()) {
+    return { name: "lunch-money-api-key", ok: true, detail: "Lunch Money API key available for this session" };
+  }
+  await bootstrapLunchMoneyApiKey(store);
+  if (process.env["LUNCH_MONEY_API_KEY"]?.trim()) {
+    return { name: "lunch-money-api-key", ok: true, detail: "Lunch Money API key loaded from secure storage" };
+  }
+  const stored = await store.has();
+  return stored
+    ? { name: "lunch-money-api-key", ok: true, detail: "Lunch Money API key stored in secure storage" }
+    : {
+        name: "lunch-money-api-key",
+        ok: false,
+        detail: "No Lunch Money API key in secure storage",
+        fix: "Run `npm run setup` to store your API key",
+      };
+}
+
+async function configCheck(store: LunchMoneyApiKeyStore): Promise<DoctorCheck | null> {
   try {
-    loadDotenvFromCwd();
+    await bootstrapLunchMoneyApiKey(store);
     const config = readConfigFromDiskForCli();
     const profileCount = config.tradeRepublicProfiles.length + config.scalableCapitalProfiles.length;
     return {
@@ -199,7 +218,6 @@ function configCheck(): DoctorCheck | null {
 export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; checks: DoctorCheck[] }> {
   const cwd = process.cwd();
   const exists = deps.exists ?? existsSync;
-  const statFn = deps.stat ?? ((p) => stat(p));
   const checks: DoctorCheck[] = [];
 
   checks.push(nodeMajorOk(deps.nodeVersion ?? process.version), npmCiCheck(exists, cwd));
@@ -230,15 +248,16 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<{ ok: boolean; c
   const scRunner = (deps.createScRunner ?? createScCliRunner)(scBinary);
   checks.push(await scVersionCheck(scRunner));
 
-  if (exists(path.join(cwd, ".env"))) {
-    const envCheck = await envFileCheck(exists, statFn, cwd);
-    if (envCheck) {
-      checks.push(envCheck);
-    }
+  const plaintextEnv = dotenvPlaintextApiKeyCheck(exists, cwd);
+  if (plaintextEnv) {
+    checks.push(plaintextEnv);
   }
 
+  const store = deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore();
+  checks.push(await lunchMoneyApiKeyCheck(store));
+
   if (exists(path.join(cwd, "config.json"))) {
-    const cfg = configCheck();
+    const cfg = await configCheck(store);
     if (cfg) {
       checks.push(cfg);
     }

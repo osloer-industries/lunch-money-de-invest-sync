@@ -10,23 +10,25 @@ const resumedConfigSchema = syncConfigSchema.omit({ lunchMoneyApiKey: true }).pa
 export function readResumedProfiles(filesystem: SetupFilesystem): {
   tradeRepublicProfiles: TradeRepublicProfile[];
   scalableCapitalProfiles: ScalableCapitalProfile[];
+  sharedCardLast4: string[];
 } {
   const configPath = path.join(process.cwd(), CONFIG_FILENAME);
   if (!filesystem.exists(configPath)) {
-    return { tradeRepublicProfiles: [], scalableCapitalProfiles: [] };
+    return { tradeRepublicProfiles: [], scalableCapitalProfiles: [], sharedCardLast4: [] };
   }
   let parsed: Record<string, unknown>;
   try {
     parsed = readConfigJsonObject(filesystem, configPath);
   } catch {
-    return { tradeRepublicProfiles: [], scalableCapitalProfiles: [] };
+    return { tradeRepublicProfiles: [], scalableCapitalProfiles: [], sharedCardLast4: [] };
   }
   const resumed = resumedConfigSchema.safeParse(parsed);
   if (!resumed.success) {
-    return { tradeRepublicProfiles: [], scalableCapitalProfiles: [] };
+    return { tradeRepublicProfiles: [], scalableCapitalProfiles: [], sharedCardLast4: [] };
   }
   return {
     tradeRepublicProfiles: resumed.data.tradeRepublicProfiles ?? [],
     scalableCapitalProfiles: resumed.data.scalableCapitalProfiles ?? [],
+    sharedCardLast4: resumed.data.sharedCardLast4 ?? [],
   };
 }
