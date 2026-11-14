@@ -9,26 +9,6 @@ permissions:
 
 jobs:
   semantic-title:
-    name: Semantic pull request
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    uses: osloer-industries/.github/.github/workflows/semantic-pull-request.yml@0221b21f9d130eff47cb04ca9374220886198419 # main
     permissions:
       pull-requests: read
-    steps:
-      - name: Validate Conventional Commit title
-        uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          types: |
-            build
-            chore
-            ci
-            docs
-            feat
-            fix
-            perf
-            refactor
-            revert
-            style
-            test

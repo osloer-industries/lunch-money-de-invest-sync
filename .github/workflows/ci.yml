@@ -16,20 +16,9 @@ jobs:
       actions: read
 
   quality:
-    name: Quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: { node-version-file: .nvmrc, cache: npm }
-      - run: npm ci --ignore-scripts
-      - run: npm audit --omit=dev --audit-level=high
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test:coverage
-      - run: npm run build
+    uses: osloer-industries/.github/.github/workflows/node-npm-quality.yml@0221b21f9d130eff47cb04ca9374220886198419 # main
+    permissions:
+      contents: read
 
   test-macos:
     name: Tests (macOS)
