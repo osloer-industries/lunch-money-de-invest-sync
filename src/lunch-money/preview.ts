@@ -1,5 +1,6 @@
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { TransactionsApi } from "./upsert.js";
+import { toLunchMoneyV2Amount } from "./upsert.js";
 
 export interface DryRunLine {
   readonly externalId: string;
@@ -60,7 +61,7 @@ export async function previewUpsert(
     return {
       externalId: tx.externalId,
       date: tx.date,
-      amount: tx.amount,
+      amount: toLunchMoneyV2Amount(tx.amount),
       payee: tx.payee,
       action,
     };

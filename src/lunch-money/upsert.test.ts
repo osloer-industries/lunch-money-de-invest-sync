@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CanonicalTransaction } from "../shared/transaction.js";
-import { summarizeInsertResult, toInsertPayload, upsertTransactions } from "./upsert.js";
+import {
+  summarizeInsertResult,
+  toInsertPayload,
+  toLunchMoneyV2Amount,
+  upsertTransactions,
+} from "./upsert.js";
 import type { TransactionsApi } from "./upsert.js";
 
 function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction {
@@ -16,13 +21,20 @@ function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction
   };
 }
 
+describe("toLunchMoneyV2Amount", () => {
+  it("negates canonical amounts for the v2 API", () => {
+    expect(toLunchMoneyV2Amount(-12.5)).toBe(12.5);
+    expect(toLunchMoneyV2Amount(40)).toBe(-40);
+  });
+});
+
 describe("toInsertPayload", () => {
   it("maps canonical fields onto the Lunch Money insert shape", () => {
     const payload = toInsertPayload([tx()], 42, new Map());
     expect(payload.transactions).toEqual([
       {
         date: "2026-07-01",
-        amount: -12.5,
+        amount: 12.5,
         currency: "eur",
         payee: "Some Payee",
         notes: null,

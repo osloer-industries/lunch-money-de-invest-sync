@@ -28,6 +28,9 @@
   `sc broker transactions --json`).
 - Maps broker events into Lunch Money **manual account** transactions with stable `external_id` values so
   re-running a sync is idempotent (duplicates are skipped server-side).
+- Keeps broker amounts in the internal canonical model (negative = outflow, positive = inflow) and converts to
+  [Lunch Money v2](https://lunchmoney.dev/amounts-and-balances) signs at insert time (positive = outflow,
+  negative = inflow). Dry-run previews use the same v2 amounts that would be POSTed.
 - Tags spend that matches configured shared-card last-four digits with a `shared` tag for easier splitting later.
 
 ## Supported institutions

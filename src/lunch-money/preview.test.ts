@@ -64,6 +64,8 @@ describe("previewUpsert", () => {
     );
     expect(summary.wouldInsert).toBe(1);
     expect(summary.wouldSkip).toBe(1);
+    expect(summary.lines[0]?.amount).toBe(1);
+    expect(summary.lines[1]?.amount).toBe(2);
     expect(client.transactions.create).not.toHaveBeenCalled();
   });
 });
