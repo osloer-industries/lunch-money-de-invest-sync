@@ -14,7 +14,12 @@ import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
-import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
+import {
+  SAVEBACK_CREATE_TEMPLATES,
+  type SuggestedCategory,
+  SUGGESTED_CATEGORIES,
+  SUGGESTED_TAGS,
+} from "./category-defaults.js";
 import {
   findSuggestedCategoryMatch,
   type SetupCategoryRow,
@@ -24,6 +29,126 @@ import type { SetupCliOptions } from "./setup-options.js";
 const CONFIG_FILENAME = "config.json";
 const SKIP_CATEGORY = "__skip__";
 const NEW_CATEGORY = "__new__";
+const SAVEBACK_INCOME_CHOICE = "saveback-income";
+const SAVEBACK_EXCLUDED_CHOICE = "saveback-excluded";
+
+function formatCreateCategoryConfirm(suggestion: SuggestedCategory): string {
+  return `Create category "${suggestion.name}" (is_income=${suggestion.is_income}, exclude budget=${suggestion.exclude_from_budget}, exclude totals=${suggestion.exclude_from_totals})?`;
+}
+
+function allowsCreateCategory(canonicalType: CanonicalType, suggestion: SuggestedCategory | undefined): boolean {
+  if (canonicalType === "saveback") {
+    return true;
+  }
+  return suggestion !== undefined;
+}
+
+async function pickSavebackCreateTemplate(prompter: SetupPrompter): Promise<SuggestedCategory | undefined> {
+  const choice = await prompter.select("Saveback category treatment", [
+    {
+      name: "Saveback income — is_income=true, not excluded from budget/totals",
+      value: SAVEBACK_INCOME_CHOICE,
+    },
+    {
+      name: "Excluded savings/investment — same flags as Investments (excluded from budget and totals)",
+      value: SAVEBACK_EXCLUDED_CHOICE,
+    },
+  ]);
+  if (choice === SAVEBACK_INCOME_CHOICE) {
+    return SAVEBACK_CREATE_TEMPLATES[0];
+  }
+  if (choice === SAVEBACK_EXCLUDED_CHOICE) {
+    return SAVEBACK_CREATE_TEMPLATES[1];
+  }
+  return undefined;
+}
+
+async function createCategoryFromTemplate(
+  prompter: SetupPrompter,
+  client: CategoryMappingSetupClient,
+  suggestion: SuggestedCategory,
+): Promise<number | undefined> {
+  const confirmed = await prompter.confirm(formatCreateCategoryConfirm(suggestion), false);
+  if (!confirmed) {
+    return undefined;
+  }
+  const created = await client.categories.create({
+    name: suggestion.name,
+    is_income: suggestion.is_income,
+    exclude_from_budget: suggestion.exclude_from_budget,
+    exclude_from_totals: suggestion.exclude_from_totals,
+    is_group: false,
+    group_id: null,
+    archived: false,
+  });
+  return created.id;
+}
+
+
+function printStandardSuggestion(
+  prompter: SetupPrompter,
+  canonicalType: CanonicalType,
+  suggestion: SuggestedCategory,
+  categoryRows: readonly SetupCategoryRow[],
+): void {
+  const { category: match, warnedMissingExclusion } = findSuggestedCategoryMatch(
+    categoryRows,
+    suggestion,
+    canonicalType,
+  );
+  if (match) {
+    prompter.print(
+      `  Suggested category for ${canonicalType}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
+    );
+    if (warnedMissingExclusion) {
+      prompter.print(
+        "  Warning: this category does not have both Exclude from budget and Exclude from totals enabled.",
+      );
+    }
+    return;
+  }
+  prompter.print(
+    `  Suggested category for ${canonicalType}: "${suggestion.name}" (not found — pick id or create)`,
+  );
+}
+
+function printTypeMappingGuidance(
+  prompter: SetupPrompter,
+  canonicalType: CanonicalType,
+  suggestion: SuggestedCategory | undefined,
+  categoryRows: readonly SetupCategoryRow[],
+): void {
+  if (canonicalType === "saveback") {
+    printSavebackGuidance(prompter, categoryRows);
+    return;
+  }
+  if (suggestion) {
+    printStandardSuggestion(prompter, canonicalType, suggestion, categoryRows);
+    return;
+  }
+  if (canonicalType === "unknown") {
+    prompter.print(
+      "  Unknown spend: leave uncategorised or pick an existing category — create-new is not offered for unknown types.",
+    );
+  }
+}
+
+function printSavebackGuidance(
+  prompter: SetupPrompter,
+  categories: readonly SetupCategoryRow[],
+): void {
+  prompter.print(
+    "  Saveback: map to income (Saveback income) or excluded savings/investment. The saveback tag stays on every row.",
+  );
+  for (const template of SAVEBACK_CREATE_TEMPLATES) {
+    const match = categories.find(
+      (category) => !category.is_group && category.name.toLowerCase() === template.name.toLowerCase(),
+    );
+    if (match) {
+      prompter.print(`  Existing "${template.name}" [id ${match.id}]`);
+    }
+  }
+}
 
 async function pickCategoryId(
   prompter: SetupPrompter,
@@ -33,59 +158,30 @@ async function pickCategoryId(
   const categories = await client.categories.getAll();
   const suggestion = SUGGESTED_CATEGORIES[canonicalType];
   const categoryRows = categories as readonly SetupCategoryRow[];
-  if (suggestion) {
-    const { category: match, warnedMissingExclusion } = findSuggestedCategoryMatch(
-      categoryRows,
-      suggestion,
-      canonicalType,
-    );
-    if (match) {
-      prompter.print(
-        `  Suggested category for ${canonicalType}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
-      );
-      if (warnedMissingExclusion) {
-        prompter.print(
-          "  Warning: this category does not have both Exclude from budget and Exclude from totals enabled.",
-        );
-      }
-    } else {
-      prompter.print(
-        `  Suggested category for ${canonicalType}: "${suggestion.name}" (not found — pick id or create)`,
-      );
-    }
-  }
-  const choice = await prompter.search(`Category for type "${canonicalType}"`, [
+  printTypeMappingGuidance(prompter, canonicalType, suggestion, categoryRows);
+  const pickerChoices = [
     { name: "Skip (no mapping)", value: SKIP_CATEGORY },
-    { name: "Create new category", value: NEW_CATEGORY },
+    ...(allowsCreateCategory(canonicalType, suggestion)
+      ? [{ name: "Create new category", value: NEW_CATEGORY }]
+      : []),
     ...categories.map((category) => ({
       name: `[${category.id}] ${category.name}`,
       value: String(category.id),
     })),
-  ]);
+  ];
+  const choice = await prompter.search(`Category for type "${canonicalType}"`, pickerChoices);
   if (choice === SKIP_CATEGORY) {
     return undefined;
   }
   if (choice === NEW_CATEGORY) {
-    if (!suggestion) {
-      throw new Error(`No default category template for type "${canonicalType}"`);
-    }
-    const confirmed = await prompter.confirm(
-      `Create category "${suggestion.name}" (exclude budget=${suggestion.exclude_from_budget}, exclude totals=${suggestion.exclude_from_totals})?`,
-      false,
-    );
-    if (!confirmed) {
+    const template =
+      canonicalType === "saveback"
+        ? await pickSavebackCreateTemplate(prompter)
+        : suggestion;
+    if (!template) {
       return undefined;
     }
-    const created = await client.categories.create({
-      name: suggestion.name,
-      is_income: suggestion.is_income,
-      exclude_from_budget: suggestion.exclude_from_budget,
-      exclude_from_totals: suggestion.exclude_from_totals,
-      is_group: false,
-      group_id: null,
-      archived: false,
-    });
-    return created.id;
+    return createCategoryFromTemplate(prompter, client, template);
   }
   return parsePromptPositiveInt(choice, {
     entityLabel: "Category id",
