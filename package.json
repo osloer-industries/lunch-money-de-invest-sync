@@ -21,6 +21,7 @@
     "sync": "tsx src/sync.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -44,6 +45,7 @@
     "@types/node": "24.19.2",
     "@vitest/coverage-v8": "5.1.0",
     "lefthook": "2.2.2",
+    "node-pty": "1.1.0",
     "oxlint": "1.91.0",
     "oxlint-tsgolint": "7.0.2006",
     "tsx": "4.23.15",

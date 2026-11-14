@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { resolveTagIds, type TagsApi } from "./client.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./client.js";
 
 function fakeTagsApi(existing: Array<{ id: number; name: string }>): TagsApi {
   let nextId = Math.max(0, ...existing.map((tag) => tag.id)) + 1;
@@ -15,6 +15,23 @@ function fakeTagsApi(existing: Array<{ id: number; name: string }>): TagsApi {
     },
   };
 }
+
+describe("createLunchMoneyClient", () => {
+  const originalBase = process.env.LUNCH_MONEY_API_BASE_URL;
+
+  afterEach(() => {
+    if (originalBase === undefined) {
+      delete process.env.LUNCH_MONEY_API_BASE_URL;
+    } else {
+      process.env.LUNCH_MONEY_API_BASE_URL = originalBase;
+    }
+  });
+
+  it("accepts LUNCH_MONEY_API_BASE_URL for offline mock servers", () => {
+    process.env.LUNCH_MONEY_API_BASE_URL = "http://127.0.0.1:9/v2";
+    expect(() => createLunchMoneyClient("lm_test_key")).not.toThrow();
+  });
+});
 
 describe("resolveTagIds", () => {
   it("returns an empty map when no tag names are requested", async () => {

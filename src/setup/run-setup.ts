@@ -102,6 +102,10 @@ async function resolveSetupApiKey(
   store: LunchMoneyApiKeyStore,
   filesystem: SetupFilesystem,
 ): Promise<string> {
+  const e2ePreset = process.env["LM_E2E_PRESET_API_KEY"]?.trim() ?? "";
+  if (e2ePreset.length > 0 && !options.replaceApiKey) {
+    await store.set(e2ePreset);
+  }
   const envKey = process.env["LUNCH_MONEY_API_KEY"]?.trim() ?? "";
   if (options.nonInteractive) {
     return readNonInteractiveApiKey(store, envKey);

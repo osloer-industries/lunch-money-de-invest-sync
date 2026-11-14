@@ -218,7 +218,7 @@ manual account (or clean up legacy rows yourself). Re-running sync on the curren
 ## Security model
 
 - **Secrets stay local:** Lunch Money API keys belong in gitignored `.env` on your laptop; broker sessions live in pytr/`sc` config dirs.
-- **CI is credential-free:** workflows lint, typecheck, test, audit, and scan code — they never call Lunch Money or brokers.
+- **CI is credential-free:** workflows lint, typecheck, test, audit, and scan code — they never call live Lunch Money or brokers. Terminal e2e tests use a local HTTP mock and stub `pytr`/`sc` binaries with anonymised fixtures (`npm run test:e2e`).
 - **CLI sessions stay local:** pytr (`~/.pytr`) and `sc` session files live only on the operator machine; this repo never reads or stores them.
 - **Reporting vulnerabilities:** see [SECURITY.md](SECURITY.md) (private GitHub Security Advisories).
 
@@ -256,6 +256,7 @@ transports; tests inject fakes.
 | `npm run lint` | Oxlint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Vitest unit tests (faked I/O — no live brokers) |
+| `npm run test:e2e` | Pseudo-terminal e2e journeys (`doctor`, `setup`, `sync`) — offline stubs/mocks only |
 | `npm run build` | Compile to `dist/` |
 
 ## Development
@@ -269,7 +270,8 @@ npm audit --omit=dev
 ```
 
 CI runs org **workflow-security** (actionlint + zizmor), **Quality** (`npm run check` + production audit),
-**CodeQL**, dependency review on pull requests, and semantic pull request title validation.
+**CodeQL**, dependency review on pull requests, semantic pull request title validation, and separate
+**E2E terminal** jobs on macOS/Linux with a timezone matrix (`npm run test:e2e`).
 Details: [docs/consuming-org-reusables.md](docs/consuming-org-reusables.md).
 
 Every module is covered by unit tests using fakes for broker CLI I/O — no test talks to a real broker or Lunch Money.
