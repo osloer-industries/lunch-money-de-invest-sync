@@ -7,12 +7,14 @@ export interface ManualAccountKind {
   readonly subtype?: string;
 }
 
+const DEFAULT_MANUAL_ACCOUNT_KIND: ManualAccountKind = { type: "investment" };
+
 export async function createManualAccountOrReuse(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
   displayName: string,
   brokerLabel: string,
-  kind: ManualAccountKind = { type: "investment" },
+  kind: ManualAccountKind = DEFAULT_MANUAL_ACCOUNT_KIND,
 ): Promise<number | null> {
   try {
     const created = await client.manualAccounts.create({
