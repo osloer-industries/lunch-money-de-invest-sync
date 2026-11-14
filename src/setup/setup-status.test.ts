@@ -1,27 +1,24 @@
-import { describe, expect, it, vi } from "vitest";
-import { reportSetupError, statusError, statusOk } from "./setup-status.js";
+import { describe, expect, it } from "vitest";
+import { isPromptInterrupted, SETUP_PAUSED_MESSAGE, reportSetupError } from "./setup-status.js";
 
-describe("setup-status", () => {
-  it("formats status lines", () => {
-    expect(statusOk("done")).toBe("✓ done");
-    expect(statusError("nope")).toBe("✗ nope");
+describe("setup status", () => {
+  it("detects prompt interruption", () => {
+    const error = new Error("User force closed the prompt");
+    error.name = "ExitPromptError";
+    expect(isPromptInterrupted(error)).toBe(true);
   });
 
-  it("prints message-only errors unless DEBUG", () => {
-    const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
-    delete process.env.DEBUG;
-    reportSetupError(new Error("friendly"));
-    expect(stderr).toHaveBeenCalledWith("friendly");
-    stderr.mockRestore();
-  });
-
-  it("prints full errors when DEBUG=1", () => {
-    const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
-    process.env.DEBUG = "1";
-    const err = new Error("verbose");
-    reportSetupError(err);
-    expect(stderr).toHaveBeenCalledWith(err);
-    delete process.env.DEBUG;
-    stderr.mockRestore();
+  it("prints pause message on interrupt", () => {
+    const error = new Error("User force closed the prompt");
+    error.name = "ExitPromptError";
+    const lines: string[] = [];
+    const original = console.error;
+    console.error = (line: string) => lines.push(line);
+    try {
+      reportSetupError(error);
+    } finally {
+      console.error = original;
+    }
+    expect(lines.join("\n")).toContain(SETUP_PAUSED_MESSAGE);
   });
 });

@@ -9,7 +9,8 @@ import { runCategoryMappingSetup } from "./setup/run-category-mapping.js";
 import { runSetup } from "./setup/run-setup.js";
 import { createLunchMoneyClient } from "./lunch-money/client.js";
 import type { SetupFilesystem, SetupPrompter } from "./setup/types.js";
-import { reportSetupError, statusOk, statusWarn } from "./setup/setup-status.js";
+import { doctorCheckLabel } from "./doctor-labels.js";
+import { isPromptInterrupted, reportSetupError, statusOk, statusWarn } from "./setup/setup-status.js";
 import { runDoctor } from "./doctor.js";
 import {
   clearStoredLunchMoneyApiKey,
@@ -49,10 +50,12 @@ async function printDoctorWarnings(
     createScRunner: () => deps.runners?.sc ?? createScCliRunner("sc"),
     logger,
   });
-  if (!doctor.ok) {
-    logger(statusWarn("Some doctor checks failed — you can continue setup, but sync may fail until fixed"));
-    for (const check of doctor.checks.filter((c) => !c.ok)) {
-      logger(`  ✗ ${check.name}: ${check.detail}`);
+  const setupWillFix = new Set(["lunch-money-api-key", "dotenv-api-key", "config-json"]);
+  const remaining = doctor.checks.filter((c) => !c.ok && !setupWillFix.has(c.name));
+  if (remaining.length > 0) {
+    logger(statusWarn("Some checks failed — fix these before sync if setup cannot resolve them"));
+    for (const check of remaining) {
+      logger(`  ✗ ${doctorCheckLabel(check.name)}: ${check.detail}`);
       if (check.fix) {
         logger(`    → ${check.fix}`);
       }
@@ -125,6 +128,6 @@ if (entryScript !== undefined && fileURLToPath(import.meta.url) === nodePath.res
     await runSetupCli(process.argv.slice(2));
   } catch (error: unknown) {
     reportSetupError(error);
-    process.exitCode = 1;
+    process.exitCode = isPromptInterrupted(error) ? 130 : 1;
   }
 }

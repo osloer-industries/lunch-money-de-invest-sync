@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { assertNodeMajorVersion, ensurePytrReady, ensureScCliReady, parseScPortfolios } from "./broker-preflight.js";
+import {
+  assertNodeMajorVersion,
+  confirmPytrCredentialStorage,
+  ensurePytrReady,
+  ensureScCliReady,
+  parseScPortfolios,
+} from "./broker-preflight.js";
 import type { SetupPrompter } from "./types.js";
 
 function prompter(): SetupPrompter {
@@ -172,6 +178,16 @@ describe("ensurePytrReady", () => {
     await expect(ensurePytrReady(runner, prompter(), { enabled: true, skipCheck: false })).rejects.toThrow(
       /session check failed/,
     );
+  });
+
+  it("re-prompts when credential storage is declined", async () => {
+    const prompt = prompter();
+    (prompt.confirm as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true);
+    await confirmPytrCredentialStorage(prompt, "pytr login --v2");
+    expect(prompt.confirm).toHaveBeenCalledTimes(3);
   });
 
   it("returns when export_transactions succeeds", async () => {

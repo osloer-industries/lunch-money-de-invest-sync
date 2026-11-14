@@ -155,7 +155,7 @@ describe("runSetupCli", () => {
           logger,
         }),
       );
-      expect(logger).toHaveBeenCalledWith(expect.stringContaining("doctor checks failed"));
+      expect(logger).toHaveBeenCalledWith(expect.stringContaining("Some checks failed"));
       expect(runSetup).toHaveBeenCalledOnce();
     } finally {
       if (vitest !== undefined) {

@@ -87,16 +87,25 @@ function isScSessionActive(stdout: string): boolean {
 }
 
 export async function confirmPytrCredentialStorage(prompter: SetupPrompter, loginCommand: string): Promise<void> {
-  prompter.print(
-    [
-      "pytr must store credentials on disk for unattended exports.",
-      "The login command below passes --store_credentials, which writes your phone number and Trade Republic PIN",
-      "in plain text to ~/.pytr/credentials (file mode 0600).",
-    ].join("\n"),
-  );
-  const ok = await prompter.confirm(`Accept and run this login command later if needed?\n\n  ${loginCommand}`, false);
-  if (!ok) {
-    throw new Error("Trade Republic setup cancelled — credential storage was not accepted");
+  for (;;) {
+    prompter.print(
+      [
+        "pytr must store credentials on disk for unattended exports.",
+        "The login command below passes --store_credentials, which writes your phone number and Trade Republic PIN",
+        "in plain text to ~/.pytr/credentials (file mode 0600).",
+      ].join("\n"),
+    );
+    const ok = await prompter.confirm(`Accept and run this login command later if needed?\n\n  ${loginCommand}`, false);
+    if (ok) {
+      return;
+    }
+    prompter.print(
+      "Without stored credentials, Trade Republic cannot sync automatically. You can accept storage or choose a different broker.",
+    );
+    const again = await prompter.confirm("Review the credential notice again?", true);
+    if (!again) {
+      throw new Error("Trade Republic setup stopped — credential storage was not accepted");
+    }
   }
 }
 

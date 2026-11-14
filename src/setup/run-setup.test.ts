@@ -432,6 +432,47 @@ describe("runSetup", () => {
     );
   });
 
+  it("re-prompts when the Lunch Money API key input is empty", async () => {
+    const prompter = trInteractivePrompter({
+      confirms: (message) => pytrCredentialStorageAccepted(message) || message.includes("dry-run"),
+    });
+  (prompter.password as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("lm_test_key");
+    await expect(
+      runSetup(
+        baseSetupOptions(),
+        defaultRunSetupDeps({
+          prompter,
+          runSync: vi.fn().mockResolvedValue(undefined),
+        }),
+      ),
+    ).resolves.toMatchObject({ kind: "completed" });
+    expect(prompter.password).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not prompt to overwrite config saved incrementally during setup", async () => {
+    const confirms: string[] = [];
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter: trInteractivePrompter({
+          confirms: (message) => {
+            confirms.push(message);
+            return (
+              pytrCredentialStorageAccepted(message) ||
+              message.includes("dry-run") ||
+              message.includes("category mapping")
+            );
+          },
+        }),
+        runSync: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    expect(confirms.some((message) => message.includes("overwrite"))).toBe(false);
+  });
+
   it("defaults the profile label to me and uses it in the manual account name", async () => {
     const previousUser = process.env.USER;
     process.env.USER = "alice";

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  CORRUPT_CONFIG_JSON_MESSAGE,
   formatConfigLoadError,
   MISSING_LUNCH_MONEY_API_KEY_MESSAGE,
 } from "./config-cli-errors.js";
@@ -33,7 +34,7 @@ describe("formatConfigLoadError", () => {
 
   it("maps invalid JSON errors", () => {
     expect(formatConfigLoadError(new Error("config.json contains invalid JSON"))).toBe(
-      "config.json is invalid — fix or delete it and run npm run setup again.",
+      CORRUPT_CONFIG_JSON_MESSAGE,
     );
   });
 });

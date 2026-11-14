@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { doctorCheckLabel } from "./doctor-labels.js";
+import { formatConfigLoadError } from "./shared/config-cli-errors.js";
 import { readConfigFromDiskForCli } from "./shared/config.js";
 import { bootstrapLunchMoneyApiKey } from "./shared/bootstrap-lunch-money-api-key.js";
 import { readApiKeyFromDotenvText } from "./shared/dotenv-api-key.js";
@@ -204,12 +206,12 @@ async function configCheck(store: LunchMoneyApiKeyStore): Promise<DoctorCheck | 
       ...(profileCount > 0 ? {} : { fix: "Run `npm run setup` to add broker profiles" }),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatConfigLoadError(error) ?? (error instanceof Error ? error.message : String(error));
     return {
       name: "config-json",
       ok: false,
       detail: message,
-      fix: "Fix or delete config.json and re-run `npm run setup`",
+      fix: "Run `npm run setup` to back up broken settings to config.json.bak and start fresh",
     };
   }
 }
@@ -277,7 +279,7 @@ export async function runDoctorCli(
   }
   const result = await runDoctor(deps);
   for (const check of result.checks) {
-    const summary = `${check.name}: ${check.detail}`;
+    const summary = `${doctorCheckLabel(check.name)}: ${check.detail}`;
     let line = statusOk(summary);
     if (!check.ok) {
       line = statusError(summary);

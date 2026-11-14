@@ -1,6 +1,8 @@
 import path from "node:path";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { loadConfig } from "../shared/config.js";
+import { ensureReadableConfigForSetup } from "./corrupt-config-recovery.js";
+import { promptSharedCardDigits, runSavedBrokerProfilesStep } from "./setup-profile-resume.js";
 import { readResumedProfiles } from "./resume-config.js";
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "../shared/config.js";
 import { createLunchMoneyClient } from "../lunch-money/client.js";
@@ -21,7 +23,7 @@ import { parseSharedCardLast4Input } from "./shared-card-input.js";
 import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse } from "./manual-account.js";
-import { statusError, statusOk } from "./setup-status.js";
+import { statusError, statusOk, statusWarn } from "./setup-status.js";
 import { forEachConfirmedRepeat } from "../shared/sequential-profiles.js";
 import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
 import { stripApiKeyFromDotenvFile } from "../shared/dotenv-api-key.js";
@@ -52,7 +54,8 @@ async function promptApiKeyWithFactory(
   for (;;) {
     const key = await prompter.password("Lunch Money API key (input hidden)");
     if (key.trim().length === 0) {
-      throw new Error("Lunch Money API key is required");
+      prompter.print(statusWarn("Lunch Money API key cannot be empty — paste your developer key from Lunch Money settings"));
+      continue;
     }
     try {
       await validateApiKey(createClient(key.trim()));
@@ -336,21 +339,34 @@ async function interactiveProfiles(
   tradeRepublicProfiles: TradeRepublicProfile[];
   scalableCapitalProfiles: ScalableCapitalProfile[];
 }> {
-  const resumed = readResumedProfiles(filesystem);
-  const { tradeRepublicProfiles, scalableCapitalProfiles } = resumed;
-  if (tradeRepublicProfiles.length > 0 || scalableCapitalProfiles.length > 0) {
-    prompter.print(statusOk("Resuming broker profiles from config.json"));
+  await ensureReadableConfigForSetup(filesystem, prompter);
+  const savedStep = await runSavedBrokerProfilesStep(prompter, filesystem, writeProgress);
+  if (savedStep.kind === "finished") {
+    return {
+      tradeRepublicProfiles: savedStep.tradeRepublicProfiles,
+      scalableCapitalProfiles: savedStep.scalableCapitalProfiles,
+    };
   }
+  let tradeRepublicProfiles = [...savedStep.tradeRepublicProfiles];
+  let scalableCapitalProfiles = [...savedStep.scalableCapitalProfiles];
 
-  const brokers = await prompter.checkbox(
-    "Which brokers should this config include? (Space to select, Enter to confirm)",
-    [
-      { name: "Trade Republic (pytr)", value: "trade-republic" },
-      { name: "Scalable Capital (sc)", value: "scalable-capital" },
-    ],
-  );
-  if (brokers.length === 0) {
-    throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
+  let brokers: string[] = [];
+  let emptyBrokerSelectionWarned = false;
+  while (brokers.length === 0) {
+    brokers = await prompter.checkbox(
+      "Which brokers should this config include? (Space to select, Enter to confirm)",
+      [
+        { name: "Trade Republic (pytr)", value: "trade-republic" },
+        { name: "Scalable Capital (sc)", value: "scalable-capital" },
+      ],
+    );
+    if (brokers.length === 0) {
+      if (emptyBrokerSelectionWarned) {
+        throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
+      }
+      emptyBrokerSelectionWarned = true;
+      prompter.print(statusWarn("Select at least one broker (Space to toggle, then Enter)"));
+    }
   }
 
   if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
@@ -456,6 +472,7 @@ async function finishSetup(
     { sharedCardLast4, ...profiles },
     options.yes,
     deps.prompter,
+    true,
   );
   process.env["LUNCH_MONEY_API_KEY"] = apiKey;
   let ranDryRun = false;
@@ -543,18 +560,14 @@ export async function runSetup(
         writeProgress,
       );
 
-  const resumedCards = options.nonInteractive ? [] : readResumedProfiles(deps.filesystem).sharedCardLast4;
-  let sharedRaw = "";
-  if (!options.nonInteractive && resumedCards.length === 0) {
-    sharedRaw = await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
-  }
-  const sharedCardLast4 =
-    resumedCards.length > 0 && !options.nonInteractive
-      ? resumedCards
-      : parseSharedCardLast4Input(sharedRaw);
-  if (resumedCards.length > 0 && !options.nonInteractive) {
-    deps.prompter.print(statusOk("Using shared card last-4 from config.json"));
-  }
+  const sharedCardLast4 = options.nonInteractive
+    ? []
+    : await promptSharedCardDigits(
+        deps.prompter,
+        readResumedProfiles(deps.filesystem).sharedCardLast4,
+        parseSharedCardLast4Input,
+        () => deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", ""),
+      );
   loadConfig({
     lunchMoneyApiKey: apiKey,
     sharedCardLast4,

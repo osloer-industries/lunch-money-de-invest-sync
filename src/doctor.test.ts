@@ -262,7 +262,7 @@ describe("runDoctorCli", () => {
       logger,
       ...okRunners,
     });
-    expect(logger).toHaveBeenCalledWith(expect.stringContaining("node:"));
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining("Node.js version:"));
   });
 
   it("prints a warning and exits successfully when uv is missing but pytr is present", async () => {
@@ -274,7 +274,7 @@ describe("runDoctorCli", () => {
       logger,
       ...okRunners,
     });
-    expect(logger).toHaveBeenCalledWith(expect.stringMatching(/⚠ uv: .*standalone pytr/));
+    expect(logger).toHaveBeenCalledWith(expect.stringMatching(/⚠ uv \(Python runner\): .*standalone pytr/));
     expect(logger).toHaveBeenCalledWith(expect.stringMatching(/^ {2}→ /));
   });
 });
