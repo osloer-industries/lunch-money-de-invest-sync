@@ -9,6 +9,7 @@ import { runCategoryMappingSetup } from "./setup/run-category-mapping.js";
 import { runSetup } from "./setup/run-setup.js";
 import { createLunchMoneyClient } from "./lunch-money/client.js";
 import type { SetupFilesystem, SetupPrompter } from "./setup/types.js";
+import { reportSetupError } from "./setup/setup-status.js";
 export function assertInteractiveSetupAllowed(options: SetupCliOptions): void {
   if (options.help || options.nonInteractive) {
     return;
@@ -73,7 +74,7 @@ if (entryScript !== undefined && fileURLToPath(import.meta.url) === nodePath.res
   try {
     await runSetupCli(process.argv.slice(2));
   } catch (error: unknown) {
-    console.error(error);
+    reportSetupError(error);
     process.exitCode = 1;
   }
 }
