@@ -6,9 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: release-please
@@ -16,10 +14,10 @@ concurrency:
 
 jobs:
   release-please:
-    uses: osloer-industries/.github/.github/workflows/release-please.yml@eb1884c861aed5f39259adf8d02db11c2a196051 # main
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
+    uses: osloer-industries/.github/.github/workflows/release-please.yml@a081e1b87b5309ff2b3999e8d6804d8ebec5c518 # v0.1.1
     secrets:
-      RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+    with:
+      release-app-id: ${{ vars.OSLOER_RELEASE_APP_ID }}
+      release-app-owner: osloer-industries
+      release-app-repositories: lunch-money-de-invest-sync

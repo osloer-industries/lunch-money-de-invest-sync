@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   analyze:
-    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@eb1884c861aed5f39259adf8d02db11c2a196051 # main
+    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@a081e1b87b5309ff2b3999e8d6804d8ebec5c518 # v0.1.1
     permissions:
       contents: read
       actions: read
