@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.1.1...v0.2.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **setup:** pytr launcher detection, always --v2 login, credential consent ([#43](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/43))
+
+### Features
+
+* npm run doctor and unified README setup path ([#40](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/40)) ([2356ac3](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/2356ac32e07f8ac304bb4c2eb0d084b203f8e33c))
+* **setup:** map withholding tax to excluded Investment tax ([#63](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/63)) ([0f62de7](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/0f62de7d14868df43c2f70a86eac55e1e827e822))
+* **setup:** offer category mapping by default after dry-run ([#61](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/61)) ([6a9e336](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/6a9e336f40794cd3e3d4cf5a4ee5de3bd8bbe688))
+* **setup:** offer Saveback income or excluded investment category ([#59](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/59)) ([f1b00ac](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/f1b00acb5d44eea3a7755f541e98c6a6f90858f8))
+* **setup:** onboarding UX polish ([#41](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/41)) ([38daaa9](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/38daaa9b7a40ad22ea5ca702f957815a98fd3625))
+* **setup:** print suggested account-scoped Lunch Money UI rules ([#62](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/62)) ([fdf2f87](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/fdf2f87e65d714c3c81da73d402ac0f1c01f86eb))
+
+
+### Bug Fixes
+
+* flip canonical amounts to Lunch Money v2 signs at insert ([#56](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/56)) ([a5693ee](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/a5693ee735831fafe84064bf7e4489458f967770))
+* make monthOnlyDate UTC-stable and extend CI timezones ([#34](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/34)) ([d388f98](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/d388f98961e4ffa430a7377004e437eafa5e4c43))
+* **setup:** default transfer mapping to Payment, Transfer ([#57](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/57)) ([01ef8bc](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/01ef8bc3100446b904a0df2910caceaa7a161587))
+* **setup:** hide Scalable security types from category mapping ([#64](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/64)) ([6b4e55c](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/6b4e55c2853c4ba369a86db19c43d2cd49f948e9))
+* **setup:** name new manual accounts after the broker ([#26](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/26)) ([40fe314](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/40fe314a0dab37c9a824d7239a6a23c6ff14c0e1))
+* **setup:** pytr launcher detection, always --v2 login, credential consent ([#43](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/43)) ([ed66288](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/ed66288dbd5d4f846c2f953986a6ee96e784e467))
+* **setup:** robust onboarding, incremental save, duplicate accounts ([#39](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/39)) ([4c0521b](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/4c0521bd8aba47a914f5931761a3b562080eff4b))
+* **setup:** validate category flags and refuse category groups ([#60](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/60)) ([f19d175](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/f19d175e1d0250c23a5a77816a93dc585c5076ef))
+* **subprocess:** fixed PATH, ~/.local/bin, ENOENT, timeout ([#42](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/42)) ([18d369e](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/18d369ecaa2accdf5f59b39fdb2d9ecb72d20ef6))
+* **sync:** run sync CLI entry and load .env from setup ([#36](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/36)) ([ab52783](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/ab52783683600b9cd6230950f46b0ddec26a141b))
+
 ## [0.1.1](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.1.0...v0.1.1) (2026-11-12)
 
 
