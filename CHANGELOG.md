@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.1...v0.2.2) (2026-11-14)
+
+
+### Features
+
+* **sync:** alert on Trade Republic app approval and re-check resumed sessions ([#70](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/70)) ([576c847](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/576c8479c6cb05af128c1f2af7e6ab4b2529ee5e))
+
 ## [0.2.1](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.0...v0.2.1) (2026-11-14)
 
 
