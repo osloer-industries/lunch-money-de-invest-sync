@@ -54,6 +54,7 @@ describe("fetchTradeRepublicTimeline", () => {
     expect(runner.run).toHaveBeenCalledWith(
       expect.arrayContaining(["export_transactions", "--outputdir", "/tmp/lm-tr-sync-test/"]),
       undefined,
+      expect.objectContaining({ onOutputLine: expect.any(Function) }),
     );
   });
 
@@ -87,6 +88,7 @@ describe("fetchTradeRepublicTimeline", () => {
     expect(runner.run).toHaveBeenCalledWith(
       expect.arrayContaining(["--v2", "--account", "acct-1"]),
       { HOME: "/data/operator-a" },
+      expect.objectContaining({ onOutputLine: expect.any(Function) }),
     );
   });
 
@@ -144,7 +146,11 @@ describe("fetchTradeRepublicTimeline", () => {
     const runner = fakeRunner([{ exitCode: 0 }]);
     const filesystem = fakeFilesystem(fixture);
     await fetchTradeRepublicTimeline(runner, {}, filesystem);
-    expect(runner.run).toHaveBeenCalledWith(expect.arrayContaining(["--v2"]), undefined);
+    expect(runner.run).toHaveBeenCalledWith(
+      expect.arrayContaining(["--v2"]),
+      undefined,
+      expect.objectContaining({ onOutputLine: expect.any(Function) }),
+    );
   });
 
   it("checks pytrMinVersion before exporting", async () => {

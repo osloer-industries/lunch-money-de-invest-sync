@@ -1,4 +1,5 @@
 import type { PathLike } from "node:fs";
+import { createAppApprovalWatcher } from "./app-approval-alert.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -203,7 +204,7 @@ async function runExport(
     const argv = buildExportArgv(outputDir, config);
     let run: Awaited<ReturnType<PytrCliRunner["run"]>>;
     try {
-      run = await runner.run(argv, childEnv);
+      run = await runner.run(argv, childEnv, { onOutputLine: createAppApprovalWatcher() });
     } catch (error) {
       if (isErrnoCode(error, "ENOENT")) {
         throw new Error(
