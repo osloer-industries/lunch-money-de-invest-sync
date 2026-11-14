@@ -6,6 +6,7 @@ vi.mock("./run-category-mapping.js", () => ({
   runCategoryMappingSetup,
 }));
 
+import { MemoryLunchMoneyApiKeyStore } from "../shared/lunch-money-api-key-store.js";
 import { manualAccountChoices, runSetup } from "./run-setup.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type { LunchMoneySetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
@@ -66,6 +67,7 @@ function defaultRunSetupDeps(
     runners: {},
     nodeVersion: "v24.0.0",
     createLunchMoneyClient: () => fakeLmClient(),
+    apiKeyStore: new MemoryLunchMoneyApiKeyStore(),
     ...overrides,
   };
 }
@@ -124,6 +126,8 @@ function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOpt
     portfolioId: null,
     categories: false,
     exportTypeSummary: null,
+    replaceApiKey: false,
+    clearApiKey: false,
     help: false,
     ...overrides,
   };
@@ -174,11 +178,12 @@ describe("runSetup", () => {
         }),
         defaultRunSetupDeps(),
       ),
-    ).rejects.toThrow(/LUNCH_MONEY_API_KEY/);
+    ).rejects.toThrow(/Lunch Money API key is not stored/);
   });
 
-  it("writes .env and config.json in non-interactive mode", async () => {
+  it("writes config.json in non-interactive mode without persisting the API key", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const filesystem = fakeFilesystem();
     const result = await runSetup(
       baseSetupOptions({
         nonInteractive: true,
@@ -186,13 +191,15 @@ describe("runSetup", () => {
         owner: "operator-a",
         lunchMoneyAssetId: 3,
       }),
-      defaultRunSetupDeps({ runSync: vi.fn().mockResolvedValue(undefined) }),
+      defaultRunSetupDeps({ filesystem, runSync: vi.fn().mockResolvedValue(undefined) }),
     );
     if (result.kind !== "completed") {
       throw new Error("expected completed setup");
     }
     expect(result.config.tradeRepublicProfiles[0]?.owner).toBe("operator-a");
-    expect(result.files.envPath.endsWith(".env")).toBe(true);
+    const written = String((filesystem.writeText as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] ?? "");
+    expect(written).not.toContain("lm_test_key");
+    expect(written).not.toContain("lunchMoneyApiKey");
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
@@ -347,23 +354,6 @@ describe("runSetup", () => {
     ).rejects.toThrow();
   });
 
-  it("refuses to overwrite an existing .env without confirmation", async () => {
-    const fs = fakeFilesystem();
-    (fs.exists as ReturnType<typeof vi.fn>).mockImplementation((path) => String(path).endsWith(".env"));
-    await expect(
-      runSetup(
-        baseSetupOptions({ yes: false }),
-        defaultRunSetupDeps({
-          prompter: trInteractivePrompter({
-            confirms: (message) => !message.includes(".env"),
-          }),
-          filesystem: fs,
-          runSync: vi.fn(),
-        }),
-      ),
-    ).rejects.toThrow(/overwrite existing .env/);
-  });
-
   it("offers category mapping with default Yes after a dry-run", async () => {
     let categoryMappingDefault: boolean | undefined;
     const prompter = trInteractivePrompter();
@@ -390,6 +380,30 @@ describe("runSetup", () => {
     expect(result.kind).toBe("completed");
     expect(categoryMappingDefault).toBe(true);
     expect(runCategoryMappingSetup).not.toHaveBeenCalled();
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
+  it("hands a Lunch Money client factory to category mapping when the operator accepts", async () => {
+    runCategoryMappingSetup.mockClear();
+    const lm = fakeLmClient();
+    const prompter = trInteractivePrompter({
+      confirms: (message) => message.includes("dry-run") || message.includes("category mapping"),
+    });
+    const result = await runSetup(
+      baseSetupOptions(),
+      defaultRunSetupDeps({
+        prompter,
+        runSync: vi.fn().mockResolvedValue(undefined),
+        createLunchMoneyClient: () => lm,
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    expect(runCategoryMappingSetup).toHaveBeenCalledTimes(1);
+    const deps = runCategoryMappingSetup.mock.calls[0]?.[1] as {
+      createClient?: (apiKey: string) => unknown;
+    };
+    expect(typeof deps.createClient).toBe("function");
+    expect(deps.createClient?.("lm_test_key")).toBe(lm);
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 

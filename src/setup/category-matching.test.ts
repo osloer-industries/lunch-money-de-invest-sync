@@ -61,7 +61,7 @@ describe("category-matching", () => {
     const categories = [
       row({
         id: 10,
-        name: "Investment income",
+        name: "Income",
         is_income: true,
         exclude_from_budget: false,
         exclude_from_totals: false,

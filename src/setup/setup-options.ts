@@ -14,6 +14,8 @@ export interface SetupCliOptions {
   readonly portfolioId: string | null;
   readonly categories: boolean;
   readonly exportTypeSummary: string | null;
+  readonly replaceApiKey: boolean;
+  readonly clearApiKey: boolean;
   readonly help: boolean;
 }
 
@@ -31,6 +33,8 @@ const PARSE_CONFIG: ParseArgsConfig = {
     "portfolio-id": { type: "string" },
     categories: { type: "boolean", default: false },
     "export-type-summary": { type: "string" },
+    "replace-api-key": { type: "boolean", default: false },
+    "clear-api-key": { type: "boolean", default: false },
     help: { type: "boolean", default: false, short: "h" },
   },
   allowPositionals: false,
@@ -50,7 +54,9 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --scalable-asset-id <id>       Scalable Capital manual account id (non-interactive)
   --portfolio-id <id>            Scalable portfolio id (optional)
   --skip-broker-check            Skip sc/pytr install+login probes
-  --yes                          Overwrite config.json / .env without prompting
+  --yes                          Overwrite config.json without prompting
+  --replace-api-key              Prompt for a new Lunch Money API key (stored in OS keychain)
+  --clear-api-key                Remove the stored Lunch Money API key
   --categories                   Map broker types to Lunch Money categories/tags (standalone)
   --export-type-summary <file>   Write anonymised type counts/examples (opt-in)
   -h, --help                     Show this help`;
@@ -86,6 +92,8 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
     categories: values.categories === true,
     exportTypeSummary: exportTypeSummaryPath(values),
+    replaceApiKey: values["replace-api-key"] === true,
+    clearApiKey: values["clear-api-key"] === true,
     help: values.help === true,
   };
 }

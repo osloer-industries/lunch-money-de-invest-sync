@@ -1,6 +1,8 @@
 import type { ScalableCapitalProfile, SyncConfig, TradeRepublicProfile } from "./shared/config.js";
 import { readConfigFromDisk, readConfigFromDiskForCli } from "./shared/config.js";
-import { loadDotenvFromCwd } from "./shared/load-dotenv.js";
+import { ensureLunchMoneyApiKeyForCli } from "./shared/bootstrap-lunch-money-api-key.js";
+import type { LunchMoneyApiKeyStore } from "./shared/lunch-money-api-key-store.js";
+import { createDefaultLunchMoneyApiKeyStore } from "./shared/lunch-money-api-key-store.js";
 import { tagSharedExpenses } from "./shared/tagging.js";
 import type { BrokerSource, CanonicalTransaction } from "./shared/transaction.js";
 import { createLunchMoneyClient, resolveTagIds, type TagsApi } from "./lunch-money/client.js";
@@ -224,6 +226,7 @@ export async function runSyncCli(
     createClient?: typeof createLunchMoneyClient;
     collectors?: BrokerCollectors;
     logger?: SyncLogger;
+    apiKeyStore?: LunchMoneyApiKeyStore;
   } = {},
 ): Promise<void> {
   const cli = parseSyncCliOptions(argv);
@@ -231,6 +234,7 @@ export async function runSyncCli(
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return;
   }
+  await ensureLunchMoneyApiKeyForCli(deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore());
   const config = (deps.readConfig ?? readConfigFromDiskForCli)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
   if (cli.exportTypeSummary) {
@@ -251,7 +255,6 @@ export async function runSyncCli(
 }
 
 runCliModuleMain(async () => {
-  loadDotenvFromCwd();
   try {
     await runSyncCli(process.argv.slice(2));
   } catch (error: unknown) {

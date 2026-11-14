@@ -23,8 +23,15 @@ import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse } from "./manual-account.js";
 import { statusError, statusOk } from "./setup-status.js";
 import { forEachConfirmedRepeat, forEachSequentially } from "../shared/sequential-profiles.js";
+import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
+import { stripApiKeyFromDotenvFile } from "../shared/dotenv-api-key.js";
+import {
+  createDefaultLunchMoneyApiKeyStore,
+  type LunchMoneyApiKeyStore,
+} from "../shared/lunch-money-api-key-store.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
+  CategoryMappingSetupClient,
   LunchMoneySetupClient,
   SetupBrokerRunners,
   SetupFilesystem,
@@ -32,7 +39,6 @@ import type {
   SetupResult,
 } from "./types.js";
 
-const ENV_FILENAME = ".env";
 const CONFIG_FILENAME = "config.json";
 
 async function validateApiKey(client: LunchMoneySetupClient): Promise<void> {
@@ -44,7 +50,7 @@ async function promptApiKeyWithFactory(
   createClient: (apiKey: string) => LunchMoneySetupClient,
 ): Promise<string> {
   for (;;) {
-    const key = await prompter.password("Lunch Money API key");
+    const key = await prompter.password("Lunch Money API key (input hidden)");
     if (key.trim().length === 0) {
       throw new Error("Lunch Money API key is required");
     }
@@ -60,6 +66,62 @@ async function promptApiKeyWithFactory(
       throw error;
     }
   }
+}
+
+async function readNonInteractiveApiKey(store: LunchMoneyApiKeyStore, envKey: string): Promise<string> {
+  if (envKey.length > 0) {
+    return envKey;
+  }
+  const stored = (await store.get())?.trim() ?? "";
+  if (stored.length > 0) {
+    return stored;
+  }
+  throw new Error(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
+}
+
+async function tryStoredInteractiveApiKey(
+  prompter: SetupPrompter,
+  createClient: (apiKey: string) => LunchMoneySetupClient,
+  stored: string,
+): Promise<string | null> {
+  try {
+    await validateApiKey(createClient(stored));
+    prompter.print(statusOk("Using Lunch Money API key from secure storage"));
+    return stored;
+  } catch (error) {
+    if (isLunchMoneyUnauthorized(error)) {
+      prompter.print(statusError("Stored Lunch Money API key was rejected — enter a new key"));
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function resolveSetupApiKey(
+  options: SetupCliOptions,
+  prompter: SetupPrompter,
+  createClient: (apiKey: string) => LunchMoneySetupClient,
+  store: LunchMoneyApiKeyStore,
+  filesystem: SetupFilesystem,
+): Promise<string> {
+  const envKey = process.env["LUNCH_MONEY_API_KEY"]?.trim() ?? "";
+  if (options.nonInteractive) {
+    return readNonInteractiveApiKey(store, envKey);
+  }
+  if (!options.replaceApiKey) {
+    const stored = (await store.get())?.trim() ?? "";
+    if (stored.length > 0) {
+      const reused = await tryStoredInteractiveApiKey(prompter, createClient, stored);
+      if (reused) {
+        return reused;
+      }
+    }
+  }
+  const prompted = await promptApiKeyWithFactory(prompter, createClient);
+  await store.set(prompted);
+  await stripApiKeyFromDotenvFile(filesystem, process.cwd());
+  prompter.print(statusOk("Saved Lunch Money API key to secure storage"));
+  return prompted;
 }
 
 const NEW_MANUAL_ACCOUNT = "__new__";
@@ -154,26 +216,6 @@ async function confirmOverwriteIfExists(
       throw new Error(refusalMessage);
     }
   }
-}
-
-async function writeEnvFile(
-  filesystem: SetupFilesystem,
-  apiKey: string,
-  overwrite: boolean,
-  prompter: SetupPrompter,
-): Promise<string> {
-  const envPath = path.join(process.cwd(), ENV_FILENAME);
-  await confirmOverwriteIfExists(
-    filesystem,
-    envPath,
-    ENV_FILENAME,
-    overwrite,
-    prompter,
-    "Refusing to overwrite existing .env",
-  );
-  await filesystem.writeText(envPath, `LUNCH_MONEY_API_KEY=${apiKey}\n`);
-  await filesystem.chmod(envPath, 0o600);
-  return envPath;
 }
 
 async function writeConfigFile(
@@ -333,7 +375,11 @@ async function interactiveProfiles(
   tradeRepublicProfiles: TradeRepublicProfile[];
   scalableCapitalProfiles: ScalableCapitalProfile[];
 }> {
-  const { tradeRepublicProfiles, scalableCapitalProfiles } = readResumedProfiles(filesystem);
+  const resumed = readResumedProfiles(filesystem);
+  const { tradeRepublicProfiles, scalableCapitalProfiles } = resumed;
+  if (tradeRepublicProfiles.length > 0 || scalableCapitalProfiles.length > 0) {
+    prompter.print(statusOk("Resuming broker profiles from config.json"));
+  }
 
   const brokers = await prompter.checkbox(
     "Which brokers should this config include? (Space to select, Enter to confirm)",
@@ -445,9 +491,9 @@ async function finishSetup(
     prompter: SetupPrompter;
     filesystem: SetupFilesystem;
     runSync?: typeof runSyncCli;
+    createLunchMoneyClient?: (apiKey: string) => CategoryMappingSetupClient;
   },
   apiKey: string,
-  envPath: string,
   profiles: {
     tradeRepublicProfiles: TradeRepublicProfile[];
     scalableCapitalProfiles: ScalableCapitalProfile[];
@@ -475,11 +521,12 @@ async function finishSetup(
     await runCategoryMappingSetup(options, {
       prompter: deps.prompter,
       filesystem: deps.filesystem,
+      createClient: deps.createLunchMoneyClient ?? ((key) => createLunchMoneyClient(key)),
     });
   }
   return {
     kind: "completed",
-    files: { configPath: written.path, envPath },
+    files: { configPath: written.path, envPath: "" },
     config: {
       sharedCardLast4,
       ...profiles,
@@ -498,28 +545,25 @@ export async function runSetup(
     nodeVersion?: string;
     runSync?: typeof runSyncCli;
     createLunchMoneyClient?: (apiKey: string) => LunchMoneySetupClient;
+    apiKeyStore?: LunchMoneyApiKeyStore;
   },
 ): Promise<SetupResult> {
   assertNodeMajorVersion(deps.nodeVersion ?? process.version);
 
   const createClient =
     deps.createLunchMoneyClient ?? createSetupLunchMoneyClient(createLunchMoneyClient);
+  const apiKeyStore = deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore();
 
-  const apiKey = options.nonInteractive
-    ? process.env["LUNCH_MONEY_API_KEY"]?.trim() ?? ""
-    : await promptApiKeyWithFactory(deps.prompter, createClient);
-  if (apiKey.length === 0) {
-    throw new Error("LUNCH_MONEY_API_KEY must be set for non-interactive setup");
-  }
+  const apiKey = await resolveSetupApiKey(
+    options,
+    deps.prompter,
+    createClient,
+    apiKeyStore,
+    deps.filesystem,
+  );
 
   const lmClient = createClient(apiKey);
-
-  let envPath = "";
-  if (!options.nonInteractive) {
-    envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
-    process.env["LUNCH_MONEY_API_KEY"] = apiKey;
-    deps.prompter.print(statusOk("Saved Lunch Money API key to .env"));
-  }
+  process.env["LUNCH_MONEY_API_KEY"] = apiKey;
 
   const writeProgress: SetupProgressWriter = async (partial) => {
     await writeConfigFile(deps.filesystem, partial, options.yes, deps.prompter, true);
@@ -548,18 +592,23 @@ export async function runSetup(
         writeProgress,
       );
 
-  const sharedRaw = options.nonInteractive
-    ? ""
-    : await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
-  const sharedCardLast4 = parseSharedCardLast4Input(sharedRaw);
+  const resumedCards = options.nonInteractive ? [] : readResumedProfiles(deps.filesystem).sharedCardLast4;
+  let sharedRaw = "";
+  if (!options.nonInteractive && resumedCards.length === 0) {
+    sharedRaw = await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
+  }
+  const sharedCardLast4 =
+    resumedCards.length > 0 && !options.nonInteractive
+      ? resumedCards
+      : parseSharedCardLast4Input(sharedRaw);
+  if (resumedCards.length > 0 && !options.nonInteractive) {
+    deps.prompter.print(statusOk("Using shared card last-4 from config.json"));
+  }
   loadConfig({
     lunchMoneyApiKey: apiKey,
     sharedCardLast4,
     ...profiles,
   });
 
-  if (options.nonInteractive) {
-    envPath = await writeEnvFile(deps.filesystem, apiKey, options.yes, deps.prompter);
-  }
-  return finishSetup(options, deps, apiKey, envPath, profiles, sharedCardLast4);
+  return finishSetup(options, deps, apiKey, profiles, sharedCardLast4);
 }

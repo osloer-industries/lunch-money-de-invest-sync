@@ -103,7 +103,16 @@ After profiles exist in `config.json`, run `npm run setup -- --categories` to ma
 types to Lunch Money categories and tags using **read-only** broker fetches. The step shows
 **anonymised** examples (bucketed amounts, redacted ISINs/IBANs/IDs, month-only dates). New
 Lunch Money categories are created only after an explicit **y/N** confirmation, with exclude flags
-shown up front. Results are stored as `categoryMap` and `tagMap` in `config.json`.
+shown up front. Results are stored as `categoryMap` and `tagMap` in `config.json`, saved after
+each question so an interrupted run keeps earlier answers.
+
+Types that share a suggested category are asked about once: buy / sell / savings-plan →
+**Investments**, dividend / interest → **Income**, deposit / withdrawal / transfer →
+**Payment, Transfer**. Saveback and `unknown` are always asked on their own (`unknown` defaults to
+your existing transfer category and can be skipped without affecting transfers). The first picker
+entry is the sensible default (the matching existing category, else "Create new category …"). The
+tag step offers suggested tags (pre-ticked; `dividend`, `interest`, `saveback`, `needs-review`),
+your existing Lunch Money tags, and free text — pressing Enter with nothing selected means no tags.
 
 Optional: `npm run setup -- --categories --export-type-summary types-summary.json` or
 `npm run sync -- --export-type-summary types-summary.json` writes counts and anonymised examples only
@@ -121,7 +130,7 @@ and Soli suggest **Investment tax** (excluded from budget and totals), not a bud
 expense. The tool does **not** create rules via the API; categorisation applies only to rows this
 sync inserts.
 
-**Dividend reinvestment (DRIP):** a dividend in **Investment income** followed by a savings-plan
+**Dividend reinvestment (DRIP):** a dividend in **Income** followed by a savings-plan
 **buy** in excluded **Investments** still counts the dividend as income even though cash stayed in
 the brokerage — that may be what you want; adjust categories or rules if not.
 
