@@ -51,3 +51,23 @@ Never store Trade Republic, Scalable Capital, Lunch Money API keys, or operator 
 
 The [`sonar.yml`](../.github/workflows/sonar.yml) caller polls SonarCloud on each pull request and fails when open
 issues remain on the PR head commit.
+
+### Test coverage in SonarCloud (new code)
+
+Local and CI **Quality** runs `npm run test:coverage`, which writes `coverage/lcov.info` with paths like `SF:src/...`
+(see [`vitest.config.ts`](../vitest.config.ts) and [`sonar-project.properties`](../sonar-project.properties)
+`sonar.javascript.lcov.reportPaths=coverage/lcov.info`).
+
+SonarCloud **does not see that file today** because:
+
+1. Analysis is **Automatic Analysis** in SonarCloud (not a `SonarSource/sonarqube-scan-action` job in CI).
+2. The reusable **Quality** job (`node-npm-quality.yml`) runs tests but does not upload `coverage/` to Sonar.
+3. `sonar.javascript.lcov.reportPaths` is only consumed when a Sonar scanner runs in the same workspace as the report.
+
+**Org-level fix (recommended):** mirror [osloer-industries/vakt](https://github.com/osloer-industries/vakt) — disable Automatic
+Analysis for this project in SonarCloud, then add a `sonarcloud` job to [`ci.yml`](../.github/workflows/ci.yml) that runs
+`npm run test:coverage` and `SonarSource/sonarqube-scan-action` with `SONAR_TOKEN` (keep the existing `sonar.yml`
+zero-open-issues gate). Alternatively extend `node-npm-quality.yml` with an optional coverage artifact + scan step shared
+across org repos.
+
+Do **not** run a CI Sonar scan while Automatic Analysis remains enabled (SonarCloud documents this as conflicting).

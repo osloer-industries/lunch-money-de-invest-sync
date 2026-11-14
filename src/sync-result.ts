@@ -26,9 +26,9 @@ export interface SyncRunJsonDryRunMeta {
   readonly uncategorisedShareExceedsThreshold: boolean;
 }
 
-export interface SyncRunJsonResult {
+export type SyncRunJsonResult = {
   readonly ok: true;
   readonly balanceFailures: number;
   readonly accounts: readonly SyncAccountResult[];
   readonly dryRunReview?: SyncRunJsonDryRunMeta;
-}
+};

@@ -30,7 +30,7 @@ export interface DryRunBrokerCollectors {
   ) => Promise<BrokerBalanceSnapshot>;
 }
 
-type DryRunCollectionClient = TransactionsApi & {
+export type DryRunCollectionClient = TransactionsApi & {
   readonly categories?: {
     getAll(): Promise<ReadonlyArray<{ readonly id: number; readonly name: string }>>;
   };

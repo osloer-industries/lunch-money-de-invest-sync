@@ -3,6 +3,29 @@
 Tool layer for assistants ([#83](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/83)).
 Credentials never appear in JSON, NDJSON events, or logs.
 
+## JSON contract (versioned)
+
+Machine-readable stdout and stderr shapes are **contract-tested** in
+`src/shared/scriptable-json-contract.test.ts` (Zod schemas in `src/shared/scriptable-json-contract.ts`).
+
+| Constant | Meaning |
+| --- | --- |
+| `SCRIPTABLE_JSON_CONTRACT_VERSION` | Bump only when outputs intentionally break agents; currently **`1`**. |
+
+Covered commands:
+
+- `npm run sync -- --json` (dry-run and live)
+- `npm run categories -- list --json` / `list-lunch-money --json` / `apply --json`
+- Broker login `--events` NDJSON envelopes on stderr
+
+When a command fails in `--json` mode, stdout is a single object:
+
+```json
+{ "ok": false, "error": "human-readable message" }
+```
+
+The process exits non-zero. No interactive prompts run when `--json` or `--non-interactive` is set (or when stdin is not a TTY and the command would otherwise prompt).
+
 ## Shared flags
 
 | Flag | Effect |

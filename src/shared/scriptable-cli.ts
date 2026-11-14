@@ -54,6 +54,21 @@ export function writeStdoutJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
+export function scriptableFailureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** When `--json` is set, write `{ ok: false, error }` to stdout; otherwise stderr text. */
+export function emitScriptableCliFailure(argv: readonly string[], error: unknown): void {
+  const message = scriptableFailureMessage(error);
+  const { flags } = parseScriptableFlags(argv);
+  if (flags.json) {
+    writeStdoutJson({ ok: false, error: message });
+    return;
+  }
+  console.error(message);
+}
+
 const mappingFileSchema = z
   .object({
     categoryMap: z.record(z.string(), z.number().int().positive()).optional(),

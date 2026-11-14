@@ -30,7 +30,7 @@ import { runCliModuleMain } from "./shared/cli-main.js";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 import { detectFirstSyncForAccount } from "./lunch-money/first-sync-for-account.js";
 import { createNdjsonEventWriter, type BrokerLoginEventSink } from "./shared/cli-events.js";
-import { writeStdoutJson } from "./shared/scriptable-cli.js";
+import { emitScriptableCliFailure, writeStdoutJson } from "./shared/scriptable-cli.js";
 import type { SyncAccountResult, SyncRunJsonResult } from "./sync-result.js";
 import {
   readScalableCapitalBalances,
@@ -545,19 +545,20 @@ async function maybeWriteTypeSummaryExport(
   logger(`Wrote anonymised type summary to ${target}`);
 }
 
-export async function runSyncCli(
-  argv: readonly string[],
-  deps: {
-    readConfig?: typeof readConfigFromDisk;
-    createClient?: typeof createLunchMoneyClient;
-    collectors?: BrokerCollectors;
-    logger?: SyncLogger;
-    apiKeyStore?: LunchMoneyApiKeyStore;
-    prompter?: SetupPrompter;
-    filesystem?: SetupFilesystem;
-  } = {},
+type RunSyncCliDeps = {
+  readConfig?: typeof readConfigFromDisk;
+  createClient?: typeof createLunchMoneyClient;
+  collectors?: BrokerCollectors;
+  logger?: SyncLogger;
+  apiKeyStore?: LunchMoneyApiKeyStore;
+  prompter?: SetupPrompter;
+  filesystem?: SetupFilesystem;
+};
+
+async function executeRunSyncCli(
+  cli: ReturnType<typeof parseSyncCliOptions>,
+  deps: RunSyncCliDeps,
 ): Promise<SyncRunSummary> {
-  const cli = parseSyncCliOptions(argv);
   if (cli.help) {
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return { balanceFailures: 0 };
@@ -569,18 +570,32 @@ export async function runSyncCli(
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
   const loginEvents = cli.events ? createNdjsonEventWriter() : undefined;
   await maybeWriteTypeSummaryExport(cli.exportTypeSummary, config, logger);
+  const dryRunReviewDeps =
+    deps.prompter && deps.filesystem ? { prompter: deps.prompter, filesystem: deps.filesystem } : undefined;
   const result = await runSync(
     config,
     client,
     deps.collectors ?? createLiveCollectors(loginEvents),
     logger,
     selectionFromCliOptions(cli),
-    deps.prompter && deps.filesystem ? { prompter: deps.prompter, filesystem: deps.filesystem } : undefined,
+    dryRunReviewDeps,
   );
   if (cli.json && "accounts" in result) {
     writeStdoutJson(result);
   }
   return summarizeRunSyncCliResult(result);
+}
+
+export async function runSyncCli(argv: readonly string[], deps: RunSyncCliDeps = {}): Promise<SyncRunSummary> {
+  const cli = parseSyncCliOptions(argv);
+  try {
+    return await executeRunSyncCli(cli, deps);
+  } catch (error: unknown) {
+    if (cli.json) {
+      emitScriptableCliFailure(argv, error);
+    }
+    throw error;
+  }
 }
 
 runCliModuleMain(async () => {
@@ -591,8 +606,7 @@ runCliModuleMain(async () => {
       process.exitCode = 1;
     }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
+    emitScriptableCliFailure(process.argv.slice(2), error);
     process.exitCode = 1;
   }
 }, import.meta.url);

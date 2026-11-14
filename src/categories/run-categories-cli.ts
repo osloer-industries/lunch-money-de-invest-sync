@@ -28,7 +28,12 @@ import {
 import { executeReapplyChanges } from "./reapply-execute.js";
 import { planReapplyForAccount, summarizeReapplyPlan, type ReapplyChange } from "./reapply-plan.js";
 import { readFile } from "node:fs/promises";
-import { assertInteractiveTerminal, parseMappingFileJson, writeStdoutJson } from "../shared/scriptable-cli.js";
+import {
+  assertInteractiveTerminal,
+  emitScriptableCliFailure,
+  parseMappingFileJson,
+  writeStdoutJson,
+} from "../shared/scriptable-cli.js";
 import { applyMappingMutations, mapsAreEqual } from "./apply-mapping.js";
 
 export type CategoriesLogger = (line: string) => void;
@@ -340,28 +345,35 @@ async function runReapplyCommand(deps: CategoriesCliDeps, cli: CategoriesCliOpti
 
 export async function runCategoriesCli(argv: readonly string[], deps: CategoriesCliDeps): Promise<void> {
   const cli = parseCategoriesCliOptions(argv);
-  if (cli.help || cli.command === null) {
-    (deps.logger ?? defaultLogger)(CATEGORIES_HELP_TEXT);
-    return;
+  try {
+    if (cli.help || cli.command === null) {
+      (deps.logger ?? defaultLogger)(CATEGORIES_HELP_TEXT);
+      return;
+    }
+    const maps = readMapsFromFilesystem(deps.filesystem);
+    if (cli.command === "list") {
+      await runListCommand(deps, maps, cli);
+      return;
+    }
+    if (cli.command === "list-lunch-money") {
+      const logger = deps.logger ?? defaultLogger;
+      const { client } = await loadAuthedClient(deps);
+      await listLunchMoneyCatalog(client, cli.json, logger);
+      return;
+    }
+    if (cli.command === "apply") {
+      await runApplyCommand(deps, cli, maps);
+      return;
+    }
+    if (cli.command === "edit") {
+      await runEditCommand(deps, maps, cli);
+      return;
+    }
+    await runReapplyCommand(deps, cli);
+  } catch (error: unknown) {
+    if (cli.json) {
+      emitScriptableCliFailure(argv, error);
+    }
+    throw error;
   }
-  const maps = readMapsFromFilesystem(deps.filesystem);
-  if (cli.command === "list") {
-    await runListCommand(deps, maps, cli);
-    return;
-  }
-  if (cli.command === "list-lunch-money") {
-    const logger = deps.logger ?? defaultLogger;
-    const { client } = await loadAuthedClient(deps);
-    await listLunchMoneyCatalog(client, cli.json, logger);
-    return;
-  }
-  if (cli.command === "apply") {
-    await runApplyCommand(deps, cli, maps);
-    return;
-  }
-  if (cli.command === "edit") {
-    await runEditCommand(deps, maps, cli);
-    return;
-  }
-  await runReapplyCommand(deps, cli);
 }
