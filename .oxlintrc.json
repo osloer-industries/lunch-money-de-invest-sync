@@ -19,6 +19,8 @@
       { "max": 80, "skipBlankLines": true, "skipComments": true }
     ],
     "max-params": ["warn", 5],
+    "eslint/no-await-in-loop": "error",
+    "eslint/require-await": "error",
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "vitest/no-focused-tests": "error"

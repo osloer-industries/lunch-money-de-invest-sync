@@ -33,17 +33,17 @@ export class SubprocessTimeoutError extends Error {
   }
 }
 
+function shouldPassThroughEnvKey(key: string): boolean {
+  if ((PASSTHROUGH_ENV_KEYS as readonly string[]).includes(key)) {
+    return true;
+  }
+  return key.startsWith("UV_") || key.startsWith("XDG_");
+}
+
 function collectPassThroughEnv(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value !== "string") {
-      continue;
-    }
-    if ((PASSTHROUGH_ENV_KEYS as readonly string[]).includes(key)) {
-      out[key] = value;
-      continue;
-    }
-    if (key.startsWith("UV_") || key.startsWith("XDG_")) {
+    if (typeof value === "string" && shouldPassThroughEnvKey(key)) {
       out[key] = value;
     }
   }

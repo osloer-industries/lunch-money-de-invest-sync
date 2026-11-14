@@ -12,24 +12,24 @@ import type { PytrCliRunner } from "../shared/subprocess-cli.js";
 
 const fixtureDir = path.dirname(fileURLToPath(import.meta.url));
 
-async function loadFixture(): Promise<string> {
+function loadFixture(): Promise<string> {
   return readFile(path.join(fixtureDir, "fixtures", "all_events-sample.json"), "utf8");
 }
 
 function fakeRunner(sequence: Array<{ exitCode: number; stdout?: string; stderr?: string }>): PytrCliRunner {
   let call = 0;
   return {
-    run: vi.fn(async () => {
+    run: vi.fn(() => {
       const next = sequence[call];
       call += 1;
       if (!next) {
         throw new Error("unexpected pytr invocation");
       }
-      return {
+      return Promise.resolve({
         stdout: next.stdout ?? "",
         stderr: next.stderr ?? "",
         exitCode: next.exitCode,
-      };
+      });
     }),
   };
 }

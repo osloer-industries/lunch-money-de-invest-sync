@@ -11,7 +11,7 @@ function prompter(): SetupPrompter {
     search: vi.fn(),
     confirm: vi.fn(),
     print: vi.fn(),
-    waitForEnter: vi.fn(async () => undefined),
+    waitForEnter: vi.fn(() => Promise.resolve(undefined)),
   };
 }
 

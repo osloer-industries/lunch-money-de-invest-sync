@@ -15,8 +15,13 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Use the Node.js 24 version declared by `.nvmrc` and `.node-version`.
 - Install reproducibly with `npm ci`. Use `npm install --save-exact` when a
   dependency intentionally changes, then commit `package-lock.json`.
-- Run `npm run check` before submitting a change. This runs Oxlint, the
-  TypeScript compiler, coverage, and the production build.
+- Run `npm run check` before **every push** (`npm run precommit` is identical). This runs
+  Oxlint (including Sonar-aligned `require-await` / `no-await-in-loop`), `eslint-plugin-sonarjs`
+  recommended rules, TypeScript, coverage, and the production build. A lefthook `pre-commit`
+  hook runs the same command via `npm run prepare` — never bypass it with `git commit --no-verify`,
+  `HUSKY=0`, `LEFTHOOK=0`, or skip env vars.
+- Never suppress lint rules: no `eslint-disable`, `NOSONAR`, new `sonar.exclusions`, or oxlint
+  overrides except the existing documented `no-await-in-loop` carve-out for broker pagination/sync.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
 - Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.x.y` comment matching the release tag).
   Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.

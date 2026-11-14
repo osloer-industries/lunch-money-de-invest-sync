@@ -40,10 +40,10 @@ describe("createInquirerPrompter", () => {
       ]),
     ).resolves.toBe("b");
 
-    prompts.search.mockImplementationOnce(async ({ source }: { source: (term?: string) => unknown }) => {
+    prompts.search.mockImplementationOnce(({ source }: { source: (term?: string) => unknown }) => {
       expect(source(undefined)).toHaveLength(2);
       expect(source("tran")).toEqual([{ name: "[9] Payment, Transfer", value: "9" }]);
-      return "9";
+      return Promise.resolve("9");
     });
     await expect(
       prompter.search("Category", [

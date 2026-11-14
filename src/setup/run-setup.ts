@@ -49,22 +49,20 @@ async function promptApiKeyWithFactory(
   prompter: SetupPrompter,
   createClient: (apiKey: string) => LunchMoneySetupClient,
 ): Promise<string> {
-  for (;;) {
-    const key = await prompter.password("Lunch Money API key (input hidden)");
-    if (key.trim().length === 0) {
-      throw new Error("Lunch Money API key is required");
+  const key = await prompter.password("Lunch Money API key (input hidden)");
+  if (key.trim().length === 0) {
+    throw new Error("Lunch Money API key is required");
+  }
+  try {
+    await validateApiKey(createClient(key.trim()));
+    prompter.print(statusOk("Lunch Money API key verified"));
+    return key.trim();
+  } catch (error) {
+    if (isLunchMoneyUnauthorized(error)) {
+      prompter.print(statusError("Lunch Money rejected the API key — try again"));
+      return promptApiKeyWithFactory(prompter, createClient);
     }
-    try {
-      await validateApiKey(createClient(key.trim()));
-      prompter.print(statusOk("Lunch Money API key verified"));
-      return key.trim();
-    } catch (error) {
-      if (isLunchMoneyUnauthorized(error)) {
-        prompter.print(statusError("Lunch Money rejected the API key — try again"));
-        continue;
-      }
-      throw error;
-    }
+    throw error;
   }
 }
 
@@ -158,31 +156,29 @@ async function chooseManualAccount(
   owner: string,
 ): Promise<number> {
   const accountName = `${brokerLabel} (${owner})`;
-  for (;;) {
-    const accounts = await client.manualAccounts.getAll();
-    const choice = await prompter.select(
-      `Lunch Money manual account for ${accountName}`,
-      manualAccountChoices(accounts, accountName),
+  const accounts = await client.manualAccounts.getAll();
+  const choice = await prompter.select(
+    `Lunch Money manual account for ${accountName}`,
+    manualAccountChoices(accounts, accountName),
+  );
+  if (choice === NEW_MANUAL_ACCOUNT) {
+    const create = await prompter.confirm(
+      `Create Lunch Money manual account "${accountName}" (EUR, investment, starting cash balance 0)? This account tracks cash movements from sync, not portfolio market value — set starting cash on the Accounts page if needed.`,
+      false,
     );
-    if (choice === NEW_MANUAL_ACCOUNT) {
-      const create = await prompter.confirm(
-        `Create Lunch Money manual account "${accountName}" (EUR, investment, starting cash balance 0)? This account tracks cash movements from sync, not portfolio market value — set starting cash on the Accounts page if needed.`,
-        false,
-      );
-      if (!create) {
-        continue;
-      }
-      const createdId = await createManualAccountOrReuse(prompter, client, accountName, brokerLabel);
-      if (createdId !== null) {
-        return createdId;
-      }
-      continue;
+    if (!create) {
+      return chooseManualAccount(prompter, client, brokerLabel, owner);
     }
-    return parsePromptPositiveInt(choice, {
-      entityLabel: "Manual account id",
-      exists: (id) => accounts.some((account) => account.id === id),
-    });
+    const createdId = await createManualAccountOrReuse(prompter, client, accountName, brokerLabel);
+    if (createdId !== null) {
+      return createdId;
+    }
+    return chooseManualAccount(prompter, client, brokerLabel, owner);
   }
+  return parsePromptPositiveInt(choice, {
+    entityLabel: "Manual account id",
+    exists: (id) => accounts.some((account) => account.id === id),
+  });
 }
 
 async function chooseScPortfolio(

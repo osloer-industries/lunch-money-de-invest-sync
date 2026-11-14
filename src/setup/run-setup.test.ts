@@ -23,20 +23,20 @@ function fakePrompter(options: FakePrompterOptions): SetupPrompter {
   let inputIndex = 0;
   let selectIndex = 0;
   return {
-    password: vi.fn<() => Promise<string>>(async () => options.password ?? ""),
-    input: vi.fn<() => Promise<string>>(async () => options.inputs?.[inputIndex++] ?? ""),
-    checkbox: vi.fn<() => Promise<string[]>>(async () => options.brokers ?? []),
-    async select<T extends string>(_message: string, _choices: readonly PromptChoice<T>[]): Promise<T> {
+    password: vi.fn<() => Promise<string>>(() => Promise.resolve(options.password ?? "")),
+    input: vi.fn<() => Promise<string>>(() => Promise.resolve(options.inputs?.[inputIndex++] ?? "")),
+    checkbox: vi.fn<() => Promise<string[]>>(() => Promise.resolve(options.brokers ?? [])),
+    select<T extends string>(_message: string, _choices: readonly PromptChoice<T>[]): Promise<T> {
       const value = options.selects?.[selectIndex++] ?? "";
-      return value as T;
+      return Promise.resolve(value as T);
     },
-    search: vi.fn<() => Promise<string>>(async () => ""),
+    search: vi.fn<() => Promise<string>>(() => Promise.resolve("")),
     confirm: vi.fn<(message: string, defaultValue?: boolean) => Promise<boolean>>(
-      async (message: string, defaultValue?: boolean) =>
-        options.confirms ? options.confirms(message) : (defaultValue ?? true),
+      (message: string, defaultValue?: boolean) =>
+        Promise.resolve(options.confirms ? options.confirms(message) : (defaultValue ?? true)),
     ),
     print: vi.fn<(line: string) => void>(),
-    waitForEnter: vi.fn<() => Promise<void>>(async () => undefined),
+    waitForEnter: vi.fn<() => Promise<void>>(() => Promise.resolve(undefined)),
   };
 }
 
@@ -45,10 +45,11 @@ function fakeFilesystem(): SetupFilesystem {
   return {
     exists: vi.fn((path) => files.has(path)),
     readText: vi.fn((path) => files.get(path) ?? null),
-    writeText: vi.fn(async (path, content) => {
+    writeText: vi.fn((path, content) => {
       files.set(path, content);
+      return Promise.resolve();
     }),
-    chmod: vi.fn(async () => undefined),
+    chmod: vi.fn(() => Promise.resolve(undefined)),
   };
 }
 
@@ -357,18 +358,18 @@ describe("runSetup", () => {
   it("offers category mapping with default Yes after a dry-run", async () => {
     let categoryMappingDefault: boolean | undefined;
     const prompter = trInteractivePrompter();
-    prompter.confirm = vi.fn(async (message: string, defaultYes?: boolean) => {
+    prompter.confirm = vi.fn((message: string, defaultYes?: boolean) => {
       if (message.includes("category mapping")) {
         categoryMappingDefault = defaultYes;
-        return false;
+        return Promise.resolve(false);
       }
       if (message.includes("dry-run")) {
-        return true;
+        return Promise.resolve(true);
       }
       if (pytrCredentialStorageAccepted(message)) {
-        return true;
+        return Promise.resolve(true);
       }
-      return defaultYes ?? true;
+      return Promise.resolve(defaultYes ?? true);
     });
     const result = await runSetup(
       baseSetupOptions(),
