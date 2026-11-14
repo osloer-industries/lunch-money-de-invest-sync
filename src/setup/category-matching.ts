@@ -75,5 +75,6 @@ export function findSuggestedCategoryMatch(
       (suggestion.exclude_from_totals && !exact.exclude_from_totals);
     return { category: exact, warnedMissingExclusion };
   }
-  return { category: undefined, warnedMissingExclusion: false };
+  const category: SetupCategoryRow | undefined = undefined;
+  return { category, warnedMissingExclusion: false };
 }

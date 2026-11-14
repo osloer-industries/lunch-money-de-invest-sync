@@ -6,11 +6,11 @@ function fakeTagsApi(existing: Array<{ id: number; name: string }>): TagsApi {
   const store = [...existing];
   return {
     tags: {
-      getAll: vi.fn(async () => store),
-      create: vi.fn(async ({ name }) => {
+      getAll: vi.fn(() => Promise.resolve(store)),
+      create: vi.fn(({ name }) => {
         const tag = { id: nextId++, name };
         store.push(tag);
-        return tag;
+        return Promise.resolve(tag);
       }),
     },
   };

@@ -14,12 +14,12 @@ function loadFixture(name: string): string {
 function runnerFromResponses(responses: string[]): ScCliRunner {
   const queue = [...responses];
   return {
-    run: vi.fn(async () => {
+    run: vi.fn(() => {
       const stdout = queue.shift();
       if (stdout === undefined) {
         throw new Error("unexpected extra sc invocation");
       }
-      return { stdout, stderr: "", exitCode: 0 };
+      return Promise.resolve({ stdout, stderr: "", exitCode: 0 });
     }),
   };
 }
@@ -79,9 +79,9 @@ describe("fetchAllScalableCapitalTransactions", () => {
 
   it("throws when sc is missing on PATH", async () => {
     const runner: ScCliRunner = {
-      run: vi.fn(async () => {
-        throw Object.assign(new Error("spawn sc ENOENT"), { code: "ENOENT" });
-      }),
+      run: vi.fn(() =>
+        Promise.reject(Object.assign(new Error("spawn sc ENOENT"), { code: "ENOENT" })),
+      ),
     };
     await expect(fetchAllScalableCapitalTransactions(runner, {})).rejects.toThrow(/was not found/);
   });

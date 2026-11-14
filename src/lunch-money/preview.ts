@@ -43,7 +43,7 @@ async function accumulateExternalIds(
 }
 
 /** Lists existing external ids for a manual account using read-only Lunch Money GET requests. */
-export async function loadExistingExternalIds(
+export function loadExistingExternalIds(
   client: TransactionsApi,
   manualAccountId: number,
 ): Promise<Set<string>> {

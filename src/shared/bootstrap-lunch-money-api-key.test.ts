@@ -41,7 +41,7 @@ describe("bootstrapLunchMoneyApiKey", () => {
     expect(readFileSync(".env", "utf8")).not.toContain("LUNCH_MONEY_API_KEY=");
   });
 
-  it("throws a message without the key when missing", async () => {
+  it("throws a message without the key when missing", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
     expect(() => requireLunchMoneyApiKeyInProcessEnv()).toThrow(MISSING_LUNCH_MONEY_API_KEY_MESSAGE);
     expect(() => requireLunchMoneyApiKeyInProcessEnv()).not.toThrow(/lm_/);

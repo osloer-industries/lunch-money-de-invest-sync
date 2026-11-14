@@ -170,7 +170,7 @@ async function paginateBrokerTransactionPages<T>(
 }
 
 /** Fetches every raw transaction summary row (all summary types) for type reporting. */
-export async function fetchAllScalableTransactionSummaries(
+export function fetchAllScalableTransactionSummaries(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
 ): Promise<ScTransactionSummary[]> {
@@ -178,7 +178,7 @@ export async function fetchAllScalableTransactionSummaries(
 }
 
 /** Fetches every page of broker cash transactions via `sc broker transactions --json`. */
-export async function fetchAllScalableCapitalTransactions(
+export function fetchAllScalableCapitalTransactions(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
 ): Promise<ScalableCapitalTransaction[]> {
