@@ -26,6 +26,7 @@ import {
   type SetupCategoryRow,
 } from "./category-matching.js";
 import type { SetupCliOptions } from "./setup-options.js";
+import { printSuggestedLunchMoneyRules } from "./print-suggested-rules.js";
 
 const CONFIG_FILENAME = "config.json";
 const SKIP_CATEGORY = "__skip__";
@@ -359,6 +360,7 @@ export async function runCategoryMappingSetup(
   await configureMapsForTypes(seenTypes, deps.prompter, client, categoryMap, tagMap);
 
   const configPath = await mergeConfigOnDisk(deps.filesystem, { categoryMap, tagMap });
+  printSuggestedLunchMoneyRules(deps.prompter, config, categoryMap);
 
   let exportPath: string | undefined;
   if (options.exportTypeSummary) {

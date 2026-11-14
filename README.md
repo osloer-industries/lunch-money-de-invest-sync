@@ -112,8 +112,10 @@ Optional: `npm run setup -- --categories --export-type-summary types-summary.jso
 Lunch Money **categories** are created via the v2 API ([docs](https://lunchmoney.dev/docs),
 [`categories.create`](https://github.com/lunch-money/lunch-money-js-v2#categories)). Deposits,
 withdrawals, and internal transfers suggest **Payment, Transfer** (Lunch Money's default excluded
-transfer category). The tool does **not** create transaction rules; categorisation applies only to
-rows this sync inserts.
+transfer category). When mapping finishes, setup prints suggested Lunch Money **UI rules** for
+`saveback` and `needs-review`, scoped to your brokerage manual accounts (v2 has no rules API).
+Inserts use `apply_rules: true`; broad payee rules can overwrite `categoryMap`. The tool does
+**not** create rules via the API; categorisation applies only to rows this sync inserts.
 
 ## Configuration
 
