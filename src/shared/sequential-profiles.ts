@@ -14,3 +14,29 @@ export async function forEachSequentially<TItem>(
 
 /** @see forEachSequentially — same contract for configured broker profiles. */
 export const forEachProfileSequentially = forEachSequentially;
+
+export interface RepeatConfirmedPrompter {
+  confirm(message: string, defaultValue?: boolean): Promise<boolean>;
+}
+
+/**
+ * Runs interactive `step` callbacks strictly in order. When `startWithoutConfirm` is true the
+ * first step runs immediately; every subsequent step requires confirming `confirmMessage`.
+ */
+export async function forEachConfirmedRepeat(
+  prompter: RepeatConfirmedPrompter,
+  confirmMessage: string,
+  startWithoutConfirm: boolean,
+  step: () => Promise<void>,
+): Promise<void> {
+  const runNext = async (skipConfirm: boolean): Promise<void> => {
+    if (!skipConfirm && !(await prompter.confirm(confirmMessage, false))) {
+      return;
+    }
+    await step();
+    await runNext(false);
+  };
+  if (startWithoutConfirm) {
+    await runNext(true);
+  }
+}

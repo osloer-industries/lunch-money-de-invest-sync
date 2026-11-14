@@ -23,8 +23,9 @@ function fakePrompter(options: FakePrompterOptions): SetupPrompter {
       return value as T;
     },
     search: vi.fn<() => Promise<string>>(async () => ""),
-    confirm: vi.fn<(message: string) => Promise<boolean>>(async (message: string) =>
-      options.confirms ? options.confirms(message) : true,
+    confirm: vi.fn<(message: string, defaultValue?: boolean) => Promise<boolean>>(
+      async (message: string, defaultValue?: boolean) =>
+        options.confirms ? options.confirms(message) : (defaultValue ?? true),
     ),
     print: vi.fn<(line: string) => void>(),
     waitForEnter: vi.fn<() => Promise<void>>(async () => undefined),
@@ -62,6 +63,10 @@ function defaultRunSetupDeps(
   };
 }
 
+function pytrCredentialStorageAccepted(message: string): boolean {
+  return message.includes("login command") || message.includes("Accept and run");
+}
+
 function fakeLmClient(): LunchMoneySetupClient {
   return {
     manualAccounts: {
@@ -79,12 +84,22 @@ function fakeLmClient(): LunchMoneySetupClient {
 }
 
 function trInteractivePrompter(overrides: Partial<FakePrompterOptions> = {}): SetupPrompter {
+  const userConfirms = overrides.confirms;
   return fakePrompter({
     password: "lm_test_key",
     brokers: ["trade-republic"],
     inputs: ["operator-a", "[]"],
     selects: ["3"],
     ...overrides,
+    confirms: (message) => {
+      if (pytrCredentialStorageAccepted(message)) {
+        return true;
+      }
+      if (userConfirms) {
+        return userConfirms(message);
+      }
+      return false;
+    },
   });
 }
 
@@ -97,6 +112,8 @@ function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOpt
     scalableCapital: false,
     owner: null,
     lunchMoneyAssetId: null,
+    tradeRepublicAssetId: null,
+    scalableAssetId: null,
     portfolioId: null,
     categories: false,
     exportTypeSummary: null,
@@ -169,6 +186,31 @@ describe("runSetup", () => {
     }
     expect(result.config.tradeRepublicProfiles[0]?.owner).toBe("operator-a");
     expect(result.files.envPath.endsWith(".env")).toBe(true);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
+  it("writes per-broker manual account ids into config", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const filesystem = fakeFilesystem();
+    const result = await runSetup(
+      baseSetupOptions({
+        nonInteractive: true,
+        tradeRepublic: true,
+        scalableCapital: true,
+        owner: "operator-a",
+        tradeRepublicAssetId: 3,
+        scalableAssetId: 4,
+      }),
+      defaultRunSetupDeps({ filesystem }),
+    );
+    if (result.kind !== "completed") {
+      throw new Error("expected completed setup");
+    }
+    expect(result.config.tradeRepublicProfiles[0]?.lunchMoneyAssetId).toBe(3);
+    expect(result.config.scalableCapitalProfiles[0]?.lunchMoneyAssetId).toBe(4);
+    const written = JSON.parse(filesystem.readText(result.files.configPath) ?? "");
+    expect(written.tradeRepublicProfiles[0]?.lunchMoneyAssetId).toBe(3);
+    expect(written.scalableCapitalProfiles[0]?.lunchMoneyAssetId).toBe(4);
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
@@ -338,6 +380,48 @@ describe("runSetup", () => {
         institution_name: "Trade Republic",
       }),
     );
+  });
+
+  it("defaults the profile label to me and uses it in the manual account name", async () => {
+    const previousUser = process.env.USER;
+    process.env.USER = "alice";
+    const lm = fakeLmClient();
+    try {
+      const prompter = trInteractivePrompter({
+        inputs: ["", ""],
+        selects: ["__new__"],
+        confirms: (message) =>
+          message.includes("Create Lunch Money manual account") ||
+          message.includes("credential") ||
+          message.includes("login command"),
+      });
+      const result = await runSetup(
+        baseSetupOptions(),
+        defaultRunSetupDeps({
+          prompter,
+          createLunchMoneyClient: () => lm,
+          runSync: vi.fn().mockResolvedValue(undefined),
+        }),
+      );
+      expect(result.kind).toBe("completed");
+      if (result.kind !== "completed") {
+        throw new Error("expected completed setup");
+      }
+      expect(prompter.input).toHaveBeenCalledWith("Trade Republic profile label", "me");
+      expect(lm.manualAccounts.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Trade Republic (me)",
+          institution_name: "Trade Republic",
+        }),
+      );
+      expect(result.config.tradeRepublicProfiles[0]?.owner).toBe("me");
+    } finally {
+      if (previousUser === undefined) {
+        delete process.env.USER;
+      } else {
+        process.env.USER = previousUser;
+      }
+    }
   });
 });
 

@@ -7,7 +7,12 @@ export interface CanonicalTransaction {
   externalId: string;
   /** ISO 8601 date, e.g. "2026-07-01". */
   date: string;
-  /** Signed amount in the account's currency major unit (negative = outflow). */
+  /**
+   * Signed amount in the account's currency major unit using broker/canonical convention:
+   * negative = outflow (money leaving the account), positive = inflow (money entering).
+   * Converted to Lunch Money v2 signs in `toLunchMoneyV2Amount` when building insert payloads
+   * (v2: positive = outflow, negative = inflow).
+   */
   amount: number;
   currency: Currency;
   payee: string;

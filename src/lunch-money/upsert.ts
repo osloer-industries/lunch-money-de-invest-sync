@@ -27,6 +27,14 @@ export interface UpsertSummary {
 }
 
 /**
+ * Lunch Money v2 transaction amounts: positive = debit/outflow, negative = credit/inflow.
+ * See https://lunchmoney.dev/amounts-and-balances and `@lunch-money/lunch-money-js-v2` create types.
+ */
+export function toLunchMoneyV2Amount(canonicalAmount: number): number {
+  return -canonicalAmount;
+}
+
+/**
  * Builds the insert payload. Lunch Money dedups on (manual_account_id, external_id)
  * regardless of skip_duplicates, so re-running a sync for the same date range is safe.
  */
@@ -40,7 +48,7 @@ export function toInsertPayload(
     skip_duplicates: false,
     transactions: transactions.map((tx) => ({
       date: tx.date,
-      amount: tx.amount,
+      amount: toLunchMoneyV2Amount(tx.amount),
       currency: tx.currency,
       payee: tx.payee,
       notes: tx.notes ?? null,
