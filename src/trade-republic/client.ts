@@ -201,19 +201,28 @@ async function runExport(
   try {
     await assertPytrMinVersion(runner, config, childEnv);
     outputDir = await filesystem.mkdtemp(path.join(os.tmpdir(), "lm-tr-sync-"));
-    const argv = buildExportArgv(outputDir, config);
-    let run: Awaited<ReturnType<PytrCliRunner["run"]>>;
-    try {
-      run = await runner.run(argv, childEnv, { onOutputLine: createAppApprovalWatcher() });
-    } catch (error) {
-      if (isErrnoCode(error, "ENOENT")) {
-        throw new Error(
-          `pytr was not found — install it from ${PYTR_DOC} (for example \`uvx pytr@0.4.10\`)`,
-          { cause: error },
-        );
+    const onOutputLine = createAppApprovalWatcher();
+    // Short session check first: if Trade Republic needs app approval it happens here (with an alert),
+    // so the full-history export below starts on a fresh session with its whole timeout.
+    const runPytr = async (argv: readonly string[]) => {
+      try {
+        return await runner.run(argv, childEnv, { onOutputLine });
+      } catch (error) {
+        if (isErrnoCode(error, "ENOENT")) {
+          throw new Error(
+            `pytr was not found — install it from ${PYTR_DOC} (for example \`uvx pytr@0.4.10\`)`,
+            { cause: error },
+          );
+        }
+        throw error;
       }
-      throw error;
+    };
+    const probeDir = await filesystem.mkdtemp(path.join(outputDir, "session-check-"));
+    const probe = await runPytr([...buildExportArgv(probeDir, config), "--last_days", "1"]);
+    if (probe.exitCode !== 0) {
+      throw new Error(actionablePytrFailure(probe.stderr, probe.exitCode));
     }
+    const run = await runPytr(buildExportArgv(outputDir, config));
     if (run.exitCode !== 0) {
       throw new Error(actionablePytrFailure(run.stderr, run.exitCode));
     }
