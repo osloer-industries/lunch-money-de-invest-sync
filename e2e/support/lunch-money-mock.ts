@@ -28,6 +28,10 @@ function unauthorized(res: ServerResponse): void {
   json(res, 401, { message: "Unauthorized", errors: [{ errMsg: "Unauthorized" }] });
 }
 
+function asString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 export class LunchMoneyMockServer {
   private server: Server | undefined;
   readonly port: number;
@@ -97,97 +101,108 @@ export class LunchMoneyMockServer {
     this.server = undefined;
   }
 
-  private route(req: IncomingMessage, res: ServerResponse): void {
+  private authorize(req: IncomingMessage, res: ServerResponse): boolean {
     const token = readBearer(req);
-    if (!token || token.length === 0) {
+    if (!token || token === INVALID_API_KEY || token !== VALID_API_KEY) {
       unauthorized(res);
-      return;
+      return false;
     }
-    if (token === INVALID_API_KEY) {
-      unauthorized(res);
-      return;
-    }
-    if (token !== VALID_API_KEY) {
-      unauthorized(res);
+    return true;
+  }
+
+  private route(req: IncomingMessage, res: ServerResponse): void {
+    if (!this.authorize(req, res)) {
       return;
     }
 
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
-    const { pathname } = url;
     const method = req.method ?? "GET";
+    const routeKey = `${method} ${url.pathname}`;
 
-    if (method === "GET" && pathname === "/v2/manual_accounts") {
-      json(res, 200, { manual_accounts: this.state.manualAccounts });
-      return;
+    switch (routeKey) {
+      case "GET /v2/manual_accounts":
+        json(res, 200, { manual_accounts: this.state.manualAccounts });
+        return;
+      case "GET /v2/categories":
+        json(res, 200, { categories: this.state.categories });
+        return;
+      case "GET /v2/tags":
+        json(res, 200, { tags: this.state.tags });
+        return;
+      case "GET /v2/transactions":
+        json(res, 200, { transactions: [], has_more: false });
+        return;
+      case "POST /v2/manual_accounts":
+        this.readJsonBody(req, (body) => {
+          this.createManualAccount(res, body);
+        });
+        return;
+      case "POST /v2/categories":
+        this.readJsonBody(req, (body) => {
+          this.createCategory(res, body);
+        });
+        return;
+      case "POST /v2/tags":
+        this.readJsonBody(req, (body) => {
+          this.createTag(res, body);
+        });
+        return;
+      case "POST /v2/transactions":
+        this.readJsonBody(req, (body) => {
+          this.insertTransactions(res, body);
+        });
+        return;
+      default:
+        json(res, 404, { message: "not found" });
     }
-    if (method === "POST" && pathname === "/v2/manual_accounts") {
-      this.readJsonBody(req, (body) => {
-        const name = typeof body.name === "string" ? body.name : "manual";
-        if (this.state.manualAccounts.some((row) => row.name === name)) {
-          json(res, 400, {
-            message: "ASSET_DISPLAY_NAME_ALREADY_EXISTS",
-            errors: [{ errMsg: "ASSET_DISPLAY_NAME_ALREADY_EXISTS" }],
-          });
-          return;
-        }
-        const created = { id: this.nextManualId++, name, type_name: "investment" };
-        this.state.manualAccounts.push(created);
-        json(res, 200, created);
+  }
+
+  private createManualAccount(res: ServerResponse, body: Record<string, unknown>): void {
+    const name = asString(body.name, "manual");
+    if (this.state.manualAccounts.some((row) => row.name === name)) {
+      json(res, 400, {
+        message: "ASSET_DISPLAY_NAME_ALREADY_EXISTS",
+        errors: [{ errMsg: "ASSET_DISPLAY_NAME_ALREADY_EXISTS" }],
       });
       return;
     }
-    if (method === "GET" && pathname === "/v2/categories") {
-      json(res, 200, { categories: this.state.categories });
+    const created = { id: this.nextManualId++, name, type_name: "investment" };
+    this.state.manualAccounts.push(created);
+    json(res, 200, created);
+  }
+
+  private createCategory(res: ServerResponse, body: Record<string, unknown>): void {
+    const created = {
+      id: this.nextCategoryId++,
+      name: asString(body.name, "category"),
+      is_income: body.is_income === true,
+      exclude_from_budget: body.exclude_from_budget === true,
+      is_group: false,
+    };
+    this.state.categories.push(created);
+    json(res, 200, created);
+  }
+
+  private createTag(res: ServerResponse, body: Record<string, unknown>): void {
+    const name = asString(body.name, "tag");
+    const existing = this.state.tags.find((tag) => tag.name === name);
+    if (existing) {
+      json(res, 200, existing);
       return;
     }
-    if (method === "POST" && pathname === "/v2/categories") {
-      this.readJsonBody(req, (body) => {
-        const created = {
-          id: this.nextCategoryId++,
-          name: String(body.name ?? "category"),
-          is_income: body.is_income === true,
-          exclude_from_budget: body.exclude_from_budget === true,
-          is_group: false,
-        };
-        this.state.categories.push(created);
-        json(res, 200, created);
-      });
-      return;
-    }
-    if (method === "GET" && pathname === "/v2/tags") {
-      json(res, 200, { tags: this.state.tags });
-      return;
-    }
-    if (method === "POST" && pathname === "/v2/tags") {
-      this.readJsonBody(req, (body) => {
-        const name = String(body.name ?? "tag");
-        const existing = this.state.tags.find((tag) => tag.name === name);
-        if (existing) {
-          json(res, 200, existing);
-          return;
-        }
-        const created = { id: this.nextTagId++, name };
-        this.state.tags.push(created);
-        json(res, 200, created);
-      });
-      return;
-    }
-    if (method === "GET" && pathname === "/v2/transactions") {
-      json(res, 200, { transactions: [], has_more: false });
-      return;
-    }
-    if (method === "POST" && pathname === "/v2/transactions") {
-      this.readJsonBody(req, (body) => {
-        const rows = Array.isArray(body.transactions) ? body.transactions : [];
-        const inserted = rows.map((row: { external_id?: string; payee?: string }) => ({
-          id: this.nextTransactionId++,
-          external_id: row.external_id ?? null,
-          payee: row.payee ?? "tx",
-        }));
-        json(res, 200, { transactions: inserted, skipped_duplicates: [] });
-      });
-      return;
-    }
+    const created = { id: this.nextTagId++, name };
+    this.state.tags.push(created);
+    json(res, 200, created);
+  }
+
+  private insertTransactions(res: ServerResponse, body: Record<string, unknown>): void {
+    const rows = Array.isArray(body.transactions) ? body.transactions : [];
+    const inserted = rows.map((row: { external_id?: string; payee?: string }) => ({
+      id: this.nextTransactionId++,
+      external_id: row.external_id ?? null,
+      payee: row.payee ?? "tx",
+    }));
+    json(res, 200, { transactions: inserted, skipped_duplicates: [] });
   }
 
   private readJsonBody(req: IncomingMessage, onBody: (body: Record<string, unknown>) => void): void {

@@ -1,7 +1,7 @@
-const ESC = String.fromCharCode(0x1b);
-const CSI = String.fromCharCode(0x9b);
+const ESC = String.fromCodePoint(0x1b);
+const CSI = String.fromCodePoint(0x9b);
 const ANSI_PATTERN = new RegExp(
-  `[${ESC}${CSI}][[\\]()#;?]*(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-ORZcf-nqry=><]`,
+  String.raw`[${ESC}${CSI}][[\]()#;?]*(?:\d{1,4}(?:;\d{0,4})*)?[\dA-ORZcf-nqry=><]`,
   "g",
 );
 

@@ -13,6 +13,31 @@ export interface PtyRunResult {
   readonly output: string;
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function pollUntil(
+  condition: () => boolean,
+  timeoutMs: number,
+  deadlineMessage: () => string,
+): Promise<void> {
+  const started = Date.now();
+  const tick = async (): Promise<void> => {
+    if (condition()) {
+      return;
+    }
+    if (Date.now() - started >= timeoutMs) {
+      throw new Error(deadlineMessage());
+    }
+    await delay(50);
+    await tick();
+  };
+  await tick();
+}
+
 export class PtySession {
   private readonly rawChunks: string[] = [];
   private readonly proc: pty.IPty;
@@ -66,30 +91,24 @@ export class PtySession {
   }
 
   async waitFor(pattern: RegExp, timeoutMs: number): Promise<void> {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      if (pattern.test(this.text)) {
-        return;
-      }
-      if (this.settled) {
-        break;
-      }
-      await new Promise((resolve) => {
-        setTimeout(resolve, 50);
-      });
-    }
-    throw new Error(
-      `Timed out after ${timeoutMs}ms waiting for ${pattern.toString()} in PTY output:\n${this.text.slice(-4000)}`,
+    const mismatchMessage = () =>
+      `Timed out after ${timeoutMs}ms waiting for ${pattern.toString()} in PTY output:\n${this.text.slice(-4000)}`;
+    await pollUntil(
+      () => pattern.test(this.text) || this.settled,
+      timeoutMs,
+      mismatchMessage,
     );
+    if (!pattern.test(this.text)) {
+      throw new Error(mismatchMessage());
+    }
   }
 
   async finish(timeoutMs: number): Promise<PtyRunResult> {
-    const started = Date.now();
-    while (!this.settled && Date.now() - started < timeoutMs) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 50);
-      });
-    }
+    await pollUntil(
+      () => this.settled,
+      timeoutMs,
+      () => `Timed out after ${timeoutMs}ms waiting for PTY process to exit`,
+    );
     if (!this.settled) {
       this.proc.kill();
     }

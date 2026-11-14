@@ -1,4 +1,5 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { e2eFixturesDir, e2eStubsDir, repoRoot } from "./paths.js";
@@ -38,12 +39,13 @@ export async function createE2eWorkspace(options: WorkspaceOptions): Promise<E2e
   await mkdir(localBinDir, { recursive: true });
   await installFakeNodeModules(dir);
 
-  for (const targetDir of [stubBinDir, localBinDir]) {
-    await installStub(targetDir, "pytr", path.join(e2eStubsDir, "pytr-stub.mjs"));
-    await installStub(targetDir, "sc", path.join(e2eStubsDir, "sc-stub.mjs"));
-    await installStub(targetDir, "uv", path.join(e2eStubsDir, "uv-stub.mjs"));
-    await installStub(targetDir, "uvx", path.join(e2eStubsDir, "uvx-stub.mjs"));
-  }
+  const stubJobs = [stubBinDir, localBinDir].flatMap((targetDir) => [
+    installStub(targetDir, "pytr", path.join(e2eStubsDir, "pytr-stub.mjs")),
+    installStub(targetDir, "sc", path.join(e2eStubsDir, "sc-stub.mjs")),
+    installStub(targetDir, "uv", path.join(e2eStubsDir, "uv-stub.mjs")),
+    installStub(targetDir, "uvx", path.join(e2eStubsDir, "uvx-stub.mjs")),
+  ]);
+  await Promise.all(stubJobs);
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -84,7 +86,8 @@ export function cliEntryArgs(
   entry: "doctor" | "setup" | "sync",
   scriptArgs: readonly string[] = [],
 ): { readonly command: string; readonly args: readonly string[] } {
-  const tsx = path.join(repoRoot, "node_modules", ".bin", "tsx");
+  const require = createRequire(import.meta.url);
+  const tsxCli = require.resolve("tsx/cli");
   const script = path.join(repoRoot, "src", `${entry}.ts`);
-  return { command: tsx, args: [script, ...scriptArgs] };
+  return { command: process.execPath, args: [tsxCli, script, ...scriptArgs] };
 }

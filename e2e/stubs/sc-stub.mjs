@@ -7,6 +7,13 @@ const fixturesDir = process.env.LM_E2E_FIXTURES_DIR;
 const argv = process.argv.slice(2);
 const statePath = path.join(process.env.HOME ?? "/tmp", ".lm-e2e-sc-portfolios-attempts");
 
+const NO_SESSION_ENVELOPE = {
+  ok: false,
+  command: "broker.portfolios",
+  error: { code: "no_session", message: "No active session" },
+  hints: ["Run 'sc login' first to create a session."],
+};
+
 async function portfolioAttempts() {
   try {
     const text = await readFile(statePath, "utf8");
@@ -31,6 +38,49 @@ async function readFixture(name) {
   return readFile(path.join(fixturesDir, name), "utf8");
 }
 
+function writeJson(value) {
+  process.stdout.write(JSON.stringify(value));
+}
+
+async function handleBrokerPortfolios() {
+  if (scenario === "no_session_then_ok") {
+    const attempt = await bumpPortfolioAttempts();
+    if (attempt < 2) {
+      writeJson(NO_SESSION_ENVELOPE);
+      process.exit(0);
+    }
+  }
+  if (scenario === "no_session") {
+    writeJson(NO_SESSION_ENVELOPE);
+    process.exit(0);
+  }
+  writeJson({
+    ok: true,
+    command: "broker.portfolios",
+    data: {
+      portfolios: [{ id: "portfolio-operator-a", name: "Broker portfolio" }],
+    },
+  });
+  process.exit(0);
+}
+
+async function handleBrokerTransactions() {
+  if (scenario === "no_session") {
+    const body = await readFixture("scalable-broker-transactions-no-session.json");
+    process.stdout.write(body.trim());
+    process.exit(0);
+  }
+  const cursorIndex = argv.indexOf("--cursor");
+  const cursor = cursorIndex >= 0 ? argv[cursorIndex + 1] : undefined;
+  const fixture =
+    cursor === "page-2"
+      ? "scalable-broker-transactions-page-2.json"
+      : "scalable-broker-transactions-page-1.json";
+  const body = await readFixture(fixture);
+  process.stdout.write(body.trim());
+  process.exit(0);
+}
+
 async function run() {
   if (argv.includes("--version")) {
     process.stdout.write("sc 0.1.0-e2e-stub\n");
@@ -38,62 +88,15 @@ async function run() {
   }
 
   if (argv[0] === "broker" && argv[1] === "portfolios") {
-    if (scenario === "no_session_then_ok") {
-      const attempt = await bumpPortfolioAttempts();
-      if (attempt < 2) {
-        process.stdout.write(
-          JSON.stringify({
-            ok: false,
-            command: "broker.portfolios",
-            error: { code: "no_session", message: "No active session" },
-            hints: ["Run 'sc login' first to create a session."],
-          }),
-        );
-        process.exit(0);
-      }
-    }
-    if (scenario === "no_session") {
-      process.stdout.write(
-        JSON.stringify({
-          ok: false,
-          command: "broker.portfolios",
-          error: { code: "no_session", message: "No active session" },
-          hints: ["Run 'sc login' first to create a session."],
-        }),
-      );
-      process.exit(0);
-    }
-    process.stdout.write(
-      JSON.stringify({
-        ok: true,
-        command: "broker.portfolios",
-        data: {
-          portfolios: [{ id: "portfolio-operator-a", name: "Broker portfolio" }],
-        },
-      }),
-    );
-    process.exit(0);
+    await handleBrokerPortfolios();
   }
 
   if (argv[0] === "broker" && argv[1] === "transactions") {
-    if (scenario === "no_session") {
-      const body = await readFixture("scalable-broker-transactions-no-session.json");
-      process.stdout.write(body.trim());
-      process.exit(0);
-    }
-    const cursorIndex = argv.indexOf("--cursor");
-    const cursor = cursorIndex >= 0 ? argv[cursorIndex + 1] : undefined;
-    const fixture =
-      cursor === "page-2"
-        ? "scalable-broker-transactions-page-2.json"
-        : "scalable-broker-transactions-page-1.json";
-    const body = await readFixture(fixture);
-    process.stdout.write(body.trim());
-    process.exit(0);
+    await handleBrokerTransactions();
   }
 
   if (argv[0] === "login") {
-    process.stdout.write(JSON.stringify({ ok: true, command: "login" }));
+    writeJson({ ok: true, command: "login" });
     process.exit(0);
   }
 
@@ -101,7 +104,9 @@ async function run() {
   process.exit(2);
 }
 
-run().catch((error) => {
+try {
+  await run();
+} catch (error) {
   process.stderr.write(String(error));
   process.exit(1);
-});
+}
