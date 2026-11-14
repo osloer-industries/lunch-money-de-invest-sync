@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.2...v0.2.3) (2026-11-14)
+
+
+### Features
+
+* categories CLI to view, edit, and re-apply mappings ([#85](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/85)) ([3214bdd](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/3214bdd5668ad8488bb254b38634f73524e3b8d2))
+
+
+### Bug Fixes
+
+* **classification:** recognise Trade Republic and Scalable event types ([#90](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/90)) ([28a4bba](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/28a4bba318ed3605d31ab9d8d33bb9493b719096))
+
 ## [0.2.2](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.1...v0.2.2) (2026-11-14)
 
 
