@@ -1,5 +1,5 @@
 import type { DryRunSummary } from "../lunch-money/preview.js";
-import type { CanonicalTransaction } from "../shared/transaction.js";
+import type { BrokerSource, CanonicalTransaction } from "../shared/transaction.js";
 import { formatPlainCanonicalAmount } from "./plain-amount.js";
 import type {
   DryRunCategoryBucket,
@@ -7,7 +7,6 @@ import type {
   DryRunReviewRow,
   DryRunReviewSummary,
 } from "./types.js";
-import type { BrokerSource } from "../shared/transaction.js";
 
 const UNCATEGORISED_LABEL = "Uncategorised";
 const NEEDS_REVIEW_TAG = "needs-review";

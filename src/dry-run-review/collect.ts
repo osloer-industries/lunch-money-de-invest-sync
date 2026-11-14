@@ -9,8 +9,7 @@ import { forEachProfileSequentially } from "../shared/sequential-profiles.js";
 import type { TransactionsApi } from "../lunch-money/upsert.js";
 import { buildDryRunProfileSummary, buildDryRunReviewSummary } from "./build-summary.js";
 import { filterTransactionsSince } from "./since.js";
-import type { DryRunReviewSummary } from "./types.js";
-import type { DryRunProfileSummary } from "./types.js";
+import type { DryRunProfileSummary, DryRunReviewSummary } from "./types.js";
 
 export interface DryRunCollectionSelection {
   readonly includeBrokers: ReadonlySet<SyncBroker>;

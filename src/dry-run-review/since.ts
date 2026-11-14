@@ -10,7 +10,7 @@ export function parseSinceDate(raw: string): string {
   }
   const parsed = new Date(`${trimmed}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`--since is not a valid date: "${raw}"`);
+    throw new TypeError(`--since is not a valid date: "${raw}"`);
   }
   return trimmed;
 }
