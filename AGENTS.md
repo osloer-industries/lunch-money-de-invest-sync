@@ -23,8 +23,11 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Never suppress lint rules: no `eslint-disable`, `NOSONAR`, new `sonar.exclusions`, or oxlint
   overrides except the existing documented `no-await-in-loop` carve-out for broker pagination/sync.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
-- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.1.1` or matching release tag comment).
+- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.x.y` comment matching the release tag).
   Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.
+- GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
+  `SONAR_TOKEN`, and `RELEASE_APP_PRIVATE_KEY` (with variable `OSLOER_RELEASE_APP_ID` for
+  Release Please). Never add broker, Lunch Money, or other financial credentials to CI.
 
 ## Architecture
 
