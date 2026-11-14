@@ -7,6 +7,7 @@ import {
 } from "./types.js";
 import { parseScMachineEnvelopeStdout } from "./sc-envelope.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
 
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;
@@ -20,11 +21,28 @@ function cliErrorMessage(envelope: ReturnType<typeof parseScMachineEnvelopeStdou
     : `Scalable CLI command failed (${code})`;
 }
 
-function assertSuccessEnvelope(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): void {
+export interface ScalableFetchContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
+
+function assertSuccessEnvelope(
+  envelope: ReturnType<typeof parseScMachineEnvelopeStdout>,
+  context: ScalableFetchContext = {},
+): void {
   if (envelope.ok) {
     return;
   }
   if (envelope.error?.code === "no_session") {
+    context.loginEvents?.({
+      kind: "broker_login",
+      broker: "scalable-capital",
+      phase: "session_needed",
+    });
+    context.loginEvents?.({
+      kind: "broker_login",
+      broker: "scalable-capital",
+      phase: "login_required",
+    });
     throw new Error("Scalable CLI has no active session — run `sc login` on this machine first");
   }
   throw new Error(cliErrorMessage(envelope));
@@ -101,6 +119,7 @@ function childEnv(config: ScalableCapitalCliConfig): Record<string, string> | un
 async function runTransactionsPage(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext,
   cursor?: string,
 ): Promise<{
   transactions: ScalableCapitalTransaction[];
@@ -125,10 +144,10 @@ async function runTransactionsPage(
   if (!envelope.ok && envelope.error?.code === "refresh_retryable") {
     const retry = await runner.run(argv, env);
     const retryEnvelope = parseScMachineEnvelopeStdout(retry.stdout);
-    assertSuccessEnvelope(retryEnvelope);
+    assertSuccessEnvelope(retryEnvelope, context);
     return parseTransactionsData(retryEnvelope);
   }
-  assertSuccessEnvelope(envelope);
+  assertSuccessEnvelope(envelope, context);
   return parseTransactionsData(envelope);
 }
 
@@ -153,13 +172,23 @@ function parseTransactionsData(envelope: ReturnType<typeof parseScMachineEnvelop
 async function paginateBrokerTransactionPages<T>(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext,
   pick: (page: Awaited<ReturnType<typeof runTransactionsPage>>) => readonly T[],
 ): Promise<T[]> {
   const all: T[] = [];
   let cursor: string | undefined;
+  let sessionActiveEmitted = false;
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const result = await runTransactionsPage(runner, config, cursor);
+    const result = await runTransactionsPage(runner, config, context, cursor);
+    if (!sessionActiveEmitted) {
+      sessionActiveEmitted = true;
+      context.loginEvents?.({
+        kind: "broker_login",
+        broker: "scalable-capital",
+        phase: "session_active",
+      });
+    }
     all.push(...pick(result));
     if (!result.cursor) {
       return all;
@@ -174,16 +203,18 @@ async function paginateBrokerTransactionPages<T>(
 export function fetchAllScalableTransactionSummaries(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext = {},
 ): Promise<ScTransactionSummary[]> {
-  return paginateBrokerTransactionPages(runner, config, (page) => page.summaries);
+  return paginateBrokerTransactionPages(runner, config, context, (page) => page.summaries);
 }
 
 /** Fetches every page of broker cash transactions via `sc broker transactions --json`. */
 export function fetchAllScalableCapitalTransactions(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
+  context: ScalableFetchContext = {},
 ): Promise<ScalableCapitalTransaction[]> {
-  return paginateBrokerTransactionPages(runner, config, (page) => page.transactions);
+  return paginateBrokerTransactionPages(runner, config, context, (page) => page.transactions);
 }
 
 export function createDefaultScCliRunner(config: ScalableCapitalCliConfig): ScCliRunner {

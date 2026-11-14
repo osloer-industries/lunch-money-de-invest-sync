@@ -54,6 +54,7 @@ function fakeClient(): LunchMoneySyncClient {
       ),
     },
     transactions: {
+      getAll: vi.fn().mockResolvedValue({ transactions: [], hasMore: false }),
       create: vi.fn().mockResolvedValue({ transactions: [{ id: 1 }], skipped_duplicates: [] }),
     },
   } as unknown as LunchMoneySyncClient;
@@ -191,6 +192,8 @@ describe("runSync", () => {
         account: "acct-1",
         pytrMinVersion: "0.4.10",
       }),
+      undefined,
+      {},
     );
   });
 
@@ -359,6 +362,24 @@ describe("runSync", () => {
     });
     expect(writeFileMock).toHaveBeenCalled();
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("types.json"));
+  });
+
+  it("runSyncCli emits json account summaries", async () => {
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const client = fakeClient();
+    await runSyncCli(["--dry-run", "--json", "--non-interactive"], {
+      readConfig: () => baseConfig({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 7 }] }),
+      createClient: () => client as never,
+      collectors: {
+        collectTradeRepublic: vi.fn().mockResolvedValue([tx()]),
+        collectScalableCapital: vi.fn(),
+      },
+    });
+    const payload = JSON.parse(String(stdout.mock.calls[0]?.[0])) as {
+      accounts: Array<{ firstSyncForAccount: boolean }>;
+    };
+    expect(payload.accounts[0]?.firstSyncForAccount).toBe(true);
+    stdout.mockRestore();
   });
 
   it("runSyncCli rejects unknown flags", async () => {

@@ -88,6 +88,8 @@ npm run sync -- --dry-run
 npm run sync
 ```
 
+For assistants and scripted tooling, commands support `--json`, `--events` (broker login NDJSON on stderr), and `--non-interactive`. See [docs/scriptable-cli.md](docs/scriptable-cli.md) for schemas. Non-interactive category mapping: `npm run categories -- apply --non-interactive --from mapping.json` (or `--map deposit=<categoryId>`).
+
 Store the Lunch Money API key in gitignored `.env` only (`npm run setup` writes it). Do not prefix `npm run sync` with `LUNCH_MONEY_API_KEY=...` on the command line (shell history).
 
 `npm run setup` runs `doctor`, validates your API key, detects `pytr` / `sc` launchers, walks broker login (including `pytr login --v2 --store_credentials` when you consent), writes incremental progress to `.env` and `config.json`, and can dry-run sync at the end.

@@ -18,6 +18,8 @@ const options: SetupCliOptions = {
   portfolioId: null,
   categories: true,
   exportTypeSummary: null,
+  json: false,
+  events: false,
   replaceApiKey: false,
   clearApiKey: false,
   help: false,

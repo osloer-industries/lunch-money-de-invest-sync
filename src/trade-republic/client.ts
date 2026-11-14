@@ -1,5 +1,11 @@
 import type { PathLike } from "node:fs";
-import { createAppApprovalWatcher } from "./app-approval-alert.js";
+import {
+  appApprovalWatcherDeps,
+  createAppApprovalWatcher,
+  finalizeTradeRepublicApprovalFromRun,
+  type AppApprovalWatcherState,
+} from "./app-approval-alert.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -191,17 +197,27 @@ function actionablePytrFailure(stderr: string, exitCode: number): string {
     : `pytr export_transactions failed with exit code ${exitCode}`;
 }
 
+export interface TradeRepublicFetchContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
+
 async function runExport(
   runner: PytrCliRunner,
   config: TradeRepublicPytrConfig,
   filesystem: PytrFilesystem = defaultPytrFilesystem,
+  context: TradeRepublicFetchContext = {},
 ): Promise<string> {
   const childEnv = pytrHomeEnv(config.pytrHome);
   let outputDir: string | undefined;
+  let approvalState: AppApprovalWatcherState = { sawApprovalWait: false, approvalSettled: false };
   try {
     await assertPytrMinVersion(runner, config, childEnv);
     outputDir = await filesystem.mkdtemp(path.join(os.tmpdir(), "lm-tr-sync-"));
-    const onOutputLine = createAppApprovalWatcher();
+    const onOutputLine = createAppApprovalWatcher(
+      appApprovalWatcherDeps((state) => {
+        approvalState = state;
+      }, context.loginEvents),
+    );
     // Short session check first: if Trade Republic needs app approval it happens here (with an alert),
     // so the full-history export below starts on a fresh session with its whole timeout.
     const runPytr = async (argv: readonly string[]) => {
@@ -219,10 +235,12 @@ async function runExport(
     };
     const probeDir = await filesystem.mkdtemp(path.join(outputDir, "session-check-"));
     const probe = await runPytr([...buildExportArgv(probeDir, config), "--last_days", "1"]);
+    finalizeTradeRepublicApprovalFromRun(context.loginEvents, approvalState, probe.exitCode, probe.stderr);
     if (probe.exitCode !== 0) {
       throw new Error(actionablePytrFailure(probe.stderr, probe.exitCode));
     }
     const run = await runPytr(buildExportArgv(outputDir, config));
+    finalizeTradeRepublicApprovalFromRun(context.loginEvents, approvalState, run.exitCode, run.stderr);
     if (run.exitCode !== 0) {
       throw new Error(actionablePytrFailure(run.stderr, run.exitCode));
     }
@@ -254,8 +272,9 @@ export async function fetchTradeRepublicTimeline(
   runner: PytrCliRunner,
   config: TradeRepublicPytrConfig,
   filesystem: PytrFilesystem = defaultPytrFilesystem,
+  context: TradeRepublicFetchContext = {},
 ): Promise<ReturnType<typeof pytrAllEventsSchema.parse>> {
-  const raw = await runExport(runner, config, filesystem);
+  const raw = await runExport(runner, config, filesystem, context);
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;

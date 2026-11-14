@@ -38,6 +38,16 @@ import type {
   SetupPrompter,
   SetupResult,
 } from "./types.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
+
+export interface SetupNonInteractiveJsonSummary {
+  readonly ok: true;
+  readonly mode: "non-interactive";
+  readonly configPath: string;
+  readonly tradeRepublicProfileCount: number;
+  readonly scalableCapitalProfileCount: number;
+  readonly sharedCardLast4: readonly string[];
+}
 
 const CONFIG_FILENAME = "config.json";
 
@@ -532,6 +542,35 @@ async function finishSetup(
   };
 }
 
+async function runNonInteractiveBrokerPreflight(
+  options: SetupCliOptions,
+  deps: {
+    runners: SetupBrokerRunners;
+    prompter: SetupPrompter;
+    loginEvents?: BrokerLoginEventSink;
+  },
+): Promise<void> {
+  const brokerContext = deps.loginEvents ? { loginEvents: deps.loginEvents } : {};
+  await ensurePytrReady(
+    deps.runners.pytr,
+    deps.prompter,
+    {
+      enabled: options.tradeRepublic,
+      skipCheck: options.skipBrokerCheck,
+    },
+    brokerContext,
+  );
+  await ensureScCliReady(
+    deps.runners.sc,
+    deps.prompter,
+    {
+      enabled: options.scalableCapital,
+      skipCheck: options.skipBrokerCheck,
+    },
+    brokerContext,
+  );
+}
+
 export async function runSetup(
   options: SetupCliOptions,
   deps: {
@@ -542,6 +581,8 @@ export async function runSetup(
     runSync?: typeof runSyncCli;
     createLunchMoneyClient?: (apiKey: string) => LunchMoneySetupClient;
     apiKeyStore?: LunchMoneyApiKeyStore;
+    loginEvents?: BrokerLoginEventSink;
+    onNonInteractiveComplete?: (summary: SetupNonInteractiveJsonSummary) => void;
   },
 ): Promise<SetupResult> {
   assertNodeMajorVersion(deps.nodeVersion ?? process.version);
@@ -567,14 +608,7 @@ export async function runSetup(
 
   if (options.nonInteractive) {
     await validateApiKey(lmClient);
-    await ensurePytrReady(deps.runners.pytr, deps.prompter, {
-      enabled: options.tradeRepublic,
-      skipCheck: options.skipBrokerCheck,
-    });
-    await ensureScCliReady(deps.runners.sc, deps.prompter, {
-      enabled: options.scalableCapital,
-      skipCheck: options.skipBrokerCheck,
-    });
+    await runNonInteractiveBrokerPreflight(options, deps);
   }
 
   const profiles = options.nonInteractive
@@ -606,5 +640,25 @@ export async function runSetup(
     ...profiles,
   });
 
-  return finishSetup(options, deps, apiKey, profiles, sharedCardLast4);
+  const result = await finishSetup(options, deps, apiKey, profiles, sharedCardLast4);
+  emitNonInteractiveJsonSummary(options, result, deps.onNonInteractiveComplete);
+  return result;
+}
+
+function emitNonInteractiveJsonSummary(
+  options: SetupCliOptions,
+  result: SetupResult,
+  onComplete: ((summary: SetupNonInteractiveJsonSummary) => void) | undefined,
+): void {
+  if (!options.nonInteractive || result.kind !== "completed" || !onComplete) {
+    return;
+  }
+  onComplete({
+    ok: true,
+    mode: "non-interactive",
+    configPath: result.files.configPath,
+    tradeRepublicProfileCount: result.config.tradeRepublicProfiles.length,
+    scalableCapitalProfileCount: result.config.scalableCapitalProfiles.length,
+    sharedCardLast4: result.config.sharedCardLast4,
+  });
 }

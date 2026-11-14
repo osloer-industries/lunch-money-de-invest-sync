@@ -22,6 +22,8 @@ const baseOptions = (): SetupCliOptions => ({
   portfolioId: null,
   categories: false,
   exportTypeSummary: null,
+  json: false,
+  events: false,
   replaceApiKey: false,
   clearApiKey: false,
   help: false,

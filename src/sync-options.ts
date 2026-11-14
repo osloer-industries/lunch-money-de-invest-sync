@@ -1,5 +1,6 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { exportTypeSummaryPath } from "./shared/cli-args.js";
+import { parseScriptableFlags, scriptableOptionConfig } from "./shared/scriptable-cli.js";
 
 export type SyncBroker = "trade-republic" | "scalable-capital";
 
@@ -9,6 +10,9 @@ export interface SyncCliOptions {
   readonly dryRun: boolean;
   readonly exportTypeSummary: string | null;
   readonly help: boolean;
+  readonly json: boolean;
+  readonly events: boolean;
+  readonly nonInteractive: boolean;
 }
 
 const PARSE_CONFIG: ParseArgsConfig = {
@@ -18,6 +22,7 @@ const PARSE_CONFIG: ParseArgsConfig = {
     "dry-run": { type: "boolean", default: false },
     "export-type-summary": { type: "string" },
     help: { type: "boolean", default: false, short: "h" },
+    ...scriptableOptionConfig(),
   },
   allowPositionals: false,
   strict: true,
@@ -70,14 +75,27 @@ export const SYNC_HELP_TEXT = `Usage: npm run sync -- [options]
   --account <owner>                           Limit sync to profile owner labels (repeatable)
   --dry-run                                   Fetch and map only; preview inserts via Lunch Money GET
   --export-type-summary <file>                Write anonymised broker type summary (opt-in)
+  --json                                      Machine-readable result on stdout (no secrets)
+  --events                                    Broker login NDJSON events on stderr during fetch
+  --non-interactive                           Required when stdin is not a TTY
   -h, --help                                  Show this help
 
 Unknown flags or invalid broker names exit with an error. When no filters are set, all configured profiles run.`;
 
 export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
   const values = parseArgsOrThrow(argv).values as Record<string, unknown>;
+  const scriptable = parseScriptableFlags(argv);
   if (values.help === true) {
-    return { brokers: [], owners: [], dryRun: false, exportTypeSummary: null, help: true };
+    return {
+      brokers: [],
+      owners: [],
+      dryRun: false,
+      exportTypeSummary: null,
+      help: true,
+      json: false,
+      events: false,
+      nonInteractive: false,
+    };
   }
 
   return {
@@ -86,6 +104,9 @@ export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
     dryRun: values["dry-run"] === true,
     exportTypeSummary: exportTypeSummaryPath(values),
     help: false,
+    json: scriptable.flags.json,
+    events: scriptable.flags.events,
+    nonInteractive: scriptable.flags.nonInteractive,
   };
 }
 

@@ -27,6 +27,10 @@ import {
 import { writeFile } from "node:fs/promises";
 import { runCliModuleMain } from "./shared/cli-main.js";
 import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
+import { detectFirstSyncForAccount } from "./lunch-money/first-sync-for-account.js";
+import { createNdjsonEventWriter, type BrokerLoginEventSink } from "./shared/cli-events.js";
+import { writeStdoutJson } from "./shared/scriptable-cli.js";
+import type { SyncAccountResult, SyncRunResult } from "./sync-result.js";
 
 export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
 
@@ -46,6 +50,7 @@ export interface RunSyncSelection {
   readonly owners: readonly string[];
   readonly dryRun: boolean;
   readonly exportTypeSummary?: string | null;
+  readonly json?: boolean;
 }
 
 function createDefaultRunSyncSelection(): RunSyncSelection {
@@ -73,7 +78,12 @@ interface SyncOneAccountParams {
   readonly dryRun: boolean;
 }
 
-async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
+const BROKER_EXTERNAL_ID_PREFIX: Record<BrokerSource, string> = {
+  "trade-republic": "trade-republic:",
+  "scalable-capital": "scalable-capital:",
+};
+
+async function syncOneAccount(params: SyncOneAccountParams): Promise<SyncAccountResult> {
   const {
     owner,
     source,
@@ -90,6 +100,7 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
     applyCategoryTagMappings(rawTransactions, categoryMap, tagMap),
     sharedCardLast4,
   );
+  const firstSync = await detectFirstSyncForAccount(client, lunchMoneyAssetId, [BROKER_EXTERNAL_ID_PREFIX[source]]);
   if (dryRun) {
     const preview = await previewUpsert(client, transactions, lunchMoneyAssetId);
     logger(
@@ -100,13 +111,38 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<void> {
         `  ${line.action === "insert" ? "+" : "="} ${line.date} ${line.amount} ${line.payee} (${line.externalId})`,
       );
     }
-    return;
+    if (firstSync.firstSyncForAccount) {
+      logger(
+        `[${source}:${owner}] note: first sync for this Lunch Money account — classification is locked in after the first successful sync`,
+      );
+    }
+    return {
+      owner,
+      source,
+      lunchMoneyAssetId,
+      firstSyncForAccount: firstSync.firstSyncForAccount,
+      existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+      dryRun: true,
+      wouldInsert: preview.wouldInsert,
+      wouldSkip: preview.wouldSkip,
+      dryRunSummary: null,
+    };
   }
   const tagIds = await resolveTagIds(client, uniqueTags(transactions));
   const summary = await upsertTransactions(client, transactions, lunchMoneyAssetId, tagIds);
   logger(
     `[${source}:${owner}] inserted ${summary.insertedCount}, skipped ${summary.skippedCount} duplicate(s)`,
   );
+  return {
+    owner,
+    source,
+    lunchMoneyAssetId,
+    firstSyncForAccount: firstSync.firstSyncForAccount,
+    existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+    dryRun: false,
+    insertedCount: summary.insertedCount,
+    skippedCount: summary.skippedCount,
+  };
 }
 
 export async function runSync(
@@ -115,7 +151,7 @@ export async function runSync(
   collectors: BrokerCollectors,
   logger: SyncLogger = defaultSyncLogger,
   selection: RunSyncSelection = createDefaultRunSyncSelection(),
-): Promise<void> {
+): Promise<SyncRunResult | undefined> {
   const tradeProfiles =
     selection.includeBrokers.has("trade-republic")
       ? filterSyncConfig(config.tradeRepublicProfiles, selection.owners)
@@ -154,9 +190,15 @@ export async function runSync(
       collect: collectors.collectScalableCapital,
     },
   ] as const;
+  const accounts: SyncAccountResult[] = [];
   await forEachProfileSequentially(brokerSyncJobs, async (job) => {
-    await syncProfilesForBroker(job.profiles, job.source, job.collect, syncContext);
+    const chunk = await syncProfilesForBroker(job.profiles, job.source, job.collect, syncContext);
+    accounts.push(...chunk);
   });
+  if (selection.json) {
+    return { ok: true, accounts };
+  }
+  return undefined;
 }
 
 async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetId: number }>(
@@ -171,10 +213,11 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
     logger: SyncLogger;
     dryRun: boolean;
   },
-): Promise<void> {
+): Promise<SyncAccountResult[]> {
+  const results: SyncAccountResult[] = [];
   await forEachProfileSequentially(profiles, async (profile) => {
     const transactions = await collect(profile);
-    await syncOneAccount({
+    const accountResult = await syncOneAccount({
       owner: profile.owner,
       source,
       rawTransactions: transactions,
@@ -186,23 +229,24 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
       logger: context.logger,
       dryRun: context.dryRun,
     });
+    results.push(accountResult);
   });
+  return results;
 }
 
-export function createLiveCollectors(): BrokerCollectors {
-  return liveCollectors;
+export function createLiveCollectors(loginEvents?: BrokerLoginEventSink): BrokerCollectors {
+  const brokerContext = loginEvents ? { loginEvents } : {};
+  return {
+    async collectTradeRepublic(profile) {
+      const events = await fetchTradeRepublicEventsForProfile(profile, brokerContext);
+      return mapTradeRepublicEvents(events);
+    },
+    async collectScalableCapital(profile) {
+      const transactions = await fetchScalableCashTransactionsForProfile(profile, brokerContext);
+      return mapScalableCapitalTransactions(transactions);
+    },
+  };
 }
-
-const liveCollectors: BrokerCollectors = {
-  async collectTradeRepublic(profile) {
-    const events = await fetchTradeRepublicEventsForProfile(profile);
-    return mapTradeRepublicEvents(events);
-  },
-  async collectScalableCapital(profile) {
-    const transactions = await fetchScalableCashTransactionsForProfile(profile);
-    return mapScalableCapitalTransactions(transactions);
-  },
-};
 
 function selectionFromCliOptions(
   cli: ReturnType<typeof parseSyncCliOptions>,
@@ -216,6 +260,7 @@ function selectionFromCliOptions(
     owners: cli.owners,
     dryRun: cli.dryRun,
     exportTypeSummary: cli.exportTypeSummary,
+    json: cli.json,
   };
 }
 
@@ -234,24 +279,30 @@ export async function runSyncCli(
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
     return;
   }
+  const humanLogger = deps.logger ?? defaultSyncLogger;
+  const logger = cli.json ? () => undefined : humanLogger;
   await ensureLunchMoneyApiKeyForCli(deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore());
   const config = (deps.readConfig ?? readConfigFromDiskForCli)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);
+  const loginEvents = cli.events ? createNdjsonEventWriter() : undefined;
   if (cli.exportTypeSummary) {
     const observations = await collectTypeObservations(config);
     const groups = groupTypeObservations(observations);
     const target = await writeAnonymisedTypeSummaryToPath(cli.exportTypeSummary, groups, {
       write: (absolutePath, body) => writeFile(absolutePath, body, "utf8"),
     });
-    (deps.logger ?? defaultSyncLogger)(`Wrote anonymised type summary to ${target}`);
+    logger(`Wrote anonymised type summary to ${target}`);
   }
-  await runSync(
+  const result = await runSync(
     config,
     client,
-    deps.collectors ?? liveCollectors,
-    deps.logger ?? defaultSyncLogger,
+    deps.collectors ?? createLiveCollectors(loginEvents),
+    logger,
     selectionFromCliOptions(cli),
   );
+  if (cli.json && result) {
+    writeStdoutJson(result);
+  }
 }
 
 runCliModuleMain(async () => {

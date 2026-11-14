@@ -265,6 +265,18 @@ describe("runDoctorCli", () => {
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("node:"));
   });
 
+  it("writes json to stdout with --json", async () => {
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await runDoctorCli(["--json"], {
+      nodeVersion: "v24.0.0",
+      platform: "linux",
+      exists: existsWithUvAndDeps(),
+      ...okRunners,
+    });
+    expect(stdout.mock.calls[0]?.[0]).toEqual(expect.stringContaining('"ok":true'));
+    stdout.mockRestore();
+  });
+
   it("prints a warning and exits successfully when uv is missing but pytr is present", async () => {
     const logger = vi.fn();
     await runDoctorCli([], {
