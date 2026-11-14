@@ -84,6 +84,55 @@ async function createCategoryFromTemplate(
   return created.id;
 }
 
+
+function printStandardSuggestion(
+  prompter: SetupPrompter,
+  canonicalType: CanonicalType,
+  suggestion: SuggestedCategory,
+  categoryRows: readonly SetupCategoryRow[],
+): void {
+  const { category: match, warnedMissingExclusion } = findSuggestedCategoryMatch(
+    categoryRows,
+    suggestion,
+    canonicalType,
+  );
+  if (match) {
+    prompter.print(
+      `  Suggested category for ${canonicalType}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
+    );
+    if (warnedMissingExclusion) {
+      prompter.print(
+        "  Warning: this category does not have both Exclude from budget and Exclude from totals enabled.",
+      );
+    }
+    return;
+  }
+  prompter.print(
+    `  Suggested category for ${canonicalType}: "${suggestion.name}" (not found — pick id or create)`,
+  );
+}
+
+function printTypeMappingGuidance(
+  prompter: SetupPrompter,
+  canonicalType: CanonicalType,
+  suggestion: SuggestedCategory | undefined,
+  categoryRows: readonly SetupCategoryRow[],
+): void {
+  if (canonicalType === "saveback") {
+    printSavebackGuidance(prompter, categoryRows);
+    return;
+  }
+  if (suggestion) {
+    printStandardSuggestion(prompter, canonicalType, suggestion, categoryRows);
+    return;
+  }
+  if (canonicalType === "unknown") {
+    prompter.print(
+      "  Unknown spend: leave uncategorised or pick an existing category — create-new is not offered for unknown types.",
+    );
+  }
+}
+
 function printSavebackGuidance(
   prompter: SetupPrompter,
   categories: readonly SetupCategoryRow[],
@@ -109,33 +158,7 @@ async function pickCategoryId(
   const categories = await client.categories.getAll();
   const suggestion = SUGGESTED_CATEGORIES[canonicalType];
   const categoryRows = categories as readonly SetupCategoryRow[];
-  if (canonicalType === "saveback") {
-    printSavebackGuidance(prompter, categoryRows);
-  } else if (suggestion) {
-    const { category: match, warnedMissingExclusion } = findSuggestedCategoryMatch(
-      categoryRows,
-      suggestion,
-      canonicalType,
-    );
-    if (match) {
-      prompter.print(
-        `  Suggested category for ${canonicalType}: "${suggestion.name}" → existing "${match.name}" [id ${match.id}]`,
-      );
-      if (warnedMissingExclusion) {
-        prompter.print(
-          "  Warning: this category does not have both Exclude from budget and Exclude from totals enabled.",
-        );
-      }
-    } else {
-      prompter.print(
-        `  Suggested category for ${canonicalType}: "${suggestion.name}" (not found — pick id or create)`,
-      );
-    }
-  } else if (canonicalType === "unknown") {
-    prompter.print(
-      "  Unknown spend: leave uncategorised or pick an existing category — create-new is not offered for unknown types.",
-    );
-  }
+  printTypeMappingGuidance(prompter, canonicalType, suggestion, categoryRows);
   const pickerChoices = [
     { name: "Skip (no mapping)", value: SKIP_CATEGORY },
     ...(allowsCreateCategory(canonicalType, suggestion)
