@@ -1,6 +1,6 @@
 {
   "name": "lunch-money-de-invest-sync",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Sync German investment accounts (Trade Republic, Scalable Capital) into Lunch Money",
   "private": true,
   "type": "module",
