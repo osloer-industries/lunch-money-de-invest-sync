@@ -188,6 +188,21 @@ describe("createPytrCliRunner", () => {
     }
   });
 
+  it("passes LM_E2E_FIXTURES_DIR through to stub broker CLIs", () => {
+    const previous = process.env.LM_E2E_FIXTURES_DIR;
+    process.env.LM_E2E_FIXTURES_DIR = "/tmp/lm-e2e-fixtures";
+    try {
+      const env = buildCliSpawnEnv();
+      expect(env.LM_E2E_FIXTURES_DIR).toBe("/tmp/lm-e2e-fixtures");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.LM_E2E_FIXTURES_DIR;
+      } else {
+        process.env.LM_E2E_FIXTURES_DIR = previous;
+      }
+    }
+  });
+
   it("includes home .local/bin in PATH for spawn env", () => {
     const previousHome = process.env.HOME;
     process.env.HOME = "/home/example-operator";

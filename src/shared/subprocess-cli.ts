@@ -15,7 +15,15 @@ export const TRUSTED_CLI_SEARCH_DIRS = [
 
 const DEFAULT_SUBPROCESS_TIMEOUT_MS = 120_000;
 
-const PASSTHROUGH_ENV_KEYS = ["SC_CONFIG_DIR", "TMPDIR"] as const;
+const PASSTHROUGH_ENV_KEYS = [
+  "SC_CONFIG_DIR",
+  "TMPDIR",
+  /** E2E harness only — stub broker CLIs read anonymised fixtures; never set in production. */
+  "LM_E2E_FIXTURES_DIR",
+  "LM_E2E_PYTR_SCENARIO",
+  "LM_E2E_SC_SCENARIO",
+  "LM_E2E_FAST",
+] as const;
 
 export class CliExecutableNotFoundError extends Error {
   readonly code = "ENOENT";
