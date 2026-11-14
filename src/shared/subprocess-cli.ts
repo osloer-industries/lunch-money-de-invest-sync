@@ -139,6 +139,29 @@ export interface SubprocessRunResult {
 export interface SubprocessRunOptions {
   readonly timeoutMs?: number;
   readonly extraSearchDir?: string;
+  /** Called with each complete stdout/stderr line as it arrives (output is still captured). */
+  readonly onOutputLine?: (line: string) => void;
+}
+
+/** Splits streamed chunks into complete lines; call `flush` at exit for a trailing partial line. */
+export function createLineSplitter(onLine: (line: string) => void): { push(chunk: string): void; flush(): void } {
+  let pending = "";
+  return {
+    push(chunk) {
+      pending += chunk;
+      const parts = pending.split(/\r?\n/);
+      pending = parts.pop() ?? "";
+      for (const part of parts) {
+        onLine(part);
+      }
+    },
+    flush() {
+      if (pending.length > 0) {
+        onLine(pending);
+        pending = "";
+      }
+    },
+  };
 }
 
 export interface PrefixCliRunner {
@@ -269,13 +292,18 @@ export function runSubprocess(
     }, timeoutMs);
     let stdout = "";
     let stderr = "";
+    const onLine = options?.onOutputLine;
+    const stdoutLines = onLine ? createLineSplitter(onLine) : undefined;
+    const stderrLines = onLine ? createLineSplitter(onLine) : undefined;
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk;
+      stdoutLines?.push(chunk);
     });
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
+      stderrLines?.push(chunk);
     });
     child.on("error", (error) => {
       finish(() => {
@@ -283,6 +311,8 @@ export function runSubprocess(
       });
     });
     child.on("close", (exitCode) => {
+      stdoutLines?.flush();
+      stderrLines?.flush();
       finish(() => {
         resolve({ stdout, stderr, exitCode: exitCode ?? 1 });
       });

@@ -19,13 +19,17 @@ function loadFixture(): Promise<string> {
 function fakeRunner(sequence: Array<{ exitCode: number; stdout?: string; stderr?: string }>): PytrCliRunner {
   let call = 0;
   return {
-    run: vi.fn(() => {
+    run: vi.fn(async (argv: readonly string[]) => {
+      // The short session check (`--last_days 1`) succeeds without consuming the scripted sequence.
+      if (argv.includes("--last_days")) {
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
       const next = sequence[call];
       call += 1;
       if (!next) {
         throw new Error("unexpected pytr invocation");
       }
-      return Promise.resolve({
+      return await Promise.resolve({
         stdout: next.stdout ?? "",
         stderr: next.stderr ?? "",
         exitCode: next.exitCode,
@@ -54,6 +58,7 @@ describe("fetchTradeRepublicTimeline", () => {
     expect(runner.run).toHaveBeenCalledWith(
       expect.arrayContaining(["export_transactions", "--outputdir", "/tmp/lm-tr-sync-test/"]),
       undefined,
+      expect.objectContaining({ onOutputLine: expect.any(Function) }),
     );
   });
 
@@ -87,6 +92,7 @@ describe("fetchTradeRepublicTimeline", () => {
     expect(runner.run).toHaveBeenCalledWith(
       expect.arrayContaining(["--v2", "--account", "acct-1"]),
       { HOME: "/data/operator-a" },
+      expect.objectContaining({ onOutputLine: expect.any(Function) }),
     );
   });
 
@@ -144,7 +150,20 @@ describe("fetchTradeRepublicTimeline", () => {
     const runner = fakeRunner([{ exitCode: 0 }]);
     const filesystem = fakeFilesystem(fixture);
     await fetchTradeRepublicTimeline(runner, {}, filesystem);
-    expect(runner.run).toHaveBeenCalledWith(expect.arrayContaining(["--v2"]), undefined);
+    expect(runner.run).toHaveBeenCalledWith(
+      expect.arrayContaining(["--v2"]),
+      undefined,
+      expect.objectContaining({ onOutputLine: expect.any(Function) }),
+    );
+  });
+
+  it("runs a short session check before the full export", async () => {
+    const fixture = await loadFixture();
+    const runner = fakeRunner([{ exitCode: 0 }]);
+    await fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(fixture));
+    const calls = (runner.run as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string[]);
+    expect(calls[0]).toEqual(expect.arrayContaining(["export_transactions", "--last_days", "1", "--v2"]));
+    expect(calls[1]).not.toContain("--last_days");
   });
 
   it("checks pytrMinVersion before exporting", async () => {
@@ -156,7 +175,8 @@ describe("fetchTradeRepublicTimeline", () => {
     const filesystem = fakeFilesystem(fixture);
 
     await fetchTradeRepublicTimeline(runner, { pytrMinVersion: "0.4.10" }, filesystem);
-    expect(runner.run).toHaveBeenCalledTimes(2);
+    // version check, short session check, full export
+    expect(runner.run).toHaveBeenCalledTimes(3);
   });
 });
 

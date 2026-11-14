@@ -500,3 +500,69 @@ describe("manualAccountChoices", () => {
     expect(choices.map((choice) => choice.value)).toEqual(["7", "__new__", "1"]);
   });
 });
+
+function resumedFilesystem(): SetupFilesystem {
+  const filesystem = fakeFilesystem();
+  void filesystem.writeText(
+    `${process.cwd()}/config.json`,
+    JSON.stringify({
+      sharedCardLast4: [],
+      tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 3, pytrCommand: ["pytr"] }],
+      scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 4 }],
+      categoryMap: {},
+      tagMap: {},
+    }),
+  );
+  return filesystem;
+}
+
+describe("runSetup with a resumed config.json", () => {
+  const scOkEnvelope = JSON.stringify({
+    ok: true,
+    command: "broker.portfolios",
+    data: { portfolios: [{ id: "p-1", name: "Main" }] },
+  });
+
+  it("re-checks broker sessions for resumed profiles instead of skipping them", async () => {
+    const pytr = { run: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "pytr 0.4.10\n", stderr: "" }) };
+    const sc = { run: vi.fn().mockResolvedValue({ exitCode: 0, stdout: scOkEnvelope, stderr: "" }) };
+    const prompter = fakePrompter({
+      password: "lm_test_key",
+      brokers: ["trade-republic", "scalable-capital"],
+      confirms: () => false,
+    });
+    const result = await runSetup(
+      baseSetupOptions({ skipBrokerCheck: false }),
+      defaultRunSetupDeps({
+        prompter,
+        filesystem: resumedFilesystem(),
+        runners: { pytr, sc },
+        runSync: vi.fn(),
+      }),
+    );
+    expect(result.kind).toBe("completed");
+    const pytrCalls = pytr.run.mock.calls.map((call) => call[0] as string[]);
+    expect(pytrCalls.some((argv) => argv.includes("export_transactions") && argv.includes("--last_days"))).toBe(true);
+    expect(sc.run).toHaveBeenCalledWith(["broker", "portfolios", "--json"]);
+    const printed = (prompter.print as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]));
+    expect(printed.some((line) => line.includes("Using existing Trade Republic profile(s)"))).toBe(true);
+    expect(printed.some((line) => line.includes("Using existing Scalable Capital profile(s)"))).toBe(true);
+  });
+
+  it("drops resumed profiles for brokers the operator unticked", async () => {
+    const sc = { run: vi.fn().mockResolvedValue({ exitCode: 0, stdout: scOkEnvelope, stderr: "" }) };
+    const result = await runSetup(
+      baseSetupOptions({ skipBrokerCheck: false }),
+      defaultRunSetupDeps({
+        prompter: fakePrompter({ password: "lm_test_key", brokers: ["scalable-capital"], confirms: () => false }),
+        filesystem: resumedFilesystem(),
+        runners: { sc },
+        runSync: vi.fn(),
+      }),
+    );
+    expect(result).toMatchObject({
+      kind: "completed",
+      config: { tradeRepublicProfiles: [], scalableCapitalProfiles: [expect.objectContaining({ owner: "operator-a" })] },
+    });
+  });
+});

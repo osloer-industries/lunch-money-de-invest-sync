@@ -1,4 +1,5 @@
 import { mkdtemp } from "node:fs/promises";
+import { createAppApprovalWatcher } from "../trade-republic/app-approval-alert.js";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -129,7 +130,7 @@ export async function ensurePytrReady(
   }
   const probeDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
   const probeArgv = buildPytrExportProbeArgv(probeDir);
-  const probe = await pytr.run(probeArgv);
+  const probe = await pytr.run(probeArgv, undefined, { onOutputLine: createAppApprovalWatcher() });
   if (probe.exitCode === 0) {
     return;
   }
@@ -143,7 +144,9 @@ export async function ensurePytrReady(
     "Press Enter after pytr login succeeds...",
     async () => {
       const retryDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
-      const retry = await pytr.run(buildPytrExportProbeArgv(retryDir));
+      const retry = await pytr.run(buildPytrExportProbeArgv(retryDir), undefined, {
+        onOutputLine: createAppApprovalWatcher(),
+      });
       return retry.exitCode === 0;
     },
     "pytr still cannot export transactions after login",

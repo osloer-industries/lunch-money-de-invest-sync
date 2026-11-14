@@ -22,7 +22,7 @@ import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse } from "./manual-account.js";
 import { statusError, statusOk } from "./setup-status.js";
-import { forEachConfirmedRepeat } from "../shared/sequential-profiles.js";
+import { forEachConfirmedRepeat, forEachSequentially } from "../shared/sequential-profiles.js";
 import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
 import { stripApiKeyFromDotenvFile } from "../shared/dotenv-api-key.js";
 import {
@@ -321,6 +321,45 @@ async function addScalableCapitalProfile(
   };
 }
 
+function profileLabels(profiles: ReadonlyArray<{ owner: string }>): string {
+  return profiles.map((profile) => profile.owner).join(", ");
+}
+
+async function recheckResumedSessions(
+  prompter: SetupPrompter,
+  runners: SetupBrokerRunners,
+  options: SetupCliOptions,
+  tradeRepublicProfiles: readonly TradeRepublicProfile[],
+  scalableCapitalProfiles: readonly ScalableCapitalProfile[],
+): Promise<void> {
+  if (tradeRepublicProfiles.length > 0) {
+    prompter.print(
+      statusOk(`Using existing Trade Republic profile(s) from config.json: ${profileLabels(tradeRepublicProfiles)}`),
+    );
+    await forEachSequentially(tradeRepublicProfiles, async (profile) => {
+      const pytrCommand = profile.pytrCommand?.length ? profile.pytrCommand : ["pytr"];
+      await ensurePytrReady(
+        runners.pytr ?? createPytrCliRunner(pytrCommand),
+        prompter,
+        { enabled: true, skipCheck: options.skipBrokerCheck },
+        { pytrCommand },
+      );
+    });
+  }
+  if (scalableCapitalProfiles.length > 0) {
+    prompter.print(
+      statusOk(`Using existing Scalable Capital profile(s) from config.json: ${profileLabels(scalableCapitalProfiles)}`),
+    );
+    await forEachSequentially(scalableCapitalProfiles, async (profile) => {
+      await ensureScCliReady(
+        runners.sc ?? createScCliRunner(detectScBinaryPath(profile.scBinaryPath)),
+        prompter,
+        { enabled: true, skipCheck: options.skipBrokerCheck },
+      );
+    });
+  }
+}
+
 async function interactiveProfiles(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
@@ -348,6 +387,16 @@ async function interactiveProfiles(
   if (brokers.length === 0) {
     throw new Error("Select at least one broker (use Space to toggle a broker, then Enter)");
   }
+
+  // Profiles resumed from config.json: drop brokers the operator unticked, and re-check the broker
+  // sessions that remain (sessions expire, so a resumed config is no proof the login still works).
+  if (!brokers.includes("trade-republic")) {
+    tradeRepublicProfiles.length = 0;
+  }
+  if (!brokers.includes("scalable-capital")) {
+    scalableCapitalProfiles.length = 0;
+  }
+  await recheckResumedSessions(prompter, _runners, options, tradeRepublicProfiles, scalableCapitalProfiles);
 
   if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
     const defaultOwner = DEFAULT_PROFILE_LABEL;
