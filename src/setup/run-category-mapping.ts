@@ -21,6 +21,7 @@ import {
   SUGGESTED_TAGS,
 } from "./category-defaults.js";
 import {
+  categoryFlagsMatchTemplate,
   findSuggestedCategoryMatch,
   type SetupCategoryRow,
 } from "./category-matching.js";
@@ -84,6 +85,33 @@ async function createCategoryFromTemplate(
   return created.id;
 }
 
+function formatCategoryPickerLabel(
+  category: SetupCategoryRow,
+  categories: readonly SetupCategoryRow[],
+): string {
+  let label = `[${category.id}] ${category.name}`;
+  if (category.group_id != null) {
+    const parent = categories.find((row) => row.id === category.group_id);
+    if (parent) {
+      label += ` (under ${parent.name})`;
+    }
+  }
+  return label;
+}
+
+async function confirmExistingCategoryFlags(
+  prompter: SetupPrompter,
+  category: SetupCategoryRow,
+  template: SuggestedCategory,
+): Promise<boolean> {
+  if (categoryFlagsMatchTemplate(category, template)) {
+    return true;
+  }
+  prompter.print(
+    `  Warning: "${category.name}" has is_income=${category.is_income}, exclude budget=${category.exclude_from_budget}, exclude totals=${category.exclude_from_totals}; template expects is_income=${template.is_income}, exclude budget=${template.exclude_from_budget}, exclude totals=${template.exclude_from_totals}.`,
+  );
+  return prompter.confirm("Use this category anyway?", false);
+}
 
 function printStandardSuggestion(
   prompter: SetupPrompter,
@@ -133,6 +161,28 @@ function printTypeMappingGuidance(
   }
 }
 
+async function validateExistingCategoryPick(
+  prompter: SetupPrompter,
+  categoryId: number,
+  picked: SetupCategoryRow | undefined,
+  suggestion: SuggestedCategory | undefined,
+  canonicalType: CanonicalType,
+): Promise<number | undefined> {
+  if (!picked) {
+    return categoryId;
+  }
+  if (picked.is_group) {
+    throw new Error(`Category id ${categoryId} is a category group — pick a child category, not the group`);
+  }
+  if (suggestion && canonicalType !== "saveback") {
+    const ok = await confirmExistingCategoryFlags(prompter, picked, suggestion);
+    if (!ok) {
+      return undefined;
+    }
+  }
+  return categoryId;
+}
+
 function printSavebackGuidance(
   prompter: SetupPrompter,
   categories: readonly SetupCategoryRow[],
@@ -164,10 +214,12 @@ async function pickCategoryId(
     ...(allowsCreateCategory(canonicalType, suggestion)
       ? [{ name: "Create new category", value: NEW_CATEGORY }]
       : []),
-    ...categories.map((category) => ({
-      name: `[${category.id}] ${category.name}`,
-      value: String(category.id),
-    })),
+    ...categoryRows
+      .filter((category) => !category.is_group)
+      .map((category) => ({
+        name: formatCategoryPickerLabel(category, categoryRows),
+        value: String(category.id),
+      })),
   ];
   const choice = await prompter.search(`Category for type "${canonicalType}"`, pickerChoices);
   if (choice === SKIP_CATEGORY) {
@@ -183,10 +235,12 @@ async function pickCategoryId(
     }
     return createCategoryFromTemplate(prompter, client, template);
   }
-  return parsePromptPositiveInt(choice, {
+  const categoryId = parsePromptPositiveInt(choice, {
     entityLabel: "Category id",
     exists: (id) => categories.some((category) => category.id === id),
   });
+  const picked = categoryRows.find((category) => category.id === categoryId);
+  return validateExistingCategoryPick(prompter, categoryId, picked, suggestion, canonicalType);
 }
 
 async function pickTags(prompter: SetupPrompter, canonicalType: CanonicalType): Promise<string[]> {

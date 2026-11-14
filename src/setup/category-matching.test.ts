@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  categoryFlagsMatchTemplate,
   findSuggestedCategoryMatch,
   findTransferCategoryCandidate,
   transferCategoryMissingExclusionFlags,
@@ -19,6 +20,12 @@ function row(overrides: Partial<SetupCategoryRow> & Pick<SetupCategoryRow, "id" 
 }
 
 describe("category-matching", () => {
+  it("detects when existing category flags differ from the template", () => {
+    const category = row({ id: 1, name: "Savings", exclude_from_budget: false, exclude_from_totals: false });
+    const template = SUGGESTED_CATEGORIES.deposit;
+    expect(template).toBeDefined();
+    expect(categoryFlagsMatchTemplate(category, template!)).toBe(false);
+  });
   it("prefers Payment, Transfer over a bare Transfer name", () => {
     const categories = [
       row({ id: 1, name: "Transfer", exclude_from_budget: false, exclude_from_totals: false }),
