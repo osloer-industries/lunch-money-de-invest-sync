@@ -10,7 +10,11 @@ describe("readResumedProfiles", () => {
       writeText: async () => {},
       chmod: async () => {},
     };
-    expect(readResumedProfiles(fs)).toEqual({ tradeRepublicProfiles: [], scalableCapitalProfiles: [] });
+    expect(readResumedProfiles(fs)).toEqual({
+      tradeRepublicProfiles: [],
+      scalableCapitalProfiles: [],
+      sharedCardLast4: [],
+    });
   });
 
   it("loads valid partial config", () => {
@@ -35,6 +39,10 @@ describe("readResumedProfiles", () => {
       writeText: async () => {},
       chmod: async () => {},
     };
-    expect(readResumedProfiles(fs)).toEqual({ tradeRepublicProfiles: [], scalableCapitalProfiles: [] });
+    expect(readResumedProfiles(fs)).toEqual({
+      tradeRepublicProfiles: [],
+      scalableCapitalProfiles: [],
+      sharedCardLast4: [],
+    });
   });
 });
