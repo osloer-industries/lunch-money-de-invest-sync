@@ -189,6 +189,31 @@ describe("runSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
+  it("writes per-broker manual account ids into config", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const filesystem = fakeFilesystem();
+    const result = await runSetup(
+      baseSetupOptions({
+        nonInteractive: true,
+        tradeRepublic: true,
+        scalableCapital: true,
+        owner: "operator-a",
+        tradeRepublicAssetId: 3,
+        scalableAssetId: 4,
+      }),
+      defaultRunSetupDeps({ filesystem }),
+    );
+    if (result.kind !== "completed") {
+      throw new Error("expected completed setup");
+    }
+    expect(result.config.tradeRepublicProfiles[0]?.lunchMoneyAssetId).toBe(3);
+    expect(result.config.scalableCapitalProfiles[0]?.lunchMoneyAssetId).toBe(4);
+    const written = JSON.parse(filesystem.readText(result.files.configPath) ?? "");
+    expect(written.tradeRepublicProfiles[0]?.lunchMoneyAssetId).toBe(3);
+    expect(written.scalableCapitalProfiles[0]?.lunchMoneyAssetId).toBe(4);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
   it("rejects when no broker is selected", async () => {
     await expect(
       runSetup(
@@ -355,6 +380,48 @@ describe("runSetup", () => {
         institution_name: "Trade Republic",
       }),
     );
+  });
+
+  it("defaults the profile label to me and uses it in the manual account name", async () => {
+    const previousUser = process.env.USER;
+    process.env.USER = "alice";
+    const lm = fakeLmClient();
+    try {
+      const prompter = trInteractivePrompter({
+        inputs: ["", ""],
+        selects: ["__new__"],
+        confirms: (message) =>
+          message.includes("Create Lunch Money manual account") ||
+          message.includes("credential") ||
+          message.includes("login command"),
+      });
+      const result = await runSetup(
+        baseSetupOptions(),
+        defaultRunSetupDeps({
+          prompter,
+          createLunchMoneyClient: () => lm,
+          runSync: vi.fn().mockResolvedValue(undefined),
+        }),
+      );
+      expect(result.kind).toBe("completed");
+      if (result.kind !== "completed") {
+        throw new Error("expected completed setup");
+      }
+      expect(prompter.input).toHaveBeenCalledWith("Trade Republic profile label", "me");
+      expect(lm.manualAccounts.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Trade Republic (me)",
+          institution_name: "Trade Republic",
+        }),
+      );
+      expect(result.config.tradeRepublicProfiles[0]?.owner).toBe("me");
+    } finally {
+      if (previousUser === undefined) {
+        delete process.env.USER;
+      } else {
+        process.env.USER = previousUser;
+      }
+    }
   });
 });
 

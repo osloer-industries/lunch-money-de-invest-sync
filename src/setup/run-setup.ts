@@ -63,6 +63,8 @@ async function promptApiKeyWithFactory(
 }
 
 const NEW_MANUAL_ACCOUNT = "__new__";
+/** Generic profile label used in prompts and Lunch Money account names. Never a username. */
+const DEFAULT_PROFILE_LABEL = "me";
 
 function manualAccountChoice(account: { id: number; name: string }): { name: string; value: string } {
   return { name: `[${account.id}] ${account.name}`, value: String(account.id) };
@@ -211,7 +213,7 @@ async function promptOwnerAndManualAccount(
   defaultOwner: string,
 ): Promise<{ owner: string; lunchMoneyAssetId: number }> {
   const owner = (
-    await prompter.input(`${brokerLabel} profile label (logs only)`, defaultOwner)
+    await prompter.input(`${brokerLabel} profile label`, defaultOwner)
   ).trim() || defaultOwner;
   const lunchMoneyAssetId = await chooseManualAccount(prompter, client, brokerLabel, owner);
   return { owner, lunchMoneyAssetId };
@@ -306,7 +308,7 @@ async function interactiveProfiles(
   }
 
   if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
-    const defaultOwner = process.env.USER?.trim() || "me";
+    const defaultOwner = DEFAULT_PROFILE_LABEL;
     await forEachConfirmedRepeat(
       prompter,
       "Add another Trade Republic profile?",
@@ -320,7 +322,7 @@ async function interactiveProfiles(
   }
 
   if (brokers.includes("scalable-capital") && scalableCapitalProfiles.length === 0) {
-    const defaultOwner = process.env.USER?.trim() || "me";
+    const defaultOwner = DEFAULT_PROFILE_LABEL;
     await forEachConfirmedRepeat(
       prompter,
       "Add another Scalable Capital profile?",
