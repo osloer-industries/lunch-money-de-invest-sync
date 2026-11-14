@@ -100,6 +100,7 @@ Sync stdout (`--json`):
 ```json
 {
   "ok": true,
+  "balanceFailures": 0,
   "accounts": [
     {
       "owner": "operator-a",
@@ -110,11 +111,23 @@ Sync stdout (`--json`):
       "dryRun": true,
       "wouldInsert": 12,
       "wouldSkip": 0,
-      "dryRunSummary": null
+      "dryRunSummary": null,
+      "brokerBalances": {
+        "holdings": { "ok": true, "value": 1200.5, "currency": "eur" },
+        "cash": { "ok": true, "value": 88.12, "currency": "eur" },
+        "notes": []
+      },
+      "balanceFailures": 0
     }
   ]
 }
 ```
+
+Top-level `balanceFailures` counts balance steps (holdings, overnight savings, cash reconciliation) that failed across all profiles. The CLI still exits `1` when this is greater than zero, even though transactions may already be synced.
+
+Per-account `brokerBalances` mirrors the broker snapshot after transaction sync (`holdings`, `cash`, optional `savings`, and operator `notes`). Each reading is either `{ "ok": true, "value", "currency", "asOf?" }` or `{ "ok": false, "error" }`. Per-account `balanceFailures` is how many of the three balance steps failed for that profile (omitted when live collectors have no balance readers).
+
+Use `--reconcile-cash` on the CLI to set the Lunch Money cash manual account to the broker-reported cash when they differ by more than 1.00 (human logs describe mismatches; JSON includes the post-sync readings).
 
 `firstSyncForAccount` is `true` when the Lunch Money manual account has no rows whose `external_id` starts with `trade-republic:` or `scalable-capital:` yet. Re-syncs skip existing `external_id`s, so classification should be correct before the first non-dry-run sync.
 

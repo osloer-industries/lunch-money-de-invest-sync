@@ -1,3 +1,4 @@
+import type { BrokerBalanceSnapshot } from "./shared/broker-balances.js";
 import type { BrokerSource } from "./shared/transaction.js";
 
 export interface SyncAccountResult {
@@ -16,9 +17,14 @@ export interface SyncAccountResult {
    * for `--json` output instead of echoing row-level preview lines.
    */
   readonly dryRunSummary?: null;
+  /** Broker balance readings after the transaction sync (--json only). */
+  readonly brokerBalances?: BrokerBalanceSnapshot;
+  /** Balance steps (holdings, savings, cash reconciliation) that failed for this profile (--json only). */
+  readonly balanceFailures?: number;
 }
 
-export interface SyncRunResult {
+export interface SyncRunJsonResult {
   readonly ok: true;
+  readonly balanceFailures: number;
   readonly accounts: readonly SyncAccountResult[];
 }

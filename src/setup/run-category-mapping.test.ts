@@ -16,6 +16,9 @@ const options: SetupCliOptions = {
   tradeRepublicAssetId: null,
   scalableAssetId: null,
   portfolioId: null,
+  tradeRepublicHoldingsAccountId: null,
+  scalableHoldingsAccountId: null,
+  scalableSavingsAccountId: null,
   categories: true,
   exportTypeSummary: null,
   json: false,
@@ -284,7 +287,7 @@ describe("runCategoryMappingSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
-  it("does not prompt for Scalable security types when only Scalable profiles exist", async () => {
+  it("prompts for Scalable security types even when only Scalable profiles exist", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const searchMessages: string[] = [];
     await runCategoryMappingSetup(options, {
@@ -300,7 +303,7 @@ describe("runCategoryMappingSetup", () => {
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
       collectObservations: () => Promise.resolve([buyObservation, observations[0]!]),
     });
-    expect(searchMessages.some((message) => message.includes('"buy"'))).toBe(false);
+    expect(searchMessages.some((message) => message.includes('"buy"'))).toBe(true);
     expect(searchMessages.some((message) => message.includes('"deposit"'))).toBe(true);
     delete process.env["LUNCH_MONEY_API_KEY"];
   });

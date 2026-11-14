@@ -5,47 +5,42 @@ import {
   type ScalableCapitalTransaction,
   type ScTransactionSummary,
 } from "./types.js";
-import { parseScMachineEnvelopeStdout } from "./sc-envelope.js";
+import { withPortfolioId } from "./sc-command.js";
+import type { ScMachineEnvelope } from "./types.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
 import type { BrokerLoginEventSink } from "../shared/cli-events.js";
+import { runScJsonCommand, type ScJsonCommandContext } from "./sc-command.js";
+
+export interface ScalableFetchContext extends ScJsonCommandContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
 
 const MAX_PAGES = 50;
 const DEFAULT_PAGE_SIZE = 100;
 const CASH_SUMMARY_TYPE = "BrokerCashTransactionSummary";
+const SECURITY_SUMMARY_TYPE = "BrokerSecurityTransactionSummary";
 
-function cliErrorMessage(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): string {
-  const code = envelope.error?.code ?? "unknown";
-  const hint = envelope.hints?.[0];
-  return hint
-    ? `Scalable CLI command failed (${code}): ${hint}`
-    : `Scalable CLI command failed (${code})`;
-}
+/**
+ * Security order statuses (from `sc broker transactions --status`) where no cash has moved yet, or
+ * never will. Such rows are skipped and picked up on a later sync once they are FILLED/SETTLED;
+ * inserting them early would freeze a wrong amount (Lunch Money dedups by external_id).
+ */
+const SC_NOT_EXECUTED_STATUSES = new Set([
+  "CREATED",
+  "REQUESTED",
+  "PENDING",
+  "PARTIAL_FILLED",
+  "CANCELLED",
+  "CANCEL_REQUESTED",
+  "EXPIRED",
+  "REJECTED",
+]);
 
-export interface ScalableFetchContext {
-  readonly loginEvents?: BrokerLoginEventSink;
-}
+/** Security deliveries in or out of the depot (no cash leg). */
+const SC_NON_CASH_SECURITY_TYPES = new Set(["TRANSFER_IN", "TRANSFER_OUT", "SWAP_IN", "SWAP_OUT"]);
 
-function assertSuccessEnvelope(
-  envelope: ReturnType<typeof parseScMachineEnvelopeStdout>,
-  context: ScalableFetchContext = {},
-): void {
-  if (envelope.ok) {
-    return;
-  }
-  if (envelope.error?.code === "no_session") {
-    context.loginEvents?.({
-      kind: "broker_login",
-      broker: "scalable-capital",
-      phase: "session_needed",
-    });
-    context.loginEvents?.({
-      kind: "broker_login",
-      broker: "scalable-capital",
-      phase: "login_required",
-    });
-    throw new Error("Scalable CLI has no active session — run `sc login` on this machine first");
-  }
-  throw new Error(cliErrorMessage(envelope));
+function normalizeEnum(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase().replaceAll(/[\s-]+/g, "_");
 }
 
 function parseDecimalAmount(value: string | number | null | undefined): number {
@@ -56,7 +51,7 @@ function parseDecimalAmount(value: string | number | null | undefined): number {
     return value;
   }
   if (value === null || value === undefined) {
-    throw new Error("Scalable CLI cash transaction is missing amount");
+    throw new Error("Scalable CLI transaction is missing amount");
   }
   if (typeof value !== "string") {
     throw new TypeError("Scalable CLI transaction amount has an unexpected type");
@@ -69,51 +64,68 @@ function parseDecimalAmount(value: string | number | null | undefined): number {
   return parsed;
 }
 
-function normalizeCashItem(item: ScTransactionSummary): ScalableCapitalTransaction | null {
-  if (item.summary_type !== CASH_SUMMARY_TYPE) {
+function isCashAffectingSecurityItem(item: ScTransactionSummary): boolean {
+  if (item.summary_type !== SECURITY_SUMMARY_TYPE) {
+    return false;
+  }
+  if (SC_NOT_EXECUTED_STATUSES.has(normalizeEnum(item.status))) {
+    return false;
+  }
+  return !SC_NON_CASH_SECURITY_TYPES.has(normalizeEnum(item.security_transaction_type));
+}
+
+/**
+ * Cash summaries and executed security trades both move brokerage cash; everything else (crypto,
+ * pending/cancelled orders, depot transfers) is skipped.
+ */
+function normalizeItem(item: ScTransactionSummary): ScalableCapitalTransaction | null {
+  const isCash = item.summary_type === CASH_SUMMARY_TYPE;
+  if (!isCash && !isCashAffectingSecurityItem(item)) {
     return null;
   }
   if (item.is_cancellation === true) {
     return null;
   }
   if (!item.last_event_datetime) {
-    throw new Error(`Scalable CLI cash transaction ${item.id} is missing last_event_datetime`);
+    throw new Error(
+      `Scalable CLI ${isCash ? "cash" : "security"} transaction ${item.id} is missing last_event_datetime`,
+    );
   }
   const normalized = {
     id: item.id,
     date: item.last_event_datetime,
-    type: "BrokerCashTransaction" as const,
+    type: isCash ? "BrokerCashTransaction" : "BrokerSecurityTransaction",
     description: item.description?.trim() ?? "",
     amount: parseDecimalAmount(item.amount),
     currency: item.currency?.trim() || "EUR",
-    ...(item.cash_transaction_type?.trim() ? { cashTransactionType: item.cash_transaction_type.trim() } : {}),
+    ...structuredTypeFields(item),
   };
   return scalableCapitalTransactionSchema.parse(normalized);
 }
 
+/** Structured backend enums used by classification; omitted when blank. */
+function structuredTypeFields(
+  item: ScTransactionSummary,
+): Pick<Partial<ScalableCapitalTransaction>, "cashTransactionType" | "securityTransactionType" | "side"> {
+  const cashTransactionType = item.cash_transaction_type?.trim();
+  const securityTransactionType = item.security_transaction_type?.trim();
+  const side = item.side?.trim();
+  return {
+    ...(cashTransactionType ? { cashTransactionType } : {}),
+    ...(securityTransactionType ? { securityTransactionType } : {}),
+    ...(side ? { side } : {}),
+  };
+}
+
 function buildTransactionsArgv(config: ScalableCapitalCliConfig, cursor?: string): string[] {
-  const argv = ["broker", "transactions", "--json", "--page-size", String(DEFAULT_PAGE_SIZE)];
-  if (config.portfolioId) {
-    argv.push("--portfolio-id", config.portfolioId);
-  }
+  const argv = withPortfolioId(
+    ["broker", "transactions", "--json", "--page-size", String(DEFAULT_PAGE_SIZE)],
+    config,
+  );
   if (cursor) {
     argv.push("--cursor", cursor);
   }
   return argv;
-}
-
-function isErrnoCode(error: unknown, code: string): boolean {
-  if (typeof error !== "object" || error === null) {
-    return false;
-  }
-  return Reflect.get(error, "code") === code;
-}
-
-function childEnv(config: ScalableCapitalCliConfig): Record<string, string> | undefined {
-  if (!config.scConfigDir) {
-    return undefined;
-  }
-  return { SC_CONFIG_DIR: config.scConfigDir };
 }
 
 async function runTransactionsPage(
@@ -126,32 +138,11 @@ async function runTransactionsPage(
   summaries: ScTransactionSummary[];
   cursor: string | null | undefined;
 }> {
-  const argv = buildTransactionsArgv(config, cursor);
-  const env = childEnv(config);
-  let run: Awaited<ReturnType<ScCliRunner["run"]>>;
-  try {
-    run = await runner.run(argv, env);
-  } catch (error) {
-    if (isErrnoCode(error, "ENOENT")) {
-      throw new Error(
-        "Scalable CLI (`sc`) was not found — install it from https://github.com/ScalableCapital/scalable-cli",
-        { cause: error },
-      );
-    }
-    throw error;
-  }
-  const envelope = parseScMachineEnvelopeStdout(run.stdout);
-  if (!envelope.ok && envelope.error?.code === "refresh_retryable") {
-    const retry = await runner.run(argv, env);
-    const retryEnvelope = parseScMachineEnvelopeStdout(retry.stdout);
-    assertSuccessEnvelope(retryEnvelope, context);
-    return parseTransactionsData(retryEnvelope);
-  }
-  assertSuccessEnvelope(envelope, context);
+  const envelope = await runScJsonCommand(runner, config, buildTransactionsArgv(config, cursor), context);
   return parseTransactionsData(envelope);
 }
 
-function parseTransactionsData(envelope: ReturnType<typeof parseScMachineEnvelopeStdout>): {
+function parseTransactionsData(envelope: ScMachineEnvelope): {
   transactions: ScalableCapitalTransaction[];
   summaries: ScTransactionSummary[];
   cursor: string | null | undefined;
@@ -164,7 +155,7 @@ function parseTransactionsData(envelope: ReturnType<typeof parseScMachineEnvelop
   }
   const summaries = dataParsed.data.result.items;
   const transactions = summaries
-    .map((item) => normalizeCashItem(item))
+    .map((item) => normalizeItem(item))
     .filter((tx): tx is ScalableCapitalTransaction => tx !== null);
   return { transactions, summaries, cursor: dataParsed.data.result.cursor };
 }
@@ -208,7 +199,7 @@ export function fetchAllScalableTransactionSummaries(
   return paginateBrokerTransactionPages(runner, config, context, (page) => page.summaries);
 }
 
-/** Fetches every page of broker cash transactions via `sc broker transactions --json`. */
+/** Fetches every page of cash-affecting broker transactions (cash rows + executed trades). */
 export function fetchAllScalableCapitalTransactions(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,

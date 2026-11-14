@@ -20,7 +20,7 @@ import { parsePromptPositiveInt } from "./parse-prompt-id.js";
 import { parseSharedCardLast4Input } from "./shared-card-input.js";
 import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
-import { createManualAccountOrReuse } from "./manual-account.js";
+import { createManualAccountOrReuse, type ManualAccountKind } from "./manual-account.js";
 import { statusError, statusOk } from "./setup-status.js";
 import { forEachConfirmedRepeat, forEachSequentially } from "../shared/sequential-profiles.js";
 import { MISSING_LUNCH_MONEY_API_KEY_MESSAGE } from "../shared/config-cli-errors.js";
@@ -159,31 +159,64 @@ export function manualAccountChoices(
   ];
 }
 
+interface ManualAccountSpec {
+  readonly accountName: string;
+  readonly institution: string;
+  readonly kind: ManualAccountKind;
+  readonly createMessage: string;
+}
+
+function cashAccountSpec(brokerLabel: string, owner: string): ManualAccountSpec {
+  const accountName = `${brokerLabel} (${owner})`;
+  return {
+    accountName,
+    institution: brokerLabel,
+    kind: { type: "investment" },
+    createMessage: `Create Lunch Money manual account "${accountName}" (EUR, investment, starting cash balance 0)? This account tracks cash movements from sync, not portfolio market value — set starting cash on the Accounts page if needed.`,
+  };
+}
+
+function holdingsAccountSpec(brokerLabel: string, owner: string): ManualAccountSpec {
+  const accountName = `${brokerLabel} Holdings (${owner})`;
+  return {
+    accountName,
+    institution: brokerLabel,
+    kind: { type: "investment" },
+    createMessage: `Create Lunch Money manual account "${accountName}" (EUR, investment, balance 0)? Sync sets its balance to the securities market value (cash stays in the cash account).`,
+  };
+}
+
+function savingsAccountSpec(owner: string): ManualAccountSpec {
+  const accountName = `Scalable Tagesgeld (${owner})`;
+  return {
+    accountName,
+    institution: "Scalable Capital",
+    kind: { type: "cash", subtype: "savings" },
+    createMessage: `Create Lunch Money manual account "${accountName}" (EUR, cash / savings, balance 0)? Sync sets its balance to the overnight savings balance.`,
+  };
+}
+
 async function chooseManualAccount(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
-  brokerLabel: string,
-  owner: string,
+  spec: ManualAccountSpec,
 ): Promise<number> {
-  const accountName = `${brokerLabel} (${owner})`;
+  const { accountName } = spec;
   const accounts = await client.manualAccounts.getAll();
   const choice = await prompter.select(
     `Lunch Money manual account for ${accountName}`,
     manualAccountChoices(accounts, accountName),
   );
   if (choice === NEW_MANUAL_ACCOUNT) {
-    const create = await prompter.confirm(
-      `Create Lunch Money manual account "${accountName}" (EUR, investment, starting cash balance 0)? This account tracks cash movements from sync, not portfolio market value — set starting cash on the Accounts page if needed.`,
-      false,
-    );
+    const create = await prompter.confirm(spec.createMessage, false);
     if (!create) {
-      return chooseManualAccount(prompter, client, brokerLabel, owner);
+      return chooseManualAccount(prompter, client, spec);
     }
-    const createdId = await createManualAccountOrReuse(prompter, client, accountName, brokerLabel);
+    const createdId = await createManualAccountOrReuse(prompter, client, accountName, spec.institution, spec.kind);
     if (createdId !== null) {
       return createdId;
     }
-    return chooseManualAccount(prompter, client, brokerLabel, owner);
+    return chooseManualAccount(prompter, client, spec);
   }
   return parsePromptPositiveInt(choice, {
     entityLabel: "Manual account id",
@@ -263,8 +296,84 @@ async function promptOwnerAndManualAccount(
   const owner = (
     await prompter.input(`${brokerLabel} profile label`, defaultOwner)
   ).trim() || defaultOwner;
-  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, brokerLabel, owner);
+  const lunchMoneyAssetId = await chooseManualAccount(prompter, client, cashAccountSpec(brokerLabel, owner));
   return { owner, lunchMoneyAssetId };
+}
+
+const HOLDINGS_QUESTION = "Track portfolio market value in a separate Lunch Money account?";
+const SAVINGS_QUESTION = "Track your Scalable overnight savings (Tagesgeld) balance in a separate Lunch Money account?";
+
+/** Asks (default Yes) whether to track a balance-only account and returns its id, or undefined. */
+async function offerBalanceAccount(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  question: string,
+  spec: ManualAccountSpec,
+): Promise<number | undefined> {
+  if (!(await prompter.confirm(question, true))) {
+    return undefined;
+  }
+  return chooseManualAccount(prompter, client, spec);
+}
+
+async function offerHoldingsAccount(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  brokerLabel: string,
+  owner: string,
+): Promise<{ holdingsAccountId?: number }> {
+  const id = await offerBalanceAccount(prompter, client, HOLDINGS_QUESTION, holdingsAccountSpec(brokerLabel, owner));
+  return id === undefined ? {} : { holdingsAccountId: id };
+}
+
+async function offerSavingsAccount(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  owner: string,
+): Promise<{ savingsAccountId?: number }> {
+  const id = await offerBalanceAccount(prompter, client, SAVINGS_QUESTION, savingsAccountSpec(owner));
+  return id === undefined ? {} : { savingsAccountId: id };
+}
+
+/**
+ * Resumed profiles saved before balance tracking existed: offer the missing accounts once per setup
+ * run (a "no" is not persisted). Returns true when any profile changed.
+ */
+async function offerMissingBalanceAccounts(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  tradeRepublicProfiles: TradeRepublicProfile[],
+  scalableCapitalProfiles: ScalableCapitalProfile[],
+): Promise<boolean> {
+  let changed = false;
+  await forEachSequentially([...tradeRepublicProfiles.entries()], async ([index, profile]) => {
+    if (profile.holdingsAccountId !== undefined) {
+      return;
+    }
+    prompter.print(`Trade Republic profile "${profile.owner}" has no holdings account yet.`);
+    const added = await offerHoldingsAccount(prompter, client, "Trade Republic", profile.owner);
+    if (added.holdingsAccountId !== undefined) {
+      tradeRepublicProfiles[index] = { ...profile, ...added };
+      changed = true;
+    }
+  });
+  await forEachSequentially([...scalableCapitalProfiles.entries()], async ([index, profile]) => {
+    if (profile.holdingsAccountId !== undefined && profile.savingsAccountId !== undefined) {
+      return;
+    }
+    prompter.print(`Scalable Capital profile "${profile.owner}" can track more balances.`);
+    const holdings =
+      profile.holdingsAccountId === undefined
+        ? await offerHoldingsAccount(prompter, client, "Scalable Capital", profile.owner)
+        : {};
+    const savings =
+      profile.savingsAccountId === undefined ? await offerSavingsAccount(prompter, client, profile.owner) : {};
+    if (Object.keys(holdings).length > 0 || Object.keys(savings).length > 0) {
+      scalableCapitalProfiles[index] = { ...profile, ...holdings, ...savings };
+      changed = true;
+    }
+  });
+  return changed;
 }
 
 type SetupProgressWriter = (partial: {
@@ -295,9 +404,11 @@ async function addTradeRepublicProfile(
     "Trade Republic",
     defaultOwner,
   );
+  const holdings = await offerHoldingsAccount(prompter, client, "Trade Republic", owner);
   return {
     owner,
     lunchMoneyAssetId,
+    ...holdings,
     pytrCommand: [...detected.pytrCommand],
   };
 }
@@ -318,6 +429,8 @@ async function addScalableCapitalProfile(
     "Scalable Capital",
     defaultOwner,
   );
+  const holdings = await offerHoldingsAccount(prompter, client, "Scalable Capital", owner);
+  const savings = await offerSavingsAccount(prompter, client, owner);
   let portfolioId: string | undefined;
   const listed = await scRunner.run(["broker", "portfolios", "--json"]);
   const portfolios = parseScPortfolios(listed.stdout);
@@ -326,6 +439,8 @@ async function addScalableCapitalProfile(
   return {
     owner,
     lunchMoneyAssetId,
+    ...holdings,
+    ...savings,
     ...(resolvedScPath !== "sc" ? { scBinaryPath: resolvedScPath } : {}),
     ...(portfolioId ? { portfolioId } : {}),
   };
@@ -407,6 +522,10 @@ async function interactiveProfiles(
     scalableCapitalProfiles.length = 0;
   }
   await recheckResumedSessions(prompter, _runners, options, tradeRepublicProfiles, scalableCapitalProfiles);
+  if (await offerMissingBalanceAccounts(prompter, client, tradeRepublicProfiles, scalableCapitalProfiles)) {
+    await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: resumed.sharedCardLast4 });
+    prompter.print(statusOk("Balance tracking accounts saved to config.json"));
+  }
 
   if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
     const defaultOwner = DEFAULT_PROFILE_LABEL;
@@ -457,6 +576,14 @@ function createSetupLunchMoneyClient(
   };
 }
 
+function holdingsAccountIdField(id: number | null): { holdingsAccountId?: number } {
+  return id === null ? {} : { holdingsAccountId: id };
+}
+
+function savingsAccountIdField(id: number | null): { savingsAccountId?: number } {
+  return id === null ? {} : { savingsAccountId: id };
+}
+
 function nonInteractiveProfiles(options: SetupCliOptions): {
   tradeRepublicProfiles: TradeRepublicProfile[];
   scalableCapitalProfiles: ScalableCapitalProfile[];
@@ -477,13 +604,22 @@ function nonInteractiveProfiles(options: SetupCliOptions): {
   }
   return {
     tradeRepublicProfiles: options.tradeRepublic
-      ? [{ owner: options.owner, lunchMoneyAssetId: tradeAsset!, pytrCommand: ["pytr"] }]
+      ? [
+          {
+            owner: options.owner,
+            lunchMoneyAssetId: tradeAsset!,
+            ...holdingsAccountIdField(options.tradeRepublicHoldingsAccountId),
+            pytrCommand: ["pytr"],
+          },
+        ]
       : [],
     scalableCapitalProfiles: options.scalableCapital
       ? [
           {
             owner: options.owner,
             lunchMoneyAssetId: scalableAsset!,
+            ...holdingsAccountIdField(options.scalableHoldingsAccountId),
+            ...savingsAccountIdField(options.scalableSavingsAccountId),
             ...(options.portfolioId ? { portfolioId: options.portfolioId } : {}),
           },
         ]

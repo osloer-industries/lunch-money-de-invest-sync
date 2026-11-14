@@ -32,13 +32,16 @@
   [Lunch Money v2](https://lunchmoney.dev/amounts-and-balances) signs at insert time (positive = outflow,
   negative = inflow). Dry-run previews use the same v2 amounts that would be POSTed.
 - Tags spend that matches configured shared-card last-four digits with a `shared` tag for easier splitting later.
+- Optionally keeps **market value** and the **Scalable overnight savings** balance in separate Lunch Money
+  manual accounts (balance set on every sync, see [Balances and net worth](#balances-and-net-worth)), and
+  compares each cash account with the broker-reported cash after every sync.
 
 ## Supported institutions
 
 | Broker | Integration | What gets synced |
 | --- | --- | --- |
 | **Trade Republic** | [pytr](https://github.com/pytr-org/pytr) (community CLI, unofficial) | pytr timeline events with non-zero cash amount (card spend, transfers, interest, saveback as one row, …) |
-| **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries only (security buy/sell/savings-plan rows are not inserted; category setup skips those types when only Scalable profiles exist — **Option A**) |
+| **Scalable Capital** | Official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli) (`sc`) | Cash transaction summaries **and** executed security trades (buy, sell, savings plan) as cash movements, so the cash account matches Scalable's `cash_balance`; pending, cancelled and depot-transfer rows are skipped |
 
 Both broker surfaces can change without notice. Payloads are validated with **zod** at the boundary so schema drift
 should fail loudly instead of inserting wrong amounts.
@@ -69,7 +72,7 @@ Clean-break broker migrations: Trade Republic via pytr ([#14](https://github.com
 - **Node.js 24** (see [`.nvmrc`](.nvmrc) / [`.node-version`](.node-version)); run `npm ci` after every clone
 - **macOS:** [Homebrew](https://brew.sh) for the Scalable tap (`eval "$(brew shellenv)"` so `brew` is on your PATH)
 - **[uv](https://github.com/astral-sh/uv)** (recommended) to run pytr with a supported Python (3.10+; macOS system Python 3.9 is too old)
-- [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per broker profile you sync (type investment; synced transactions update **cash** balance, not market value — set starting cash in the Lunch Money UI if needed)
+- [Lunch Money](https://lunchmoney.app) developer API key and one **manual account** per broker profile you sync (type investment; synced transactions update **cash** balance, not market value — set starting cash in the Lunch Money UI if needed). Optional extra manual accounts per profile hold the market value and, for Scalable, the overnight savings balance (setup offers to create them)
 - **Trade Republic:** [pytr](https://github.com/pytr-org/pytr) via `pytr`, `uvx pytr@0.4.10`, or `uv tool install pytr`
 - **Scalable Capital:** official CLI — `brew install ScalableCapital/tap/scalable-cli` (formula name `scalable-cli`, not `sc` alone) after enabling **Profile → Security → Agentic Investing** in the Scalable web app
 
@@ -100,6 +103,39 @@ Store the Lunch Money API key in gitignored `.env` only (`npm run setup` writes 
 - pytr also stores a session cookie file named `~/.pytr/cookies.<phone-number>.txt` (pytr behaviour). Treat `~/.pytr` as secrets; never commit it.
 
 Use `npm run sync -- --broker trade-republic --account operator-a --dry-run` to limit brokers/owners or preview inserts without POST requests.
+
+### Balances and net worth
+
+Transactions only move the **cash** account. To get the whole portfolio into Lunch Money net worth,
+each profile can point at extra manual accounts whose **balance** (not transactions) is set on every
+real sync:
+
+| Account | Config field | Source | Lunch Money balance |
+| --- | --- | --- | --- |
+| Cash (required) | `lunchMoneyAssetId` | synced transactions | sum of synced cash movements |
+| Holdings (optional, both brokers) | `holdingsAccountId` | Trade Republic: sum of `netValue` from `pytr portfolio --v2`; Scalable: `valuation.securities` + `valuation.crypto` from `sc broker overview --json` | securities market value, **excluding cash** (no double counting), `balance_as_of` = broker valuation time when reported |
+| Overnight savings (optional, Scalable) | `savingsAccountId` | `data.result.balance` from `sc overnight --json` | Tagesgeld balance |
+
+For Scalable this adds up to: brokerage cash + securities + overnight savings = total Scalable value.
+Internal transfers between the overnight savings account and the brokerage clearing account appear
+only as `transfer` rows on the cash account; the savings account has no transactions, only a balance.
+Fixed-term savings (`sc fixed-term`) are not tracked yet.
+
+`npm run setup` asks "Track portfolio market value in a separate Lunch Money account?" (and, for
+Scalable, the overnight savings question) after you pick the cash account, and offers it once per run
+for resumed profiles that do not have one yet. Non-interactive setup accepts
+`--trade-republic-holdings-account-id`, `--scalable-holdings-account-id` and
+`--scalable-savings-account-id`.
+
+**Cash reconciliation:** after each profile, sync compares the Lunch Money cash balance with the
+broker's own cash figure (Trade Republic: the `Cash EUR` line of `pytr portfolio`; Scalable:
+`cash_balance` from `sc broker cash-breakdown`). A difference above **1.00** prints a warning with both
+values; nothing is overwritten unless you pass `--reconcile-cash`, which sets the Lunch Money cash
+balance to the broker value. `--dry-run` only reports (and accounts for rows it would still insert).
+
+If reading a broker balance or updating Lunch Money fails, sync prints a warning, keeps going with the
+remaining steps and profiles (transactions are never blocked by it), and exits with code 1 at the end
+so scheduled runs still notice.
 
 ### Categories and tags (issue [#16](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/16))
 
@@ -146,8 +182,8 @@ Copy [`config.example.json`](config.example.json) to `config.json` in the repo r
 | Field | Purpose |
 | --- | --- |
 | `sharedCardLast4` | Last four digits of cards whose spend should receive the `shared` tag (matched in payee/notes text) |
-| `tradeRepublicProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `pytrCommand`, `pytrHome`, `account`, `pytrMinVersion` |
-| `scalableCapitalProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `portfolioId`, `scBinaryPath`, `scConfigDir` |
+| `tradeRepublicProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `holdingsAccountId`, `pytrCommand`, `pytrHome`, `account`, `pytrMinVersion` |
+| `scalableCapitalProfiles[]` | Per-account: `owner`, `lunchMoneyAssetId`; optional `holdingsAccountId`, `savingsAccountId`, `portfolioId`, `scBinaryPath`, `scConfigDir` |
 | `categoryMap` | Canonical type → Lunch Money `category_id` (see `npm run setup -- --categories`) |
 | `tagMap` | Canonical type → extra tag names applied at sync (unknown types always get `needs-review`) |
 
@@ -172,7 +208,7 @@ The `owner` string is a **local label** for logs only (e.g. `operator-a`, `opera
   on the operator machine, never in this repo.
 - **Scalable Capital**: the official [`scalable-cli`](https://github.com/ScalableCapital/scalable-cli)
   (`sc`, Apache-2.0). Sync shells out to `sc broker transactions --json`, parses the machine JSON
-  envelope, and maps cash summaries into Lunch Money. Operators authenticate with `sc login`
+  envelope, and maps cash summaries plus executed trades into Lunch Money. Operators authenticate with `sc login`
   (device-code OAuth) after enabling **Profile → Security → Agentic Investing** in the Scalable
   web app. Recommended for sync: `sc login --local-read-only`.
 
@@ -214,6 +250,14 @@ If `sc` is installed outside standard directories, set `scBinaryPath` in config 
 Broker credentials and CLI session files stay on the operator's machine only (`SC_CONFIG_DIR` /
 default config dir). Never commit them to this repo.
 
+**Upgrading from 0.2.x:** earlier versions inserted only cash summaries (deposits, internal
+transfers, …) and never subtracted the ETF purchases paid from that cash, so the Scalable cash account
+in Lunch Money grew with every deposit. The next sync inserts the missing buy / sell / savings-plan rows
+(each with its stable `scalable-capital:{id}` external id, so re-runs stay idempotent) and they pick
+up your `categoryMap` entries for `buy`, `sell` and `savings-plan` — run `npm run setup -- --categories`
+first if those are not mapped yet. Use `npm run sync -- --dry-run` to preview them and the cash
+reconciliation.
+
 Adopting `sc` is a **clean break** from older experimental proxy workflows: use a fresh Lunch Money
 manual account (or clean up legacy rows yourself). Re-running sync on the current path is safe because
 `external_id` values are stable broker ids (`scalable-capital:{id}`). Background: [#15](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/15).
@@ -254,7 +298,7 @@ transports; tests inject fakes.
 | Script | Description |
 | --- | --- |
 | `npm run setup` | Interactive onboarding (brokers, Lunch Money mapping, `.env` + `config.json`) |
-| `npm run sync` | Run a sync using `config.json` and `LUNCH_MONEY_API_KEY` (`--dry-run`, `--broker`, `--account`) |
+| `npm run sync` | Run a sync using `config.json` and `LUNCH_MONEY_API_KEY` (`--dry-run`, `--broker`, `--account`, `--reconcile-cash`) |
 | `npm run check` | Lint, typecheck, coverage, and build (matches CI **Quality** job) |
 | `npm run lint` | Oxlint |
 | `npm run typecheck` | `tsc --noEmit` |

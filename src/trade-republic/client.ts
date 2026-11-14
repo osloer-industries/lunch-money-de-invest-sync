@@ -15,19 +15,23 @@ import { createPytrCliRunner, type PytrCliRunner } from "../shared/subprocess-cl
 
 const PYTR_DOC = "https://github.com/pytr-org/pytr";
 
+export interface TradeRepublicFetchContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
+
 export interface PytrFilesystem {
   mkdtemp(prefix: string): Promise<string>;
   readFile(path: PathLike, encoding: "utf8"): Promise<string>;
   rm(path: PathLike, options: { recursive: boolean; force: boolean }): Promise<void>;
 }
 
-const defaultPytrFilesystem: PytrFilesystem = {
+export const defaultPytrFilesystem: PytrFilesystem = {
   mkdtemp,
   readFile: (filePath, encoding) => readFile(filePath, encoding),
   rm,
 };
 
-function pytrHomeEnv(pytrHome: string | undefined): Record<string, string> | undefined {
+export function pytrHomeEnv(pytrHome: string | undefined): Record<string, string> | undefined {
   if (!pytrHome) {
     return undefined;
   }
@@ -178,7 +182,11 @@ function truncateStderr(stderr: string, max = 500): string {
   return `${trimmed.slice(0, max)}…`;
 }
 
-function actionablePytrFailure(stderr: string, exitCode: number): string {
+export function actionablePytrFailure(
+  stderr: string,
+  exitCode: number,
+  command = "export_transactions",
+): string {
   const lower = stderr.toLowerCase();
   if (lower.includes("credentials") || lower.includes("login") || lower.includes("not logged")) {
     return "pytr session is missing or expired — run `pytr login --v2 --store_credentials` on this machine first";
@@ -193,12 +201,39 @@ function actionablePytrFailure(stderr: string, exitCode: number): string {
   }
   const detail = truncateStderr(stderr);
   return detail.length > 0
-    ? `pytr export_transactions failed (exit ${exitCode}): ${detail}`
-    : `pytr export_transactions failed with exit code ${exitCode}`;
+    ? `pytr ${command} failed (exit ${exitCode}): ${detail}`
+    : `pytr ${command} failed with exit code ${exitCode}`;
 }
 
-export interface TradeRepublicFetchContext {
-  readonly loginEvents?: BrokerLoginEventSink;
+/**
+ * Returns a pytr invoker that relays app-approval prompts (terminal + desktop notification) and turns a
+ * missing launcher into an actionable error. Shared by `export_transactions` and `portfolio`.
+ */
+export function createApprovalAwarePytrRun(
+  runner: PytrCliRunner,
+  childEnv: Record<string, string> | undefined,
+  context: TradeRepublicFetchContext = {},
+): (argv: readonly string[]) => ReturnType<PytrCliRunner["run"]> {
+  return async (argv) => {
+    let state: AppApprovalWatcherState = { sawApprovalWait: false, approvalSettled: false };
+    const onOutputLine = createAppApprovalWatcher(
+      appApprovalWatcherDeps((next) => {
+        state = next;
+      }, context.loginEvents),
+    );
+    try {
+      const result = await runner.run(argv, childEnv, { onOutputLine });
+      finalizeTradeRepublicApprovalFromRun(context.loginEvents, state, result.exitCode, result.stderr);
+      return result;
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) {
+        throw new Error(`pytr was not found — install it from ${PYTR_DOC} (for example \`uvx pytr@0.4.10\`)`, {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+  };
 }
 
 async function runExport(
@@ -209,38 +244,18 @@ async function runExport(
 ): Promise<string> {
   const childEnv = pytrHomeEnv(config.pytrHome);
   let outputDir: string | undefined;
-  let approvalState: AppApprovalWatcherState = { sawApprovalWait: false, approvalSettled: false };
   try {
     await assertPytrMinVersion(runner, config, childEnv);
     outputDir = await filesystem.mkdtemp(path.join(os.tmpdir(), "lm-tr-sync-"));
-    const onOutputLine = createAppApprovalWatcher(
-      appApprovalWatcherDeps((state) => {
-        approvalState = state;
-      }, context.loginEvents),
-    );
     // Short session check first: if Trade Republic needs app approval it happens here (with an alert),
     // so the full-history export below starts on a fresh session with its whole timeout.
-    const runPytr = async (argv: readonly string[]) => {
-      try {
-        return await runner.run(argv, childEnv, { onOutputLine });
-      } catch (error) {
-        if (isErrnoCode(error, "ENOENT")) {
-          throw new Error(
-            `pytr was not found — install it from ${PYTR_DOC} (for example \`uvx pytr@0.4.10\`)`,
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-    };
+    const runPytr = createApprovalAwarePytrRun(runner, childEnv, context);
     const probeDir = await filesystem.mkdtemp(path.join(outputDir, "session-check-"));
     const probe = await runPytr([...buildExportArgv(probeDir, config), "--last_days", "1"]);
-    finalizeTradeRepublicApprovalFromRun(context.loginEvents, approvalState, probe.exitCode, probe.stderr);
     if (probe.exitCode !== 0) {
       throw new Error(actionablePytrFailure(probe.stderr, probe.exitCode));
     }
     const run = await runPytr(buildExportArgv(outputDir, config));
-    finalizeTradeRepublicApprovalFromRun(context.loginEvents, approvalState, run.exitCode, run.stderr);
     if (run.exitCode !== 0) {
       throw new Error(actionablePytrFailure(run.stderr, run.exitCode));
     }

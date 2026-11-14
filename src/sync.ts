@@ -30,13 +30,28 @@ import { forEachProfileSequentially } from "./shared/sequential-profiles.js";
 import { detectFirstSyncForAccount } from "./lunch-money/first-sync-for-account.js";
 import { createNdjsonEventWriter, type BrokerLoginEventSink } from "./shared/cli-events.js";
 import { writeStdoutJson } from "./shared/scriptable-cli.js";
-import type { SyncAccountResult, SyncRunResult } from "./sync-result.js";
+import type { SyncAccountResult, SyncRunJsonResult } from "./sync-result.js";
+import {
+  readScalableCapitalBalances,
+  readTradeRepublicBalances,
+  type BrokerBalanceSnapshot,
+} from "./shared/broker-balances.js";
+import type { ManualAccountBalanceApi } from "./lunch-money/manual-account-balance.js";
+import { syncBrokerBalances } from "./sync-balances.js";
 
-export interface LunchMoneySyncClient extends TagsApi, TransactionsApi {}
+export interface LunchMoneySyncClient extends TagsApi, TransactionsApi, ManualAccountBalanceApi {}
 
 export interface BrokerCollectors {
   collectTradeRepublic: (profile: TradeRepublicProfile) => Promise<CanonicalTransaction[]>;
   collectScalableCapital: (profile: ScalableCapitalProfile) => Promise<CanonicalTransaction[]>;
+  /** Reads market value / cash after the transaction sync; omitted → no balance steps. */
+  readTradeRepublicBalances?: (profile: TradeRepublicProfile) => Promise<BrokerBalanceSnapshot>;
+  readScalableCapitalBalances?: (profile: ScalableCapitalProfile) => Promise<BrokerBalanceSnapshot>;
+}
+
+export interface SyncRunSummary {
+  /** Balance steps (market value, savings, cash reconciliation) that failed and were skipped. */
+  readonly balanceFailures: number;
 }
 
 export type SyncLogger = (message: string) => void;
@@ -51,6 +66,8 @@ export interface RunSyncSelection {
   readonly dryRun: boolean;
   readonly exportTypeSummary?: string | null;
   readonly json?: boolean;
+  /** Set the Lunch Money cash balance to the broker value when they differ (opt-in). */
+  readonly reconcileCash?: boolean;
 }
 
 function createDefaultRunSyncSelection(): RunSyncSelection {
@@ -83,7 +100,12 @@ const BROKER_EXTERNAL_ID_PREFIX: Record<BrokerSource, string> = {
   "scalable-capital": "scalable-capital:",
 };
 
-async function syncOneAccount(params: SyncOneAccountParams): Promise<SyncAccountResult> {
+interface SyncOneAccountOutcome {
+  readonly pendingCashDelta: number;
+  readonly account: SyncAccountResult;
+}
+
+async function syncOneAccount(params: SyncOneAccountParams): Promise<SyncOneAccountOutcome> {
   const {
     owner,
     source,
@@ -117,15 +139,18 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<SyncAccount
       );
     }
     return {
-      owner,
-      source,
-      lunchMoneyAssetId,
-      firstSyncForAccount: firstSync.firstSyncForAccount,
-      existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
-      dryRun: true,
-      wouldInsert: preview.wouldInsert,
-      wouldSkip: preview.wouldSkip,
-      dryRunSummary: null,
+      pendingCashDelta: pendingCanonicalDelta(preview.lines),
+      account: {
+        owner,
+        source,
+        lunchMoneyAssetId,
+        firstSyncForAccount: firstSync.firstSyncForAccount,
+        existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+        dryRun: true,
+        wouldInsert: preview.wouldInsert,
+        wouldSkip: preview.wouldSkip,
+        dryRunSummary: null,
+      },
     };
   }
   const tagIds = await resolveTagIds(client, uniqueTags(transactions));
@@ -134,15 +159,24 @@ async function syncOneAccount(params: SyncOneAccountParams): Promise<SyncAccount
     `[${source}:${owner}] inserted ${summary.insertedCount}, skipped ${summary.skippedCount} duplicate(s)`,
   );
   return {
-    owner,
-    source,
-    lunchMoneyAssetId,
-    firstSyncForAccount: firstSync.firstSyncForAccount,
-    existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
-    dryRun: false,
-    insertedCount: summary.insertedCount,
-    skippedCount: summary.skippedCount,
+    pendingCashDelta: 0,
+    account: {
+      owner,
+      source,
+      lunchMoneyAssetId,
+      firstSyncForAccount: firstSync.firstSyncForAccount,
+      existingBrokerExternalIds: firstSync.existingBrokerExternalIds,
+      dryRun: false,
+      insertedCount: summary.insertedCount,
+      skippedCount: summary.skippedCount,
+    },
   };
+}
+
+function pendingCanonicalDelta(lines: ReadonlyArray<{ action: string; amount: number }>): number {
+  // Preview amounts use Lunch Money v2 signs (positive = outflow), the inverse of canonical.
+  const total = lines.filter((line) => line.action === "insert").reduce((sum, line) => sum - line.amount, 0);
+  return Math.round(total * 100) / 100;
 }
 
 export async function runSync(
@@ -151,7 +185,7 @@ export async function runSync(
   collectors: BrokerCollectors,
   logger: SyncLogger = defaultSyncLogger,
   selection: RunSyncSelection = createDefaultRunSyncSelection(),
-): Promise<SyncRunResult | undefined> {
+): Promise<SyncRunSummary | SyncRunJsonResult> {
   const tradeProfiles =
     selection.includeBrokers.has("trade-republic")
       ? filterSyncConfig(config.tradeRepublicProfiles, selection.owners)
@@ -176,6 +210,8 @@ export async function runSync(
     client,
     logger,
     dryRun: selection.dryRun,
+    reconcileCash: selection.reconcileCash === true,
+    collectJsonAccounts: selection.json === true,
   };
 
   const brokerSyncJobs = [
@@ -183,28 +219,48 @@ export async function runSync(
       profiles: tradeProfiles,
       source: "trade-republic" as const,
       collect: collectors.collectTradeRepublic,
+      readBalances: collectors.readTradeRepublicBalances,
     },
     {
       profiles: scalableProfiles,
       source: "scalable-capital" as const,
       collect: collectors.collectScalableCapital,
+      readBalances: collectors.readScalableCapitalBalances,
     },
   ] as const;
   const accounts: SyncAccountResult[] = [];
+  let balanceFailures = 0;
   await forEachProfileSequentially(brokerSyncJobs, async (job) => {
-    const chunk = await syncProfilesForBroker(job.profiles, job.source, job.collect, syncContext);
-    accounts.push(...chunk);
+    balanceFailures += await syncProfilesForBroker(
+      job.profiles,
+      job.source,
+      job.collect,
+      job.readBalances,
+      syncContext,
+      accounts,
+    );
   });
-  if (selection.json) {
-    return { ok: true, accounts };
+  if (balanceFailures > 0) {
+    logger(`Transactions synced, but ${balanceFailures} balance step(s) failed — see the warnings above.`);
   }
-  return undefined;
+  if (selection.json) {
+    return { ok: true, balanceFailures, accounts };
+  }
+  return { balanceFailures };
 }
 
-async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetId: number }>(
+interface BalanceTrackedProfile {
+  readonly owner: string;
+  readonly lunchMoneyAssetId: number;
+  readonly holdingsAccountId?: number | undefined;
+  readonly savingsAccountId?: number | undefined;
+}
+
+async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
   profiles: readonly T[],
   source: BrokerSource,
   collect: (profile: T) => Promise<CanonicalTransaction[]>,
+  readBalances: ((profile: T) => Promise<BrokerBalanceSnapshot>) | undefined,
   context: {
     sharedCardLast4: readonly string[];
     categoryMap: SyncConfig["categoryMap"];
@@ -212,12 +268,15 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
     client: LunchMoneySyncClient;
     logger: SyncLogger;
     dryRun: boolean;
+    reconcileCash: boolean;
+    collectJsonAccounts: boolean;
   },
-): Promise<SyncAccountResult[]> {
-  const results: SyncAccountResult[] = [];
+  jsonAccounts: SyncAccountResult[],
+): Promise<number> {
+  let failures = 0;
   await forEachProfileSequentially(profiles, async (profile) => {
     const transactions = await collect(profile);
-    const accountResult = await syncOneAccount({
+    const { pendingCashDelta, account } = await syncOneAccount({
       owner: profile.owner,
       source,
       rawTransactions: transactions,
@@ -229,9 +288,35 @@ async function syncProfilesForBroker<T extends { owner: string; lunchMoneyAssetI
       logger: context.logger,
       dryRun: context.dryRun,
     });
-    results.push(accountResult);
+    if (!readBalances) {
+      if (context.collectJsonAccounts) {
+        jsonAccounts.push(account);
+      }
+      return;
+    }
+    const snapshot = await readBalances(profile);
+    const balanceFailuresForProfile = await syncBrokerBalances({
+      label: `[${source}:${profile.owner}]`,
+      snapshot,
+      cashAccountId: profile.lunchMoneyAssetId,
+      holdingsAccountId: profile.holdingsAccountId,
+      savingsAccountId: profile.savingsAccountId,
+      pendingCashDelta,
+      client: context.client,
+      logger: context.logger,
+      dryRun: context.dryRun,
+      reconcileCash: context.reconcileCash,
+    });
+    failures += balanceFailuresForProfile;
+    if (context.collectJsonAccounts) {
+      jsonAccounts.push({
+        ...account,
+        brokerBalances: snapshot,
+        balanceFailures: balanceFailuresForProfile,
+      });
+    }
   });
-  return results;
+  return failures;
 }
 
 export function createLiveCollectors(loginEvents?: BrokerLoginEventSink): BrokerCollectors {
@@ -245,6 +330,8 @@ export function createLiveCollectors(loginEvents?: BrokerLoginEventSink): Broker
       const transactions = await fetchScalableCashTransactionsForProfile(profile, brokerContext);
       return mapScalableCapitalTransactions(transactions);
     },
+    readTradeRepublicBalances,
+    readScalableCapitalBalances,
   };
 }
 
@@ -261,6 +348,7 @@ function selectionFromCliOptions(
     dryRun: cli.dryRun,
     exportTypeSummary: cli.exportTypeSummary,
     json: cli.json,
+    reconcileCash: cli.reconcileCash,
   };
 }
 
@@ -273,11 +361,11 @@ export async function runSyncCli(
     logger?: SyncLogger;
     apiKeyStore?: LunchMoneyApiKeyStore;
   } = {},
-): Promise<void> {
+): Promise<SyncRunSummary> {
   const cli = parseSyncCliOptions(argv);
   if (cli.help) {
     (deps.logger ?? defaultSyncLogger)(SYNC_HELP_TEXT);
-    return;
+    return { balanceFailures: 0 };
   }
   const humanLogger = deps.logger ?? defaultSyncLogger;
   const logger = cli.json ? () => undefined : humanLogger;
@@ -300,14 +388,19 @@ export async function runSyncCli(
     logger,
     selectionFromCliOptions(cli),
   );
-  if (cli.json && result) {
+  if (cli.json && "accounts" in result) {
     writeStdoutJson(result);
   }
+  return { balanceFailures: result.balanceFailures };
 }
 
 runCliModuleMain(async () => {
   try {
-    await runSyncCli(process.argv.slice(2));
+    const summary = await runSyncCli(process.argv.slice(2));
+    if (summary.balanceFailures > 0) {
+      // Transactions are already synced; a non-zero exit keeps failed balance steps visible to schedulers.
+      process.exitCode = 1;
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
