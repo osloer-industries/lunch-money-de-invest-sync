@@ -3,10 +3,10 @@ import {
   scalableCapitalTransactionSchema,
   type ScalableCapitalCliConfig,
   type ScalableCapitalTransaction,
+  type ScMachineEnvelope,
   type ScTransactionSummary,
 } from "./types.js";
 import { runScJsonCommand, withPortfolioId } from "./sc-command.js";
-import type { ScMachineEnvelope } from "./types.js";
 import { createScCliRunner, type ScCliRunner } from "../shared/subprocess-cli.js";
 
 const MAX_PAGES = 50;
