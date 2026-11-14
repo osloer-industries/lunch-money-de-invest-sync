@@ -9,6 +9,8 @@ export interface SetupCliOptions {
   readonly scalableCapital: boolean;
   readonly owner: string | null;
   readonly lunchMoneyAssetId: number | null;
+  readonly tradeRepublicAssetId: number | null;
+  readonly scalableAssetId: number | null;
   readonly portfolioId: string | null;
   readonly categories: boolean;
   readonly exportTypeSummary: string | null;
@@ -24,6 +26,8 @@ const PARSE_CONFIG: ParseArgsConfig = {
     "scalable-capital": { type: "boolean", default: false },
     owner: { type: "string" },
     "lunch-money-asset-id": { type: "string" },
+    "trade-republic-asset-id": { type: "string" },
+    "scalable-asset-id": { type: "string" },
     "portfolio-id": { type: "string" },
     categories: { type: "boolean", default: false },
     "export-type-summary": { type: "string" },
@@ -41,7 +45,9 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --trade-republic               Include a Trade Republic profile
   --scalable-capital             Include a Scalable Capital profile
   --owner <label>                Profile owner label (required in non-interactive mode)
-  --lunch-money-asset-id <id>    Lunch Money manual account id
+  --lunch-money-asset-id <id>    Default manual account id (both brokers if per-broker ids omitted)
+  --trade-republic-asset-id <id> Trade Republic manual account id (non-interactive)
+  --scalable-asset-id <id>       Scalable Capital manual account id (non-interactive)
   --portfolio-id <id>            Scalable portfolio id (optional)
   --skip-broker-check            Skip sc/pytr install+login probes
   --yes                          Overwrite config.json / .env without prompting
@@ -49,15 +55,24 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --export-type-summary <file>   Write anonymised type counts/examples (opt-in)
   -h, --help                     Show this help`;
 
+function parsePositiveIntFlag(values: Record<string, unknown>, key: string): number | null {
+  const raw = values[key];
+  if (typeof raw !== "string" || raw.length === 0) {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${key} must be a positive integer`);
+  }
+  return parsed;
+}
+
 export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
   const parsed = parseCliArgv(argv, PARSE_CONFIG, "Invalid setup arguments");
   const values = parsed.values as Record<string, unknown>;
-  const assetRaw = values["lunch-money-asset-id"];
-  const lunchMoneyAssetId =
-    typeof assetRaw === "string" && assetRaw.length > 0 ? Number(assetRaw) : null;
-  if (typeof assetRaw === "string" && assetRaw.length > 0 && !Number.isInteger(lunchMoneyAssetId)) {
-    throw new Error("--lunch-money-asset-id must be an integer");
-  }
+  const lunchMoneyAssetId = parsePositiveIntFlag(values, "lunch-money-asset-id");
+  const tradeRepublicAssetId = parsePositiveIntFlag(values, "trade-republic-asset-id");
+  const scalableAssetId = parsePositiveIntFlag(values, "scalable-asset-id");
   return {
     nonInteractive: values["non-interactive"] === true,
     skipBrokerCheck: values["skip-broker-check"] === true,
@@ -66,6 +81,8 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     scalableCapital: values["scalable-capital"] === true,
     owner: typeof values.owner === "string" ? values.owner : null,
     lunchMoneyAssetId,
+    tradeRepublicAssetId,
+    scalableAssetId,
     portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
     categories: values.categories === true,
     exportTypeSummary: exportTypeSummaryPath(values),

@@ -27,6 +27,22 @@ describe("parseSetupCliOptions", () => {
     expect(options.exportTypeSummary).toBe("out.json");
   });
 
+  it("parses per-broker manual account ids", () => {
+    const options = parseSetupCliOptions([
+      "--non-interactive",
+      "--trade-republic",
+      "--scalable-capital",
+      "--owner",
+      "operator-a",
+      "--trade-republic-asset-id",
+      "3",
+      "--scalable-asset-id",
+      "4",
+    ]);
+    expect(options.tradeRepublicAssetId).toBe(3);
+    expect(options.scalableAssetId).toBe(4);
+  });
+
   it("rejects a non-integer lunch money asset id", () => {
     expect(() => parseSetupCliOptions(["--lunch-money-asset-id", "nope"])).toThrow(/integer/);
   });

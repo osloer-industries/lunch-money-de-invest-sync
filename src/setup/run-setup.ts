@@ -1,5 +1,4 @@
 import path from "node:path";
-import { z } from "zod";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { loadConfig } from "../shared/config.js";
 import { readResumedProfiles } from "./resume-config.js";
@@ -18,9 +17,12 @@ import { detectScBinaryPath } from "./detect-sc-binary.js";
 import { formatPytrLoginCommand } from "./pytr-session.js";
 import { createPytrCliRunner, createScCliRunner } from "../shared/subprocess-cli.js";
 import { parsePromptPositiveInt } from "./parse-prompt-id.js";
+import { parseSharedCardLast4Input } from "./shared-card-input.js";
+import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import { isLunchMoneyUnauthorized } from "./lunch-money-errors.js";
 import { createManualAccountOrReuse } from "./manual-account.js";
 import { statusError, statusOk } from "./setup-status.js";
+import { forEachConfirmedRepeat } from "../shared/sequential-profiles.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
   LunchMoneySetupClient,
@@ -61,6 +63,8 @@ async function promptApiKeyWithFactory(
 }
 
 const NEW_MANUAL_ACCOUNT = "__new__";
+/** Generic profile label used in prompts and Lunch Money account names. Never a username. */
+const DEFAULT_PROFILE_LABEL = "me";
 
 function manualAccountChoice(account: { id: number; name: string }): { name: string; value: string } {
   return { name: `[${account.id}] ${account.name}`, value: String(account.id) };
@@ -208,7 +212,9 @@ async function promptOwnerAndManualAccount(
   brokerLabel: string,
   defaultOwner: string,
 ): Promise<{ owner: string; lunchMoneyAssetId: number }> {
-  const owner = (await prompter.input(`${brokerLabel} owner label`, defaultOwner)).trim() || defaultOwner;
+  const owner = (
+    await prompter.input(`${brokerLabel} profile label`, defaultOwner)
+  ).trim() || defaultOwner;
   const lunchMoneyAssetId = await chooseManualAccount(prompter, client, brokerLabel, owner);
   return { owner, lunchMoneyAssetId };
 }
@@ -223,6 +229,7 @@ async function addTradeRepublicProfile(
   prompter: SetupPrompter,
   client: LunchMoneySetupClient,
   options: SetupCliOptions,
+  defaultOwner: string,
 ): Promise<TradeRepublicProfile> {
   const detected = detectPytrLauncher();
   const loginCommand = formatPytrLoginCommand(detected.pytrCommand);
@@ -238,12 +245,41 @@ async function addTradeRepublicProfile(
     prompter,
     client,
     "Trade Republic",
-    "operator-a",
+    defaultOwner,
   );
   return {
     owner,
     lunchMoneyAssetId,
     pytrCommand: [...detected.pytrCommand],
+  };
+}
+
+async function addScalableCapitalProfile(
+  prompter: SetupPrompter,
+  client: LunchMoneySetupClient,
+  _runners: SetupBrokerRunners,
+  options: SetupCliOptions,
+  defaultOwner: string,
+): Promise<ScalableCapitalProfile> {
+  const scPath = _runners.sc ? undefined : detectScBinaryPath(undefined);
+  const scRunner = _runners.sc ?? createScCliRunner(detectScBinaryPath(undefined));
+  await ensureScCliReady(scRunner, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
+  const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
+    prompter,
+    client,
+    "Scalable Capital",
+    defaultOwner,
+  );
+  let portfolioId: string | undefined;
+  const listed = await scRunner.run(["broker", "portfolios", "--json"]);
+  const portfolios = parseScPortfolios(listed.stdout);
+  portfolioId = await chooseScPortfolio(prompter, portfolios);
+  const resolvedScPath = scPath ?? detectScBinaryPath(undefined);
+  return {
+    owner,
+    lunchMoneyAssetId,
+    ...(resolvedScPath !== "sc" ? { scBinaryPath: resolvedScPath } : {}),
+    ...(portfolioId ? { portfolioId } : {}),
   };
 }
 
@@ -272,36 +308,33 @@ async function interactiveProfiles(
   }
 
   if (brokers.includes("trade-republic") && tradeRepublicProfiles.length === 0) {
-    tradeRepublicProfiles.push(await addTradeRepublicProfile(prompter, client, options));
-    await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
-    prompter.print(statusOk("Trade Republic profile saved to config.json"));
+    const defaultOwner = DEFAULT_PROFILE_LABEL;
+    await forEachConfirmedRepeat(
+      prompter,
+      "Add another Trade Republic profile?",
+      true,
+      async () => {
+        tradeRepublicProfiles.push(await addTradeRepublicProfile(prompter, client, options, defaultOwner));
+        await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
+        prompter.print(statusOk("Trade Republic profile saved to config.json"));
+      },
+    );
   }
 
   if (brokers.includes("scalable-capital") && scalableCapitalProfiles.length === 0) {
-    const scPath = _runners.sc ? undefined : detectScBinaryPath(undefined);
-    const scRunner = _runners.sc ?? createScCliRunner(detectScBinaryPath(undefined));
-    await ensureScCliReady(scRunner, prompter, { enabled: true, skipCheck: options.skipBrokerCheck });
-    const { owner, lunchMoneyAssetId } = await promptOwnerAndManualAccount(
+    const defaultOwner = DEFAULT_PROFILE_LABEL;
+    await forEachConfirmedRepeat(
       prompter,
-      client,
-      "Scalable Capital",
-      "operator-b",
+      "Add another Scalable Capital profile?",
+      true,
+      async () => {
+        scalableCapitalProfiles.push(
+          await addScalableCapitalProfile(prompter, client, _runners, options, defaultOwner),
+        );
+        await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
+        prompter.print(statusOk("Scalable Capital profile saved to config.json"));
+      },
     );
-    let portfolioId: string | undefined;
-    if (scRunner) {
-      const listed = await scRunner.run(["broker", "portfolios", "--json"]);
-      const portfolios = parseScPortfolios(listed.stdout);
-      portfolioId = await chooseScPortfolio(prompter, portfolios);
-    }
-    const resolvedScPath = scPath ?? detectScBinaryPath(undefined);
-    scalableCapitalProfiles.push({
-      owner,
-      lunchMoneyAssetId,
-      ...(resolvedScPath !== "sc" ? { scBinaryPath: resolvedScPath } : {}),
-      ...(portfolioId ? { portfolioId } : {}),
-    });
-    await writeProgress({ tradeRepublicProfiles, scalableCapitalProfiles, sharedCardLast4: [] });
-    prompter.print(statusOk("Scalable Capital profile saved to config.json"));
   }
 
   return { tradeRepublicProfiles, scalableCapitalProfiles };
@@ -330,18 +363,26 @@ function nonInteractiveProfiles(options: SetupCliOptions): {
   if (!options.tradeRepublic && !options.scalableCapital) {
     throw new Error("Non-interactive setup requires --trade-republic and/or --scalable-capital");
   }
-  if (!options.owner || options.lunchMoneyAssetId === null) {
-    throw new Error("Non-interactive setup requires --owner and --lunch-money-asset-id");
+  if (!options.owner) {
+    throw new Error("Non-interactive setup requires --owner");
+  }
+  const tradeAsset = options.tradeRepublicAssetId ?? options.lunchMoneyAssetId;
+  const scalableAsset = options.scalableAssetId ?? options.lunchMoneyAssetId;
+  if (options.tradeRepublic && tradeAsset === null) {
+    throw new Error("Non-interactive Trade Republic setup requires --trade-republic-asset-id or --lunch-money-asset-id");
+  }
+  if (options.scalableCapital && scalableAsset === null) {
+    throw new Error("Non-interactive Scalable Capital setup requires --scalable-asset-id or --lunch-money-asset-id");
   }
   return {
     tradeRepublicProfiles: options.tradeRepublic
-      ? [{ owner: options.owner, lunchMoneyAssetId: options.lunchMoneyAssetId, pytrCommand: ["pytr"] }]
+      ? [{ owner: options.owner, lunchMoneyAssetId: tradeAsset!, pytrCommand: ["pytr"] }]
       : [],
     scalableCapitalProfiles: options.scalableCapital
       ? [
           {
             owner: options.owner,
-            lunchMoneyAssetId: options.lunchMoneyAssetId,
+            lunchMoneyAssetId: scalableAsset!,
             ...(options.portfolioId ? { portfolioId: options.portfolioId } : {}),
           },
         ]
@@ -371,9 +412,17 @@ async function finishSetup(
     deps.prompter,
   );
   process.env["LUNCH_MONEY_API_KEY"] = apiKey;
+  let ranDryRun = false;
   if (!options.nonInteractive && (await deps.prompter.confirm("Run a dry-run sync now?", true))) {
+    ranDryRun = true;
     await (deps.runSync ?? runSyncCli)(["--dry-run"], {
       logger: deps.prompter.print.bind(deps.prompter),
+    });
+  }
+  if (ranDryRun && (await deps.prompter.confirm("Run category mapping now (npm run setup -- --categories)?", false))) {
+    await runCategoryMappingSetup(options, {
+      prompter: deps.prompter,
+      filesystem: deps.filesystem,
     });
   }
   return {
@@ -448,10 +497,9 @@ export async function runSetup(
       );
 
   const sharedRaw = options.nonInteractive
-    ? "[]"
-    : await deps.prompter.input('sharedCardLast4 JSON array (e.g. ["0000"])', "[]");
-  const sharedParsed: unknown = JSON.parse(sharedRaw.trim().length > 0 ? sharedRaw : "[]");
-  const sharedCardLast4 = z.array(z.string().length(4)).parse(sharedParsed);
+    ? ""
+    : await deps.prompter.input("Shared card last-4 digits (comma-separated, optional)", "");
+  const sharedCardLast4 = parseSharedCardLast4Input(sharedRaw);
   loadConfig({
     lunchMoneyApiKey: apiKey,
     sharedCardLast4,
