@@ -25,6 +25,7 @@ import { statusError, statusOk } from "./setup-status.js";
 import { forEachConfirmedRepeat } from "../shared/sequential-profiles.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type {
+  CategoryMappingSetupClient,
   LunchMoneySetupClient,
   SetupBrokerRunners,
   SetupFilesystem,
@@ -396,6 +397,7 @@ async function finishSetup(
     prompter: SetupPrompter;
     filesystem: SetupFilesystem;
     runSync?: typeof runSyncCli;
+    createLunchMoneyClient?: (apiKey: string) => CategoryMappingSetupClient;
   },
   apiKey: string,
   envPath: string,
@@ -426,6 +428,7 @@ async function finishSetup(
     await runCategoryMappingSetup(options, {
       prompter: deps.prompter,
       filesystem: deps.filesystem,
+      createClient: deps.createLunchMoneyClient ?? ((key) => createLunchMoneyClient(key)),
     });
   }
   return {

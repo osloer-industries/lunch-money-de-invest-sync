@@ -8,7 +8,7 @@ import {
 } from "@inquirer/prompts";
 import type { PromptChoice, SetupPrompter } from "./types.js";
 
-type InquirerChoice = { name: string; value: string; description?: string };
+type InquirerChoice = { name: string; value: string; description?: string; checked?: boolean };
 
 function choiceValueFromPick<T extends string>(
   picked: string,
@@ -23,11 +23,12 @@ function choiceValueFromPick<T extends string>(
 }
 
 function mapPromptChoices(choices: readonly PromptChoice[]): InquirerChoice[] {
-  return choices.map((choice) =>
-    choice.description === undefined
-      ? { name: choice.name, value: choice.value }
-      : { name: choice.name, value: choice.value, description: choice.description },
-  );
+  return choices.map((choice) => ({
+    name: choice.name,
+    value: choice.value,
+    ...(choice.description === undefined ? {} : { description: choice.description }),
+    ...(choice.checked === true ? { checked: true } : {}),
+  }));
 }
 
 function filterChoices(choices: readonly PromptChoice[], term: string | undefined): PromptChoice[] {
