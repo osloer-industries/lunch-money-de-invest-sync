@@ -1,7 +1,30 @@
 # Agent Guidelines
 
 These instructions apply to every human or automated contributor. Keep this file
-provider-neutral. Do not add duplicate instruction files for specific tools.
+provider-neutral.
+
+## Agent workflow (org-wide, keep identical across osloer-industries repos)
+
+These rules apply to every agent (Cursor, Grok Bot, any other) working in this repo.
+
+### Quality
+- Never cut corners on quality or architecture. Fix root causes. No `continue-on-error`, `|| true`, skipped or deleted tests, lowered thresholds, ignore or suppress comments, `NOSONAR`, exclusions, new lint/Sonar rule exceptions or overrides, audit ignores, `--legacy-peer-deps`, or `--force`.
+- SonarCloud issues are resolved only by fixing code, never by marking them false positive or won't-fix.
+- Scripts are TypeScript on Node 24, never Python.
+- `AGENTS.md` is the only agent instruction file; never add `CLAUDE.md` or tool-specific rule files.
+
+### CI and workflows
+- Pin GitHub Actions by full commit SHA with an accurate version comment. Org reusables from `osloer-industries/.github` are pinned `@<full sha> # v0.x.y` (a release tag, never `# main`).
+- Every CI job feeds the single `ci-passed` aggregate job, including Workflow security, CodeQL and the SonarCloud zero-issues job. `ci-passed` is the only required status check.
+- Only Dependabot patch/minor bumps and patch/minor release PRs auto-merge. Majors (or pre-1.0 breaking changes) never auto-merge; they wait for a human.
+- Run the repo's linters, tests and pre-commit checks locally before pushing. The pre-commit hook is never skipped (`--no-verify` is not allowed).
+- Push, then stop: do not wait on, watch or poll CI. Failures are handed back to you.
+
+### Pull requests
+- Keep PRs focused and reviewable, link the issues they close, and prefer simplification (less code, fewer dependencies, removed duplication).
+- Resolve conflicts by merging the base branch in. Never rebase a pushed branch, never force-push, never bypass branch protection.
+- A PR is ready for review only when all of these hold: it has no conflicts and is up to date with `main`; every check on the current head is green (pending is not ready); and it has no unresolved review threads, requested changes or open SonarCloud issues. Fix anything short of that yourself. Ask a human only when a real decision or ambiguity needs one.
+- Never touch secrets, permissions, repo settings or rulesets without explicit human approval.
 
 ## Priorities
 
@@ -18,14 +41,11 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Run `npm run check` before **every push** (`npm run precommit` is identical). This runs
   Oxlint (including Sonar-aligned `require-await` / `no-await-in-loop`), `eslint-plugin-sonarjs`
   recommended rules, TypeScript, coverage, and the production build. A lefthook `pre-commit`
-  hook runs the same command via `npm run prepare` — never bypass it with `git commit --no-verify`,
-  `HUSKY=0`, `LEFTHOOK=0`, or skip env vars.
-- Never suppress lint rules: no `eslint-disable`, `NOSONAR`, new `sonar.exclusions`, or oxlint
-  overrides except the existing documented `no-await-in-loop` carve-out for broker pagination/sync.
+  hook runs the same command via `npm run prepare`.
+- The only documented lint override is the existing `no-await-in-loop` carve-out for broker pagination/sync.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
-- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.x.y` comment matching the release tag).
-  Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.
-- GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
+- Dependabot `github-actions` on `/` bumps org reusable refs together with Action SHAs.
+- **Local tool only:** sync runs on the operator's machine. Nothing in GitHub Actions runs `npm run sync` or calls brokers or Lunch Money. GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
   `SONAR_TOKEN`, and `RELEASE_APP_PRIVATE_KEY` (with variable `OSLOER_RELEASE_APP_ID` for
   Release Please). Never add broker, Lunch Money, or other financial credentials to CI.
 
@@ -91,7 +111,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   so `feat!` / `BREAKING CHANGE` commits do not jump straight from `0.1.0` to `1.0.0`.
 - Do not bump the major version to `1` or drop those flags in a drive-by change.
 
-## Pull requests
+## Pull requests (repo-specific)
 
 - Use Conventional Commit prefixes in pull request titles (`feat:`, `fix:`, `chore:`).
 - Describe broker or Lunch Money behavior changes and any config schema updates.
