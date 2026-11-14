@@ -164,8 +164,9 @@ Prefer [Quick start](#quick-start) (`npm run doctor`, then `npm run setup`). To 
 
 Adopting pytr is a **clean break** from the old npm WebSocket client: use a fresh Lunch Money manual account
 (or clean up legacy rows yourself). Re-running sync is safe because `external_id` values are stable TR ids
-(`trade-republic:{id}`). **Saveback** events sync as a single row tagged `saveback`; categorise via Lunch Money
-rules (income vs excluded is up to you — this tool does not pick a category).
+(`trade-republic:{id}`). **Saveback** events sync as a single row tagged `saveback`. During
+`npm run setup -- --categories`, choose **Saveback income** or an excluded Investments-style
+category (this tool does not pick one silently). Lunch Money UI rules can still refine later.
 
 ### Scalable Capital: Scalable CLI (`sc`)
 

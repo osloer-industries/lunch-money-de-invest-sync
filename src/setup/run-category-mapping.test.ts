@@ -154,6 +154,67 @@ describe("runCategoryMappingSetup", () => {
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
+  it("creates Saveback income when the operator picks income treatment", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const create = vi.fn().mockResolvedValue({ id: 88, name: "Saveback income" });
+    const savebackObservation: TypeObservation = {
+      canonicalType: "saveback",
+      brokerSubtype: "benefits_saveback_execution",
+      source: "trade-republic",
+      amount: -5,
+      currency: "eur",
+      payee: "Saveback",
+      date: "2026-01-01",
+    };
+    const result = await runCategoryMappingSetup(options, {
+      prompter: {
+        ...prompter({
+          confirms: [true, true, true, false],
+          searches: ["__new__"],
+        }),
+        select: vi.fn().mockResolvedValue("saveback-income"),
+      },
+      filesystem: fakeCategoryFilesystem(),
+      readConfig: () =>
+        readConfigFixture({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([]), create),
+      collectObservations: async () => [savebackObservation],
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Saveback income", is_income: true }),
+    );
+    expect(result.categoryMap.saveback).toBe(88);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
+  it("does not offer create-new for unknown types", async () => {
+    process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
+    const unknownObservation: TypeObservation = {
+      canonicalType: "unknown",
+      brokerSubtype: "CARD_PAYMENT",
+      source: "trade-republic",
+      amount: -12,
+      currency: "eur",
+      payee: "Merchant",
+      date: "2026-01-01",
+    };
+    const search = vi.fn().mockResolvedValue(SKIP_PLACEHOLDER);
+    await runCategoryMappingSetup(options, {
+      prompter: {
+        ...prompter({ confirms: [true, false, false], searches: [SKIP_PLACEHOLDER] }),
+        search,
+      },
+      filesystem: fakeCategoryFilesystem(),
+      readConfig: () =>
+        readConfigFixture({ tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }] }),
+      createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
+      collectObservations: async () => [unknownObservation],
+    });
+    const choices = search.mock.calls[0]?.[1] as Array<{ value: string }>;
+    expect(choices.some((choice) => choice.value === "__new__")).toBe(false);
+    delete process.env["LUNCH_MONEY_API_KEY"];
+  });
+
   it("creates a category when the operator confirms new", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 42, name: "Investments" });

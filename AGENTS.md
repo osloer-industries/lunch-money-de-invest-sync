@@ -45,7 +45,8 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Optional profile fields: `pytrCommand` (argv prefix, e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`),
   `pytrHome`, `account`, `pytrMinVersion`. pytr login always uses `--v2` (app approval); do not add WAF or Playwright login paths.
 - **Saveback:** emit one Lunch Money row per saveback timeline event (tag `saveback`), not separate
-  deposit and buy rows. Do not hardcode an income/excluded category — document Lunch Money rule options.
+ deposit and buy rows. `npm run setup -- --categories` offers **Saveback income** (`is_income`) or an
+ excluded Investments-style category; it does not pick one silently (see issue #16).
 - **Clean break:** remove `trade-republic-api`, `phoneNumber`, and `pin` from config with no migration
   shims. Assume a fresh Lunch Money manual account when adopting pytr; `external_id` format
   `trade-republic:{id}` is for idempotent re-sync only.
