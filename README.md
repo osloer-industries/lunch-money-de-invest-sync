@@ -80,7 +80,8 @@ git clone https://github.com/osloer-industries/lunch-money-de-invest-sync.git
 cd lunch-money-de-invest-sync
 npm ci
 npm run doctor          # prerequisites; prints fix commands for anything missing
-npm run setup           # interactive: .env (0600), config.json, broker login checks
+npm run setup           # interactive: .env (0600), config.json, broker login checks (offers category mapping after dry-run)
+npm run setup -- --categories   # map broker types → Lunch Money categories/tags (read-only broker fetch)
 npm run sync -- --dry-run
 npm run sync
 ```
