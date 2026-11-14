@@ -1,10 +1,13 @@
 import { z } from "zod";
 
-/** Normalized cash transaction used by the mapper (broker backend id preserved for dedup). */
+/**
+ * Normalized cash-affecting transaction used by the mapper (broker backend id preserved for dedup):
+ * cash rows (`BrokerCashTransaction`) and executed security trades (`BrokerSecurityTransaction`).
+ */
 export const scalableCapitalTransactionSchema = z.object({
   id: z.string(),
   date: z.string(),
-  /** Normalized cash rows use `BrokerCashTransaction`; mapper tests may pass other type strings. */
+  /** `BrokerCashTransaction` or `BrokerSecurityTransaction`; other type strings are ignored by the mapper. */
   type: z.string(),
   description: z.string().optional().default(""),
   amount: z.number(),
@@ -12,6 +15,10 @@ export const scalableCapitalTransactionSchema = z.object({
   isin: z.string().optional(),
   /** Backend `cashTransactionType` (e.g. DEPOSIT, WITHDRAWAL, CASH_TRANSFER_IN) when the CLI provides it. */
   cashTransactionType: z.string().optional(),
+  /** Security rows: backend `securityTransactionType` (e.g. SAVINGS_PLAN). */
+  securityTransactionType: z.string().optional(),
+  /** Security rows: order side (BUY / SELL). */
+  side: z.string().optional(),
 });
 export type ScalableCapitalTransaction = z.infer<typeof scalableCapitalTransactionSchema>;
 
