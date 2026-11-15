@@ -1,6 +1,7 @@
 import { chmod, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { runCliModuleMain } from "./shared/cli-main.js";
+import { emitScriptableCliFailure } from "./shared/scriptable-cli.js";
 import { runCategoriesCli } from "./categories/run-categories-cli.js";
 import type { SetupFilesystem } from "./setup/types.js";
 
@@ -21,8 +22,7 @@ runCliModuleMain(async () => {
   try {
     await runCategoriesCli(process.argv.slice(2), { filesystem: liveFilesystem });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
+    emitScriptableCliFailure(process.argv.slice(2), error);
     process.exitCode = 1;
   }
 }, import.meta.url);

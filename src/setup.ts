@@ -10,18 +10,20 @@ import { runSetup } from "./setup/run-setup.js";
 import { createLunchMoneyClient } from "./lunch-money/client.js";
 import type { SetupFilesystem, SetupPrompter } from "./setup/types.js";
 import { isPromptInterrupted, reportSetupError, statusOk, statusWarn } from "./setup/setup-status.js";
+import { createNdjsonEventWriter } from "./shared/cli-events.js";
+import { emitScriptableCliFailure, writeStdoutJson } from "./shared/scriptable-cli.js";
 import {
   clearStoredLunchMoneyApiKey,
   ensureLunchMoneyApiKeyForCli,
 } from "./shared/bootstrap-lunch-money-api-key.js";
 import { createDefaultLunchMoneyApiKeyStore } from "./shared/lunch-money-api-key-store.js";
 export function assertInteractiveSetupAllowed(options: SetupCliOptions): void {
-  if (options.help || options.nonInteractive) {
+  if (options.help || options.nonInteractive || options.json) {
     return;
   }
   if (!process.stdin.isTTY) {
     throw new Error(
-      "Interactive setup requires a TTY (stdin is not attached to a terminal). Pass --non-interactive for scripted setup.",
+      "Interactive setup requires a TTY (stdin is not attached to a terminal). Pass --non-interactive or --json for scripted setup.",
     );
   }
 }
@@ -39,6 +41,13 @@ const liveFilesystem: SetupFilesystem = {
   chmod,
 };
 
+function rejectScriptedSetupCategories(cli: SetupCliOptions): void {
+  if (cli.categories && (cli.json || cli.nonInteractive)) {
+    throw new Error(
+      "Category mapping during setup requires an interactive terminal. Use `npm run categories -- apply` for scripted mapping.",
+    );
+  }
+}
 async function handleClearApiKey(cli: SetupCliOptions, logger: (line: string) => void, store: ReturnType<typeof createDefaultLunchMoneyApiKeyStore>): Promise<boolean> {
   if (!cli.clearApiKey || cli.categories) {
     return false;
@@ -62,37 +71,54 @@ export async function runSetupCli(
   } = {},
 ): Promise<void> {
   const cli = parseSetupCliOptions(argv);
-  const logger = deps.logger ?? console.log;
-  if (cli.help) {
-    (deps.logger ?? console.log)(SETUP_HELP_TEXT);
-    return;
-  }
-  assertInteractiveSetupAllowed(cli);
-  const prompter = deps.prompter ?? createInquirerPrompter();
-  const filesystem = deps.filesystem ?? liveFilesystem;
-  const apiKeyStore = createDefaultLunchMoneyApiKeyStore();
-  if (await handleClearApiKey(cli, logger, apiKeyStore)) {
-    return;
-  }
-  if (cli.categories) {
-    await ensureLunchMoneyApiKeyForCli(apiKeyStore);
-    await runCategoryMappingSetup(cli, {
+  try {
+    const logger = deps.logger ?? console.log;
+    if (cli.help) {
+      (deps.logger ?? console.log)(SETUP_HELP_TEXT);
+      return;
+    }
+    assertInteractiveSetupAllowed(cli);
+    rejectScriptedSetupCategories(cli);
+    const prompter = deps.prompter ?? createInquirerPrompter();
+    const filesystem = deps.filesystem ?? liveFilesystem;
+    const apiKeyStore = createDefaultLunchMoneyApiKeyStore();
+    if (await handleClearApiKey(cli, logger, apiKeyStore)) {
+      return;
+    }
+    if (cli.categories) {
+      await ensureLunchMoneyApiKeyForCli(apiKeyStore);
+      await runCategoryMappingSetup(cli, {
+        prompter,
+        filesystem,
+        createClient: (apiKey) => createLunchMoneyClient(apiKey),
+        apiKeyStore,
+      });
+      return;
+    }
+    const loginEvents = cli.events ? createNdjsonEventWriter() : undefined;
+    await runSetup(cli, {
       prompter,
       filesystem,
-      createClient: (apiKey) => createLunchMoneyClient(apiKey),
       apiKeyStore,
+      runners: deps.runners ?? {
+        sc: createScCliRunner("sc"),
+        pytr: createPytrCliRunner(["pytr"]),
+      },
+      ...(loginEvents ? { loginEvents } : {}),
+      ...(cli.json
+        ? {
+            onNonInteractiveComplete: (summary) => {
+              writeStdoutJson(summary);
+            },
+          }
+        : {}),
     });
-    return;
+  } catch (error: unknown) {
+    if (cli.json) {
+      emitScriptableCliFailure(argv, error);
+    }
+    throw error;
   }
-  await runSetup(cli, {
-    prompter,
-    filesystem,
-    apiKeyStore,
-    runners: deps.runners ?? {
-      sc: createScCliRunner("sc"),
-      pytr: createPytrCliRunner(["pytr"]),
-    },
-  });
 }
 
 const entryScript = process.argv[1];
@@ -100,7 +126,11 @@ if (entryScript !== undefined && fileURLToPath(import.meta.url) === nodePath.res
   try {
     await runSetupCli(process.argv.slice(2));
   } catch (error: unknown) {
-    reportSetupError(error);
+    const argv = process.argv.slice(2);
+    const cli = parseSetupCliOptions(argv);
+    if (!cli.json) {
+      reportSetupError(error);
+    }
     process.exitCode = isPromptInterrupted(error) ? 130 : 1;
   }
 }

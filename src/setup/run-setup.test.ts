@@ -134,6 +134,8 @@ function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOpt
     replaceApiKey: false,
     clearApiKey: false,
     help: false,
+    json: false,
+    events: false,
     ...overrides,
   };
 }

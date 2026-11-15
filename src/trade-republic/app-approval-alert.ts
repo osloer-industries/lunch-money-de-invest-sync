@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
+import { handleAppApprovalLine, type ApprovalWatchState } from "./app-approval-line-handler.js";
 
-/** pytr `--v2` prints this while it waits for the operator to approve the login in the TR app. */
-const APPROVAL_WAITING = /confirm the login in the trade republic app/i;
-const APPROVAL_COUNTDOWN = /still waiting, \d+s left/i;
+const APPROVAL_TIMEOUT = /timed?\s*out/i;
+const APPROVAL_REJECTED = /reject/i;
 
-export const APPROVAL_MESSAGE =
-  "Trade Republic: approve the login request in your Trade Republic app now (about 2 minutes).";
+export { APPROVAL_MESSAGE } from "./app-approval-line-handler.js";
 
 /** Best-effort macOS banner; fixed strings only, failures are ignored. */
 export function notifyMacOs(platform: NodeJS.Platform = process.platform): void {
@@ -29,24 +29,69 @@ export function notifyMacOs(platform: NodeJS.Platform = process.platform): void 
  * Watches pytr output lines. When pytr starts waiting for app approval, tells the operator once
  * (terminal + desktop notification) and relays the countdown, so a pending login never looks like a hang.
  */
+export interface AppApprovalWatcherState {
+  readonly sawApprovalWait: boolean;
+  readonly approvalSettled: boolean;
+}
+
 export function createAppApprovalWatcher(
-  deps: { print?: (line: string) => void; notify?: () => void } = {},
+  deps: {
+    print?: (line: string) => void;
+    notify?: () => void;
+    emitLoginEvent?: BrokerLoginEventSink;
+    onStateChange?: (state: AppApprovalWatcherState) => void;
+  } = {},
 ): (line: string) => void {
   const print = deps.print ?? ((line: string) => process.stderr.write(`${line}\n`));
   const notify = deps.notify ?? (() => notifyMacOs());
-  let alerted = false;
-  return (line) => {
-    if (APPROVAL_WAITING.test(line)) {
-      if (!alerted) {
-        alerted = true;
-        print(APPROVAL_MESSAGE);
-        notify();
-      }
-      return;
-    }
-    if (alerted && APPROVAL_COUNTDOWN.test(line)) {
-      const match = /still waiting, (\d+)s left/i.exec(line);
-      print(`  …still waiting for app approval (${match?.[1] ?? "?"}s left)`);
-    }
+  const state: ApprovalWatchState = { alerted: false, settled: false };
+  const publishState = () => {
+    deps.onStateChange?.({ sawApprovalWait: state.alerted, approvalSettled: state.settled });
   };
+  return (line) => {
+    handleAppApprovalLine(line, state, {
+      print,
+      notify,
+      ...(deps.emitLoginEvent ? { emit: deps.emitLoginEvent } : {}),
+    });
+    publishState();
+  };
+}
+
+export function appApprovalWatcherDeps(
+  onStateChange: (state: AppApprovalWatcherState) => void,
+  loginEvents?: BrokerLoginEventSink,
+): {
+  onStateChange: (state: AppApprovalWatcherState) => void;
+  emitLoginEvent?: BrokerLoginEventSink;
+} {
+  return {
+    onStateChange,
+    ...(loginEvents ? { emitLoginEvent: loginEvents } : {}),
+  };
+}
+
+export function finalizeTradeRepublicApprovalFromRun(
+  emit: BrokerLoginEventSink | undefined,
+  state: AppApprovalWatcherState,
+  exitCode: number,
+  stderr: string,
+): void {
+  if (!emit || !state.sawApprovalWait || state.approvalSettled) {
+    return;
+  }
+  const lower = stderr.toLowerCase();
+  if (exitCode === 0) {
+    emit({ kind: "broker_login", broker: "trade-republic", phase: "approved" });
+    return;
+  }
+  if (APPROVAL_TIMEOUT.test(lower)) {
+    emit({ kind: "broker_login", broker: "trade-republic", phase: "timed_out" });
+    return;
+  }
+  if (APPROVAL_REJECTED.test(lower)) {
+    emit({ kind: "broker_login", broker: "trade-republic", phase: "rejected" });
+    return;
+  }
+  emit({ kind: "broker_login", broker: "trade-republic", phase: "rejected" });
 }

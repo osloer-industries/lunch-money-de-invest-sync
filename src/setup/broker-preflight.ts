@@ -1,5 +1,11 @@
 import { mkdtemp } from "node:fs/promises";
-import { createAppApprovalWatcher } from "../trade-republic/app-approval-alert.js";
+import {
+  appApprovalWatcherDeps,
+  createAppApprovalWatcher,
+  finalizeTradeRepublicApprovalFromRun,
+  type AppApprovalWatcherState,
+} from "../trade-republic/app-approval-alert.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -12,6 +18,10 @@ import type { SetupPrompter } from "./types.js";
 import { buildPytrExportProbeArgv, formatPytrLoginCommand, isPytrSessionMissing } from "./pytr-session.js";
 
 const SC_LOGIN_COMMAND = "sc login --local-read-only";
+
+export interface BrokerPreflightContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
 
 function brokerCheckRequested(options: { enabled: boolean; skipCheck: boolean }): boolean {
   return options.enabled && !options.skipCheck;
@@ -52,6 +62,7 @@ export async function ensureScCliReady(
   runner: ScCliRunner | undefined,
   prompter: SetupPrompter,
   options: { enabled: boolean; skipCheck: boolean },
+  context: BrokerPreflightContext = {},
 ): Promise<void> {
   if (!brokerCheckRequested(options)) {
     return;
@@ -68,15 +79,38 @@ export async function ensureScCliReady(
   }
   const loggedIn = isScSessionActive(portfoliosRun.stdout);
   if (loggedIn) {
+    context.loginEvents?.({
+      kind: "broker_login",
+      broker: "scalable-capital",
+      phase: "session_active",
+    });
     return;
   }
+  context.loginEvents?.({
+    kind: "broker_login",
+    broker: "scalable-capital",
+    phase: "session_needed",
+  });
+  context.loginEvents?.({
+    kind: "broker_login",
+    broker: "scalable-capital",
+    phase: "login_required",
+  });
   await promptBrokerLogin(
     prompter,
     `Scalable CLI session is missing or expired. Run:\n\n  ${SC_LOGIN_COMMAND}\n`,
     "Press Enter after `sc login` succeeds...",
     async () => {
       const retry = await sc.run(["broker", "portfolios", "--json"]);
-      return isScSessionActive(retry.stdout);
+      const active = isScSessionActive(retry.stdout);
+      if (active) {
+        context.loginEvents?.({
+          kind: "broker_login",
+          broker: "scalable-capital",
+          phase: "session_active",
+        });
+      }
+      return active;
     },
     "Scalable CLI still has no active session after login",
   );
@@ -117,14 +151,14 @@ export async function confirmPytrCredentialStorage(prompter: SetupPrompter, logi
 }
 
 export interface EnsurePytrReadyContext {
-  readonly pytrCommand: readonly string[];
+  readonly pytrCommand?: readonly string[];
 }
 
 export async function ensurePytrReady(
   runner: PytrCliRunner | undefined,
   prompter: SetupPrompter,
   options: { enabled: boolean; skipCheck: boolean },
-  context?: EnsurePytrReadyContext,
+  context?: EnsurePytrReadyContext & BrokerPreflightContext,
 ): Promise<void> {
   if (!brokerCheckRequested(options)) {
     return;
@@ -145,7 +179,15 @@ export async function ensurePytrReady(
   }
   const probeDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
   const probeArgv = buildPytrExportProbeArgv(probeDir);
-  const probe = await pytr.run(probeArgv, undefined, { onOutputLine: createAppApprovalWatcher() });
+  let approvalState: AppApprovalWatcherState = { sawApprovalWait: false, approvalSettled: false };
+  const probe = await pytr.run(probeArgv, undefined, {
+    onOutputLine: createAppApprovalWatcher(
+      appApprovalWatcherDeps((state) => {
+        approvalState = state;
+      }, context?.loginEvents),
+    ),
+  });
+  finalizeTradeRepublicApprovalFromRun(context?.loginEvents, approvalState, probe.exitCode, probe.stderr);
   if (probe.exitCode === 0) {
     return;
   }
@@ -159,9 +201,15 @@ export async function ensurePytrReady(
     "Press Enter after pytr login succeeds...",
     async () => {
       const retryDir = await mkdtemp(path.join(os.tmpdir(), "lm-setup-pytr-"));
+      let retryApprovalState: AppApprovalWatcherState = { sawApprovalWait: false, approvalSettled: false };
       const retry = await pytr.run(buildPytrExportProbeArgv(retryDir), undefined, {
-        onOutputLine: createAppApprovalWatcher(),
+        onOutputLine: createAppApprovalWatcher(
+          appApprovalWatcherDeps((state) => {
+            retryApprovalState = state;
+          }, context?.loginEvents),
+        ),
       });
+      finalizeTradeRepublicApprovalFromRun(context?.loginEvents, retryApprovalState, retry.exitCode, retry.stderr);
       return retry.exitCode === 0;
     },
     "pytr still cannot export transactions after login",
