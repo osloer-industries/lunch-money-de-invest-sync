@@ -117,7 +117,25 @@ export class LunchMoneyMockServer {
 
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
     const method = req.method ?? "GET";
-    const routeKey = `${method} ${url.pathname}`;
+    const { pathname } = url;
+    const routeKey = `${method} ${pathname}`;
+
+    if (method === "GET" && /^\/v2\/manual_accounts\/\d+$/.test(pathname)) {
+      const id = Number(pathname.split("/").pop());
+      const account = this.state.manualAccounts.find((row) => row.id === id);
+      if (!account) {
+        json(res, 404, { message: "not found" });
+        return;
+      }
+      json(res, 200, {
+        id: account.id,
+        name: account.name,
+        type_name: account.type_name ?? "investment",
+        balance: "1000.00",
+        currency: "eur",
+      });
+      return;
+    }
 
     switch (routeKey) {
       case "GET /v2/manual_accounts":

@@ -64,6 +64,38 @@ async function handleBrokerPortfolios() {
   process.exit(0);
 }
 
+function handleBrokerOverview() {
+  writeJson({
+    ok: true,
+    command: "broker.overview",
+    data: {
+      result: {
+        valuation: { securities: "500.00", crypto: "0", total: "500.00" },
+        timestamps: { valuation_timestamp_utc: "2026-03-10T10:00:00Z" },
+      },
+    },
+  });
+  process.exit(0);
+}
+
+function handleBrokerCashBreakdown() {
+  writeJson({
+    ok: true,
+    command: "broker.cash-breakdown",
+    data: { result: { cash_balance: "1500.50" } },
+  });
+  process.exit(0);
+}
+
+function handleOvernight() {
+  writeJson({
+    ok: true,
+    command: "overnight",
+    data: { result: { balance: "250.00" } },
+  });
+  process.exit(0);
+}
+
 async function handleBrokerTransactions() {
   if (scenario === "no_session") {
     const body = await readFixture("scalable-broker-transactions-no-session.json");
@@ -93,6 +125,22 @@ async function run() {
 
   if (argv[0] === "broker" && argv[1] === "transactions") {
     await handleBrokerTransactions();
+    return;
+  }
+
+  if (argv[0] === "broker" && argv[1] === "overview") {
+    handleBrokerOverview();
+    return;
+  }
+
+  if (argv[0] === "broker" && argv[1] === "cash-breakdown") {
+    handleBrokerCashBreakdown();
+    return;
+  }
+
+  if (argv[0] === "overnight") {
+    handleOvernight();
+    return;
   }
 
   if (argv[0] === "login") {

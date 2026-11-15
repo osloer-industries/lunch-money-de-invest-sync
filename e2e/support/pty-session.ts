@@ -90,6 +90,28 @@ export class PtySession {
     this.write("n\r");
   }
 
+  /** Choose "Edit (add or change brokers)" on the saved-profiles step. */
+  async chooseEditSavedProfiles(timeoutMs = 90_000): Promise<void> {
+    await this.waitFor(/Broker profiles are already saved/, timeoutMs);
+    this.write("\x1b[B");
+    this.sendEnter();
+  }
+
+  async declineOptionalConfirm(pattern: RegExp, timeoutMs: number): Promise<void> {
+    try {
+      await this.waitFor(pattern, timeoutMs);
+      this.sendNo();
+    } catch {
+      // Prompt omitted for this profile or broker.
+    }
+  }
+
+  /** Decline optional balance-tracking account prompts (default Yes). */
+  async declineBalanceTrackingPrompts(): Promise<void> {
+    await this.declineOptionalConfirm(/Track portfolio market value/, 15_000);
+    await this.declineOptionalConfirm(/Track your Scalable overnight/, 15_000);
+  }
+
   /** Waits for an inquirer yes/no prompt defaulting to No, then answers Yes. */
   async confirmYes(timeoutMs = 60_000): Promise<void> {
     await this.waitFor(/overwrite\? \(y\/N\)/, timeoutMs);

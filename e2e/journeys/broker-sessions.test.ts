@@ -65,16 +65,15 @@ describe("e2e broker session flows", () => {
 
     const cli = cliEntryArgs("setup");
     const session = PtySession.start(cli.command, cli.args, { cwd: workspace.dir, env: workspace.env });
+    await session.chooseEditSavedProfiles(90_000);
     await session.waitFor(/Which brokers should this config include/, 90_000);
-    session.write("\x1b[B");
-    session.write(" ");
     session.sendEnter();
     await session.waitFor(/Using existing Scalable Capital profile/, 60_000);
     await session.waitFor(/sc login/, 60_000);
     session.sendEnter();
+    await session.declineBalanceTrackingPrompts();
     await session.waitFor(/Shared card last-4/, 120_000);
     session.sendEnter();
-    await session.confirmYes(60_000);
     await session.waitFor(/Run a dry-run sync now/, 60_000);
     session.sendNo();
     const result = await session.finish(30_000);
@@ -99,15 +98,15 @@ describe("e2e broker session flows", () => {
 
     const cli = cliEntryArgs("setup");
     const session = PtySession.start(cli.command, cli.args, { cwd: workspace.dir, env: workspace.env });
+    await session.chooseEditSavedProfiles(90_000);
     await session.waitFor(/Which brokers should this config include/, 90_000);
-    session.write(" ");
     session.sendEnter();
     await session.waitFor(/Using existing Trade Republic profile/, 60_000);
     await session.waitFor(/pytr session is missing or expired/, 90_000);
     session.sendEnter();
+    await session.declineBalanceTrackingPrompts();
     await session.waitFor(/Shared card last-4/, 120_000);
     session.sendEnter();
-    await session.confirmYes(60_000);
     await session.waitFor(/Run a dry-run sync now/, 60_000);
     session.sendNo();
     const result = await session.finish(30_000);

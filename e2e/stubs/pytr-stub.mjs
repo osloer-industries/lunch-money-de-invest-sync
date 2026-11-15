@@ -78,6 +78,33 @@ async function exportApprovalTimeout() {
   process.exit(1);
 }
 
+const PORTFOLIO_HEADER = "Name;ISIN;quantity;price;avgCost;netValue";
+const PORTFOLIO_ROW = "Sample ETF;DE000A0F5UH1;1;100;95;100";
+
+async function handlePortfolio() {
+  const outputIndex = argv.indexOf("--output");
+  const outputPath = outputIndex >= 0 ? argv[outputIndex + 1] : undefined;
+
+  if (scenario === "approval_wait") {
+    const delay = process.env.LM_E2E_FAST === "1" ? 80 : 500;
+    process.stderr.write(
+      "Waiting for you to confirm the login in the Trade Republic app… 30s left\n",
+    );
+    await sleep(delay);
+    process.stderr.write("Still waiting, 5s left\n");
+    await sleep(delay);
+  }
+
+  if (!outputPath) {
+    process.stderr.write("missing --output\n");
+    process.exit(1);
+  }
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${PORTFOLIO_HEADER}\n${PORTFOLIO_ROW}\n`, "utf8");
+  process.stdout.write("Cash EUR 1234.56\n");
+  process.exit(0);
+}
+
 async function exportDefaultOk(outputDir) {
   if (!outputDir) {
     process.stderr.write("missing --outputdir\n");
@@ -128,6 +155,12 @@ async function run() {
 
   if (argv[0] === "export_transactions") {
     await handleExportTransactions();
+    return;
+  }
+
+  if (argv[0] === "portfolio") {
+    await handlePortfolio();
+    return;
   }
 
   process.stderr.write(`pytr-stub: unsupported argv ${argv.join(" ")}\n`);
