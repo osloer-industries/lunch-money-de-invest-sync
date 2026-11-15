@@ -1,5 +1,6 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { exportTypeSummaryPath } from "./shared/cli-args.js";
+import { parseSinceDate } from "./dry-run-review/since.js";
 
 export type SyncBroker = "trade-republic" | "scalable-capital";
 
@@ -7,7 +8,9 @@ export interface SyncCliOptions {
   readonly brokers: readonly SyncBroker[];
   readonly owners: readonly string[];
   readonly dryRun: boolean;
+  readonly since: string | null;
   readonly exportTypeSummary: string | null;
+  readonly reconcileCash: boolean;
   readonly help: boolean;
 }
 
@@ -16,7 +19,9 @@ const PARSE_CONFIG: ParseArgsConfig = {
     broker: { type: "string", multiple: true },
     account: { type: "string", multiple: true },
     "dry-run": { type: "boolean", default: false },
+    since: { type: "string" },
     "export-type-summary": { type: "string" },
+    "reconcile-cash": { type: "boolean", default: false },
     help: { type: "boolean", default: false, short: "h" },
   },
   allowPositionals: false,
@@ -69,22 +74,42 @@ export const SYNC_HELP_TEXT = `Usage: npm run sync -- [options]
   --broker <trade-republic|scalable-capital>  Limit sync to a broker (repeatable)
   --account <owner>                           Limit sync to profile owner labels (repeatable)
   --dry-run                                   Fetch and map only; preview inserts via Lunch Money GET
+  --since <YYYY-MM-DD>                        Only include transactions on or after this date
   --export-type-summary <file>                Write anonymised broker type summary (opt-in)
+  --reconcile-cash                            Set the Lunch Money cash balance to the broker-reported
+                                              cash when they differ by more than 1.00 (opt-in)
   -h, --help                                  Show this help
+
+After the transactions, each profile's cash balance is compared with the broker (warning only), and
+holdingsAccountId / savingsAccountId accounts get their balance set to the broker value.
 
 Unknown flags or invalid broker names exit with an error. When no filters are set, all configured profiles run.`;
 
 export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
   const values = parseArgsOrThrow(argv).values as Record<string, unknown>;
   if (values.help === true) {
-    return { brokers: [], owners: [], dryRun: false, exportTypeSummary: null, help: true };
+    return {
+      brokers: [],
+      owners: [],
+      dryRun: false,
+      since: null,
+      exportTypeSummary: null,
+      reconcileCash: false,
+      help: true,
+    };
   }
+
+  const sinceRaw = values.since;
+  const since =
+    typeof sinceRaw === "string" && sinceRaw.trim().length > 0 ? parseSinceDate(sinceRaw) : null;
 
   return {
     brokers: parseBrokerValues(values.broker),
     owners: parseOwnerValues(values.account),
     dryRun: values["dry-run"] === true,
+    since,
     exportTypeSummary: exportTypeSummaryPath(values),
+    reconcileCash: values["reconcile-cash"] === true,
     help: false,
   };
 }

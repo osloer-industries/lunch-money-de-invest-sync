@@ -27,18 +27,18 @@ import {
   type SetupCategoryRow,
 } from "./category-matching.js";
 import type { SetupCliOptions } from "./setup-options.js";
-import { filterInsertableTypeObservations } from "./filter-insertable-observations.js";
 import { printSuggestedLunchMoneyRules } from "./print-suggested-rules.js";
+import {
+  formatCategoryFlagMismatch,
+  formatCreateCategoryConfirm,
+  formatTypeGroupHeading,
+} from "./category-prompt-copy.js";
 
 const CONFIG_FILENAME = "config.json";
 const SKIP_CATEGORY = "__skip__";
 const NEW_CATEGORY = "__new__";
 const SAVEBACK_INCOME_CHOICE = "saveback-income";
 const SAVEBACK_EXCLUDED_CHOICE = "saveback-excluded";
-
-function formatCreateCategoryConfirm(suggestion: SuggestedCategory): string {
-  return `Create category "${suggestion.name}" (is_income=${suggestion.is_income}, exclude budget=${suggestion.exclude_from_budget}, exclude totals=${suggestion.exclude_from_totals})?`;
-}
 
 /**
  * Types that are always asked on their own even when another type shares their suggested category:
@@ -120,7 +120,7 @@ function matchingTypeFor(group: CategoryPromptGroup): CanonicalType {
 async function pickSavebackCreateTemplate(prompter: SetupPrompter): Promise<SuggestedCategory | undefined> {
   const choice = await prompter.select("Saveback category treatment", [
     {
-      name: "Saveback income — is_income=true, not excluded from budget/totals",
+      name: "Saveback income — counts as income and stays visible in budget totals",
       value: SAVEBACK_INCOME_CHOICE,
     },
     {
@@ -181,9 +181,7 @@ function confirmExistingCategoryFlags(
   if (categoryFlagsMatchTemplate(category, template)) {
     return Promise.resolve(true);
   }
-  prompter.print(
-    `  Warning: "${category.name}" has is_income=${category.is_income}, exclude budget=${category.exclude_from_budget}, exclude totals=${category.exclude_from_totals}; template expects is_income=${template.is_income}, exclude budget=${template.exclude_from_budget}, exclude totals=${template.exclude_from_totals}.`,
-  );
+  prompter.print(formatCategoryFlagMismatch(category, template));
   return prompter.confirm("Use this category anyway?", false);
 }
 
@@ -253,14 +251,16 @@ function printGroupGuidance(
   }
   if (groupHas(group, "unknown")) {
     prompter.print(
-      "  Unknown spend: defaults to your existing transfer category; choose Skip to leave it uncategorised (it keeps the needs-review tag) or pick an existing category — create-new is not offered for unknown types.",
+      "  Unknown rows: Skip is the default — they stay uncategorised and keep the needs-review tag so you can review them in Lunch Money. Your transfer category is listed next if these rows really are transfers; create-new is not offered for unknown types.",
     );
   }
 }
 
 /**
  * Picker choices with the most sensible answer first so Enter does the right thing: the matching
- * existing category, else "Create new category …" (when allowed), else Skip.
+ * existing category, else "Create new category …" (when allowed), else Skip. Unknown rows are the
+ * exception: Skip comes first so Enter never files unclassified rows (buys, dividends, card spend)
+ * as transfers — re-syncs skip existing rows, so a wrong first sync would stick.
  */
 function buildCategoryChoices(
   group: CategoryPromptGroup,
@@ -280,9 +280,22 @@ function buildCategoryChoices(
   const rest = categoryRows
     .filter((category) => !category.is_group && category.id !== match?.id)
     .map((category) => ({ name: formatCategoryPickerLabel(category, categoryRows), value: String(category.id) }));
-  const leading = match
-    ? [{ name: formatCategoryPickerLabel(match, categoryRows), value: String(match.id) }, skipChoice, ...createChoices]
-    : [...createChoices, skipChoice];
+  const matchChoices = match
+    ? [
+        {
+          name: `${formatCategoryPickerLabel(match, categoryRows)} (suggested)`,
+          value: String(match.id),
+        },
+      ]
+    : [];
+  let leading: PromptChoice[];
+  if (groupHas(group, "unknown")) {
+    leading = [skipChoice, ...matchChoices];
+  } else if (match) {
+    leading = [...matchChoices, skipChoice, ...createChoices];
+  } else {
+    leading = [...createChoices, skipChoice];
+  }
   return [...leading, ...rest];
 }
 
@@ -298,7 +311,7 @@ async function validateExistingCategoryPick(
   if (picked.is_group) {
     throw new Error(`Category id ${categoryId} is a category group — pick a child category, not the group`);
   }
-  // Unknown spend may legitimately land in any budget category, so its transfer default is not enforced.
+  // Unknown rows may legitimately land in any budget category, so the transfer suggestion's flags are not enforced.
   if (group.suggestion && !groupHas(group, "unknown")) {
     const ok = await confirmExistingCategoryFlags(prompter, picked, group.suggestion);
     if (!ok) {
@@ -448,9 +461,7 @@ function printTypeGroups(prompter: SetupPrompter, groups: readonly TypeGroup[]):
   const seenTypes = new Set<CanonicalType>();
   for (const group of groups) {
     const example = anonymizeTypeExample(group.sample);
-    prompter.print(
-      `\n${group.source} · ${group.canonicalType} · ${group.brokerSubtype} · count=${group.count}`,
-    );
+    prompter.print(formatTypeGroupHeading(group.source, group.canonicalType, group.count));
     prompter.print(
       `  example: ${example.month} ${example.amountBucket} ${example.payee} ${example.notes ?? ""}`.trimEnd(),
     );
@@ -521,10 +532,7 @@ export async function runCategoryMappingSetup(
   }
 
   deps.prompter.print("Fetching broker history (read-only)…");
-  const observations = filterInsertableTypeObservations(
-    await (deps.collectObservations ?? collectTypeObservations)(config),
-    config,
-  );
+  const observations = await (deps.collectObservations ?? collectTypeObservations)(config);
   const groups = groupTypeObservations(observations);
   if (groups.length === 0) {
     throw new Error("No classifiable broker transactions were found");

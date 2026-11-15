@@ -1,7 +1,30 @@
 # Agent Guidelines
 
 These instructions apply to every human or automated contributor. Keep this file
-provider-neutral. Do not add duplicate instruction files for specific tools.
+provider-neutral.
+
+## Agent workflow (org-wide, keep identical across osloer-industries repos)
+
+These rules apply to every agent (Cursor, Grok Bot, any other) working in this repo.
+
+### Quality
+- Never cut corners on quality or architecture. Fix root causes. No `continue-on-error`, `|| true`, skipped or deleted tests, lowered thresholds, ignore or suppress comments, `NOSONAR`, exclusions, new lint/Sonar rule exceptions or overrides, audit ignores, `--legacy-peer-deps`, or `--force`.
+- SonarCloud issues are resolved only by fixing code, never by marking them false positive or won't-fix.
+- Scripts are TypeScript on Node 24, never Python.
+- `AGENTS.md` is the only agent instruction file; never add `CLAUDE.md` or tool-specific rule files.
+
+### CI and workflows
+- Pin GitHub Actions by full commit SHA with an accurate version comment. Org reusables from `osloer-industries/.github` are pinned `@<full sha> # v0.x.y` (a release tag, never `# main`).
+- Every CI job feeds the single `ci-passed` aggregate job, including Workflow security, CodeQL, the SonarCloud scan job in `ci.yml` (coverage upload), and the SonarCloud zero-issues job. `ci-passed` is the only required status check.
+- Only Dependabot patch/minor bumps and patch/minor release PRs auto-merge. Majors (or pre-1.0 breaking changes) never auto-merge; they wait for a human.
+- Run the repo's linters, tests and pre-commit checks locally before pushing. The pre-commit hook is never skipped (`--no-verify` is not allowed).
+- Push, then stop: do not wait on, watch or poll CI. Failures are handed back to you.
+
+### Pull requests
+- Keep PRs focused and reviewable, link the issues they close, and prefer simplification (less code, fewer dependencies, removed duplication).
+- Resolve conflicts by merging the base branch in. Never rebase a pushed branch, never force-push, never bypass branch protection.
+- A PR is ready for review only when all of these hold: it has no conflicts and is up to date with `main`; every check on the current head is green (pending is not ready); and it has no unresolved review threads, requested changes or open SonarCloud issues. Fix anything short of that yourself. Ask a human only when a real decision or ambiguity needs one.
+- Never touch secrets, permissions, repo settings or rulesets without explicit human approval.
 
 ## Priorities
 
@@ -18,14 +41,11 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
 - Run `npm run check` before **every push** (`npm run precommit` is identical). This runs
   Oxlint (including Sonar-aligned `require-await` / `no-await-in-loop`), `eslint-plugin-sonarjs`
   recommended rules, TypeScript, coverage, and the production build. A lefthook `pre-commit`
-  hook runs the same command via `npm run prepare` — never bypass it with `git commit --no-verify`,
-  `HUSKY=0`, `LEFTHOOK=0`, or skip env vars.
-- Never suppress lint rules: no `eslint-disable`, `NOSONAR`, new `sonar.exclusions`, or oxlint
-  overrides except the existing documented `no-await-in-loop` carve-out for broker pagination/sync.
+  hook runs the same command via `npm run prepare`.
+- The only documented lint override is the existing `no-await-in-loop` carve-out for broker pagination/sync.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
-- Pin `osloer-industries/.github` reusable workflows by full SHA (`# v0.x.y` comment matching the release tag).
-  Dependabot `github-actions` on `/` bumps those refs together with Action SHAs.
-- GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
+- Dependabot `github-actions` on `/` bumps org reusable refs together with Action SHAs.
+- **Local tool only:** sync runs on the operator's machine. Nothing in GitHub Actions runs `npm run sync` or calls brokers or Lunch Money. GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
   `SONAR_TOKEN`, and `RELEASE_APP_PRIVATE_KEY` (with variable `OSLOER_RELEASE_APP_ID` for
   Release Please). Never add broker, Lunch Money, or other financial credentials to CI.
 
@@ -51,7 +71,8 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   overridable per profile via `pytrHome`). Operators run `pytr login` locally. Never commit pytr
   session files or operator config with secrets. CI uses fixtures and mocked `PytrCliRunner` only.
 - Optional profile fields: `pytrCommand` (argv prefix, e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`),
-  `pytrHome`, `account`, `pytrMinVersion`. pytr login always uses `--v2` (app approval); do not add WAF or Playwright login paths.
+  `pytrHome`, `account`, `pytrMinVersion`, `holdingsAccountId` (market value from `pytr portfolio --v2`,
+  run with the same pytr home, timeout and app-approval relay as `export_transactions`). pytr login always uses `--v2` (app approval); do not add WAF or Playwright login paths.
 - **Saveback:** emit one Lunch Money row per saveback timeline event (tag `saveback`), not separate
  deposit and buy rows. `npm run setup -- --categories` offers **Saveback income** (`is_income`) or an
  excluded Investments-style category; it does not pick one silently (see issue #16).
@@ -65,7 +86,9 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   binary as a child process (`sc broker transactions --json`), never an HTTP proxy.
 - Parse the machine JSON envelope (`ok`, `command`, `data`, `error`) and validate broker
   payloads with `zod`. Do not log stdout that may contain account metadata.
-- Map only `BrokerCashTransactionSummary` rows to Lunch Money; preserve dedup ids as
+- Map `BrokerCashTransactionSummary` rows and executed `BrokerSecurityTransactionSummary` rows
+  (buy / sell / savings plan, signed by trade direction) to Lunch Money so the cash account matches
+  `cash_balance`; skip pending/cancelled orders and depot transfers. Preserve dedup ids as
   `scalable-capital:{id}` using the broker transaction id from `sc`.
 - Set each transaction **date** to the **UTC calendar day** of `last_event_datetime` (not local
   timezone).
@@ -73,7 +96,9 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   after enabling Agentic Investing in the Scalable web profile. Never commit `sc` session
   files, tokens, or operator config with secrets. CI uses fixtures and mocked `ScCliRunner`
   only — no live `sc` or broker calls.
-- Optional profile fields: `portfolioId`, `scBinaryPath`, `scConfigDir` (`SC_CONFIG_DIR`).
+- Optional profile fields: `portfolioId`, `scBinaryPath`, `scConfigDir` (`SC_CONFIG_DIR`),
+  `holdingsAccountId` (`sc broker overview`), `savingsAccountId` (`sc overnight`). Balance reads
+  validate only the fields they use; never log account identifiers (IBANs, savings account ids).
 - **Clean break:** the old HTTP proxy integration is removed entirely (no `proxyUrl`,
   no migration shims). Assume operators use a fresh Lunch Money manual account when adopting
   `sc`; `external_id` format `scalable-capital:{id}` is for idempotent re-sync only.
@@ -91,7 +116,7 @@ provider-neutral. Do not add duplicate instruction files for specific tools.
   so `feat!` / `BREAKING CHANGE` commits do not jump straight from `0.1.0` to `1.0.0`.
 - Do not bump the major version to `1` or drop those flags in a drive-by change.
 
-## Pull requests
+## Pull requests (repo-specific)
 
 - Use Conventional Commit prefixes in pull request titles (`feat:`, `fix:`, `chore:`).
 - Describe broker or Lunch Money behavior changes and any config schema updates.

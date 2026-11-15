@@ -9,8 +9,7 @@ import { runCategoryMappingSetup } from "./setup/run-category-mapping.js";
 import { runSetup } from "./setup/run-setup.js";
 import { createLunchMoneyClient } from "./lunch-money/client.js";
 import type { SetupFilesystem, SetupPrompter } from "./setup/types.js";
-import { reportSetupError, statusOk, statusWarn } from "./setup/setup-status.js";
-import { runDoctor } from "./doctor.js";
+import { isPromptInterrupted, reportSetupError, statusOk, statusWarn } from "./setup/setup-status.js";
 import {
   clearStoredLunchMoneyApiKey,
   ensureLunchMoneyApiKeyForCli,
@@ -40,26 +39,6 @@ const liveFilesystem: SetupFilesystem = {
   chmod,
 };
 
-async function printDoctorWarnings(
-  deps: NonNullable<Parameters<typeof runSetupCli>[1]>,
-  logger: (line: string) => void,
-): Promise<void> {
-  const doctor = await runDoctor({
-    createPytrRunner: () => deps.runners?.pytr ?? createPytrCliRunner(["pytr"]),
-    createScRunner: () => deps.runners?.sc ?? createScCliRunner("sc"),
-    logger,
-  });
-  if (!doctor.ok) {
-    logger(statusWarn("Some doctor checks failed — you can continue setup, but sync may fail until fixed"));
-    for (const check of doctor.checks.filter((c) => !c.ok)) {
-      logger(`  ✗ ${check.name}: ${check.detail}`);
-      if (check.fix) {
-        logger(`    → ${check.fix}`);
-      }
-    }
-  }
-}
-
 async function handleClearApiKey(cli: SetupCliOptions, logger: (line: string) => void, store: ReturnType<typeof createDefaultLunchMoneyApiKeyStore>): Promise<boolean> {
   if (!cli.clearApiKey || cli.categories) {
     return false;
@@ -84,9 +63,6 @@ export async function runSetupCli(
 ): Promise<void> {
   const cli = parseSetupCliOptions(argv);
   const logger = deps.logger ?? console.log;
-  if (!cli.help && process.env.VITEST !== "true") {
-    await printDoctorWarnings(deps, logger);
-  }
   if (cli.help) {
     (deps.logger ?? console.log)(SETUP_HELP_TEXT);
     return;
@@ -125,6 +101,6 @@ if (entryScript !== undefined && fileURLToPath(import.meta.url) === nodePath.res
     await runSetupCli(process.argv.slice(2));
   } catch (error: unknown) {
     reportSetupError(error);
-    process.exitCode = 1;
+    process.exitCode = isPromptInterrupted(error) ? 130 : 1;
   }
 }

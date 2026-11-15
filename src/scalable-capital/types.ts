@@ -1,15 +1,24 @@
 import { z } from "zod";
 
-/** Normalized cash transaction used by the mapper (broker backend id preserved for dedup). */
+/**
+ * Normalized cash-affecting transaction used by the mapper (broker backend id preserved for dedup):
+ * cash rows (`BrokerCashTransaction`) and executed security trades (`BrokerSecurityTransaction`).
+ */
 export const scalableCapitalTransactionSchema = z.object({
   id: z.string(),
   date: z.string(),
-  /** Normalized cash rows use `BrokerCashTransaction`; mapper tests may pass other type strings. */
+  /** `BrokerCashTransaction` or `BrokerSecurityTransaction`; other type strings are ignored by the mapper. */
   type: z.string(),
   description: z.string().optional().default(""),
   amount: z.number(),
   currency: z.string().default("EUR"),
   isin: z.string().optional(),
+  /** Backend `cashTransactionType` (e.g. DEPOSIT, WITHDRAWAL, CASH_TRANSFER_IN) when the CLI provides it. */
+  cashTransactionType: z.string().optional(),
+  /** Security rows: backend `securityTransactionType` (e.g. SAVINGS_PLAN). */
+  securityTransactionType: z.string().optional(),
+  /** Security rows: order side (BUY / SELL). */
+  side: z.string().optional(),
 });
 export type ScalableCapitalTransaction = z.infer<typeof scalableCapitalTransactionSchema>;
 
@@ -22,6 +31,12 @@ export const scTransactionSummarySchema = z.object({
   last_event_datetime: z.union([z.string(), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
   amount: z.union([z.string(), z.number(), z.null()]).optional(),
+  /** Cash rows: backend `cashTransactionType` (DEPOSIT, WITHDRAWAL, CASH_TRANSFER_IN, INTEREST, …). */
+  cash_transaction_type: z.union([z.string(), z.null()]).optional(),
+  /** Security rows: backend `securityTransactionType` (e.g. SAVINGS_PLAN). */
+  security_transaction_type: z.union([z.string(), z.null()]).optional(),
+  /** Security rows: order side (BUY / SELL). */
+  side: z.union([z.string(), z.null()]).optional(),
 });
 export type ScTransactionSummary = z.infer<typeof scTransactionSummarySchema>;
 

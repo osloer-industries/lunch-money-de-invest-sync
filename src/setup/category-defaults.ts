@@ -62,7 +62,10 @@ export const SUGGESTED_CATEGORIES: Partial<Record<CanonicalType, SuggestedCatego
     exclude_from_budget: true,
     exclude_from_totals: true,
   },
-  /** Unclassified rows default to the transfer category; asked separately (see run-category-mapping). */
+  /**
+   * Unclassified rows: the transfer category is matched and listed as an option, but Skip is the
+   * default choice (see run-category-mapping) so Enter never files unknown rows as transfers.
+   */
   unknown: TRANSFER_CATEGORY,
 };
 

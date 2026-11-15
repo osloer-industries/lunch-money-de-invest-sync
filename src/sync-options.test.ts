@@ -7,6 +7,7 @@ describe("parseSyncCliOptions", () => {
     expect(options.brokers).toEqual([]);
     expect(options.owners).toEqual([]);
     expect(options.dryRun).toBe(false);
+    expect(options.since).toBeNull();
   });
 
   it("accepts multiple broker flags", () => {
@@ -25,6 +26,11 @@ describe("parseSyncCliOptions", () => {
     expect(options.brokers).toEqual(["trade-republic"]);
     expect(options.owners).toEqual(["operator-a"]);
     expect(options.dryRun).toBe(true);
+  });
+
+  it("parses the opt-in --reconcile-cash flag", () => {
+    expect(parseSyncCliOptions([]).reconcileCash).toBe(false);
+    expect(parseSyncCliOptions(["--reconcile-cash"]).reconcileCash).toBe(true);
   });
 
   it("rejects unknown flags", () => {
@@ -47,6 +53,15 @@ describe("parseSyncCliOptions", () => {
   it("parses export-type-summary", () => {
     const options = parseSyncCliOptions(["--export-type-summary", "types.json"]);
     expect(options.exportTypeSummary).toBe("types.json");
+  });
+
+  it("parses --since", () => {
+    const options = parseSyncCliOptions(["--since", "2024-01-15"]);
+    expect(options.since).toBe("2024-01-15");
+  });
+
+  it("rejects invalid --since values", () => {
+    expect(() => parseSyncCliOptions(["--since", "Jan-1"])).toThrow();
   });
 });
 

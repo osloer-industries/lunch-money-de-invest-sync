@@ -1,0 +1,155 @@
+[
+  {
+    "id": "evt-payment-inbound",
+    "timestamp": "2026-01-01T10:00:00.000+0000",
+    "title": "Deposit",
+    "amount": { "currency": "EUR", "value": 100.0, "fractionDigits": 2 },
+    "eventType": "PAYMENT_INBOUND",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-savingsplan",
+    "timestamp": "2026-01-02T10:00:00.000+0000",
+    "title": "Example ETF",
+    "subtitle": "Sparplan ausgeführt",
+    "amount": { "currency": "EUR", "value": -50.0, "fractionDigits": 2 },
+    "eventType": "TRADING_SAVINGSPLAN_EXECUTED",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-corporate-cash",
+    "timestamp": "2026-01-03T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Bardividende",
+    "amount": { "currency": "EUR", "value": 10.0, "fractionDigits": 2 },
+    "eventType": "SSP_CORPORATE_ACTION_CASH",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-bank-incoming",
+    "timestamp": "2026-01-04T10:00:00.000+0000",
+    "title": "Incoming transfer",
+    "amount": { "currency": "EUR", "value": 200.0, "fractionDigits": 2 },
+    "eventType": "BANK_TRANSACTION_INCOMING",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-bank-incoming-declined-text",
+    "timestamp": "2026-01-05T10:00:00.000+0000",
+    "title": "Incoming transfer",
+    "subtitle": "Abgelehnt",
+    "amount": { "currency": "EUR", "value": 200.0, "fractionDigits": 2 },
+    "eventType": "BANK_TRANSACTION_INCOMING",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-bank-outgoing",
+    "timestamp": "2026-01-06T10:00:00.000+0000",
+    "title": "Outgoing transfer",
+    "subtitle": "Gesendet",
+    "amount": { "currency": "EUR", "value": -300.0, "fractionDigits": 2 },
+    "eventType": "BANK_TRANSACTION_OUTGOING",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-trading-trade-buy",
+    "timestamp": "2026-01-07T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Kauforder",
+    "amount": { "currency": "EUR", "value": -100.0, "fractionDigits": 2 },
+    "eventType": "TRADING_TRADE_EXECUTED",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-order-buy",
+    "timestamp": "2026-01-08T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Kauforder",
+    "amount": { "currency": "EUR", "value": -100.0, "fractionDigits": 2 },
+    "eventType": "ORDER_EXECUTED",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-trade-invoice-buy",
+    "timestamp": "2026-01-09T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Kauforder",
+    "amount": { "currency": "EUR", "value": -100.0, "fractionDigits": 2 },
+    "eventType": "TRADE_INVOICE",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-trade-invoice-sell",
+    "timestamp": "2026-01-10T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Verkaufsorder",
+    "amount": { "currency": "EUR", "value": 100.0, "fractionDigits": 2 },
+    "eventType": "TRADE_INVOICE",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-credit",
+    "timestamp": "2026-01-11T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Dividende",
+    "amount": { "currency": "EUR", "value": 5.0, "fractionDigits": 2 },
+    "eventType": "CREDIT",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-payment-outbound",
+    "timestamp": "2026-01-12T10:00:00.000+0000",
+    "title": "Withdrawal",
+    "amount": { "currency": "EUR", "value": -400.0, "fractionDigits": 2 },
+    "eventType": "PAYMENT_OUTBOUND",
+    "status": "EXECUTED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-bank-incoming-canceled",
+    "timestamp": "2026-01-13T10:00:00.000+0000",
+    "title": "Incoming transfer",
+    "subtitle": "Abgelehnt",
+    "amount": { "currency": "EUR", "value": 200.0, "fractionDigits": 2 },
+    "eventType": "BANK_TRANSACTION_INCOMING",
+    "status": "CANCELED",
+    "hidden": false,
+    "deleted": false
+  },
+  {
+    "id": "evt-order-canceled-header",
+    "timestamp": "2026-01-14T10:00:00.000+0000",
+    "title": "Example Equity",
+    "subtitle": "Kauforder",
+    "amount": { "currency": "EUR", "value": -100.0, "fractionDigits": 2 },
+    "eventType": "ORDER_EXECUTED",
+    "hidden": false,
+    "deleted": false,
+    "details": {
+      "id": "evt-order-canceled-header",
+      "sections": [{ "type": "header", "title": "Kauforder", "data": { "status": "canceled" } }]
+    }
+  }
+]

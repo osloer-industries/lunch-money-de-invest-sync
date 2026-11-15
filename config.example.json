@@ -4,6 +4,7 @@
     {
       "owner": "operator-a",
       "lunchMoneyAssetId": 1,
+      "holdingsAccountId": 5,
       "pytrCommand": ["pytr"]
     },
     {
@@ -24,7 +25,9 @@
   "scalableCapitalProfiles": [
     {
       "owner": "operator-a",
-      "lunchMoneyAssetId": 3
+      "lunchMoneyAssetId": 3,
+      "holdingsAccountId": 6,
+      "savingsAccountId": 7
     },
     {
       "owner": "operator-b",

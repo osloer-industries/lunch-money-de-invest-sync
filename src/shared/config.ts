@@ -5,10 +5,15 @@ import { z } from "zod";
 import { categoryMapSchema, tagMapSchema } from "./canonical-type.js";
 import { formatConfigLoadError } from "./config-cli-errors.js";
 
+/** Lunch Money manual account id whose balance is set from a broker value (not from transactions). */
+const balanceAccountIdSchema = z.number().int().positive();
+
 const tradeRepublicProfileSchema = z
   .object({
     owner: z.string().min(1),
     lunchMoneyAssetId: z.number().int().positive(),
+    /** Separate manual account whose balance is set to the securities market value on every sync. */
+    holdingsAccountId: balanceAccountIdSchema.optional(),
     /** argv prefix to launch pytr (e.g. `["pytr"]` or `["uvx", "pytr@0.4.10"]`). */
     pytrCommand: z.array(z.string().min(1)).min(1).optional(),
     /** Absolute path to the operator pytr home directory (`…/.pytr`). Overrides process HOME for the child only. */
@@ -28,6 +33,10 @@ const scalableCapitalProfileSchema = z
   .object({
     owner: z.string().min(1),
     lunchMoneyAssetId: z.number().int().positive(),
+    /** Separate manual account whose balance is set to the securities (+ crypto) market value on every sync. */
+    holdingsAccountId: balanceAccountIdSchema.optional(),
+    /** Separate manual account whose balance is set to the overnight savings (`sc overnight`) balance. */
+    savingsAccountId: balanceAccountIdSchema.optional(),
     /** `sc broker transactions --portfolio-id` when multiple portfolios exist. */
     portfolioId: z.string().min(1).optional(),
     /** Absolute path to the `sc` binary (otherwise resolved under trusted system dirs). */
@@ -53,6 +62,11 @@ export const syncConfigSchema = z.object({
   categoryMap: categoryMapSchema.default({}),
   /** Extra tags to apply per canonical type at sync time. */
   tagMap: tagMapSchema.default({}),
+  /** When set, only transactions on or after this UTC calendar day are synced (YYYY-MM-DD). */
+  syncSince: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export type SyncConfig = z.infer<typeof syncConfigSchema>;
@@ -122,6 +136,7 @@ export function readConfigFromDisk(configPath = CONFIG_BASENAME): SyncConfig {
     scalableCapitalProfiles: fromFile.scalableCapitalProfiles,
     categoryMap: fromFile.categoryMap,
     tagMap: fromFile.tagMap,
+    syncSince: fromFile.syncSince,
     lunchMoneyApiKey: process.env["LUNCH_MONEY_API_KEY"],
   });
 }

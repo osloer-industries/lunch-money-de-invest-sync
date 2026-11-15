@@ -87,7 +87,10 @@ function isScSessionActive(stdout: string): boolean {
   return envelope !== null && envelope.ok;
 }
 
-export async function confirmPytrCredentialStorage(prompter: SetupPrompter, loginCommand: string): Promise<void> {
+async function confirmPytrCredentialStorageOnce(
+  prompter: SetupPrompter,
+  loginCommand: string,
+): Promise<void> {
   prompter.print(
     [
       "pytr must store credentials on disk for unattended exports.",
@@ -96,9 +99,21 @@ export async function confirmPytrCredentialStorage(prompter: SetupPrompter, logi
     ].join("\n"),
   );
   const ok = await prompter.confirm(`Accept and run this login command later if needed?\n\n  ${loginCommand}`, false);
-  if (!ok) {
-    throw new Error("Trade Republic setup cancelled — credential storage was not accepted");
+  if (ok) {
+    return;
   }
+  prompter.print(
+    "Without stored credentials, Trade Republic cannot sync automatically. You can accept storage or choose a different broker.",
+  );
+  const again = await prompter.confirm("Review the credential notice again?", true);
+  if (!again) {
+    throw new Error("Trade Republic setup stopped — credential storage was not accepted");
+  }
+  await confirmPytrCredentialStorageOnce(prompter, loginCommand);
+}
+
+export async function confirmPytrCredentialStorage(prompter: SetupPrompter, loginCommand: string): Promise<void> {
+  await confirmPytrCredentialStorageOnce(prompter, loginCommand);
 }
 
 export interface EnsurePytrReadyContext {

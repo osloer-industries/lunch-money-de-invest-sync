@@ -6,9 +6,10 @@ Use a Conventional Commit title, for example `feat: add JSON output` or `fix(cli
 
 ## Verification
 
-- [ ] `npm run check`
+- [ ] `npm run check` (and pre-commit hook) run locally before push
 - [ ] Documentation updated if behavior changed
 - [ ] No secrets, credentials, or generated files committed
+- [ ] Conflicts resolved by merging `main` (no rebase / force-push)
 
 ## Related issue
 

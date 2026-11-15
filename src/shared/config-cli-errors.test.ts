@@ -33,7 +33,7 @@ describe("formatConfigLoadError", () => {
 
   it("maps invalid JSON errors", () => {
     expect(formatConfigLoadError(new Error("config.json contains invalid JSON"))).toBe(
-      "config.json is invalid — fix or delete it and run npm run setup again.",
+      "Saved settings could not be read — setup can back them up and start fresh.",
     );
   });
 });

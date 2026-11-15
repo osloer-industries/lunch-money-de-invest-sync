@@ -12,6 +12,9 @@ export interface SetupCliOptions {
   readonly tradeRepublicAssetId: number | null;
   readonly scalableAssetId: number | null;
   readonly portfolioId: string | null;
+  readonly tradeRepublicHoldingsAccountId: number | null;
+  readonly scalableHoldingsAccountId: number | null;
+  readonly scalableSavingsAccountId: number | null;
   readonly categories: boolean;
   readonly exportTypeSummary: string | null;
   readonly replaceApiKey: boolean;
@@ -31,6 +34,9 @@ const PARSE_CONFIG: ParseArgsConfig = {
     "trade-republic-asset-id": { type: "string" },
     "scalable-asset-id": { type: "string" },
     "portfolio-id": { type: "string" },
+    "trade-republic-holdings-account-id": { type: "string" },
+    "scalable-holdings-account-id": { type: "string" },
+    "scalable-savings-account-id": { type: "string" },
     categories: { type: "boolean", default: false },
     "export-type-summary": { type: "string" },
     "replace-api-key": { type: "boolean", default: false },
@@ -53,6 +59,12 @@ Interactive onboarding for Lunch Money + broker profiles (default).
   --trade-republic-asset-id <id> Trade Republic manual account id (non-interactive)
   --scalable-asset-id <id>       Scalable Capital manual account id (non-interactive)
   --portfolio-id <id>            Scalable portfolio id (optional)
+  --trade-republic-holdings-account-id <id>
+                                 Manual account for Trade Republic market value (optional)
+  --scalable-holdings-account-id <id>
+                                 Manual account for Scalable market value (optional)
+  --scalable-savings-account-id <id>
+                                 Manual account for the Scalable overnight savings balance (optional)
   --skip-broker-check            Skip sc/pytr install+login probes
   --yes                          Overwrite config.json without prompting
   --replace-api-key              Prompt for a new Lunch Money API key (stored in OS keychain)
@@ -90,6 +102,9 @@ export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
     tradeRepublicAssetId,
     scalableAssetId,
     portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
+    tradeRepublicHoldingsAccountId: parsePositiveIntFlag(values, "trade-republic-holdings-account-id"),
+    scalableHoldingsAccountId: parsePositiveIntFlag(values, "scalable-holdings-account-id"),
+    scalableSavingsAccountId: parsePositiveIntFlag(values, "scalable-savings-account-id"),
     categories: values.categories === true,
     exportTypeSummary: exportTypeSummaryPath(values),
     replaceApiKey: values["replace-api-key"] === true,

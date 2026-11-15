@@ -19,6 +19,10 @@ export const pytrTimelineEventSchema = z.object({
   eventType: z.string().nullable().optional(),
   hidden: z.boolean().optional(),
   deleted: z.boolean().optional(),
+  /** Timeline status, e.g. `EXECUTED` or `CANCELED` (cancelled/declined rows never moved cash). */
+  status: z.string().nullable().optional(),
+  /** Raw detail payload; only the header section's `data.status` is read (see broker-type-classification). */
+  details: z.unknown().optional(),
 });
 export type PytrTimelineEvent = z.infer<typeof pytrTimelineEventSchema>;
 

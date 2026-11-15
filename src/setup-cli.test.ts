@@ -114,7 +114,7 @@ describe("runSetupCli", () => {
     expect(runCategoryMappingSetup).not.toHaveBeenCalled();
   });
 
-  it("runs doctor before setup when not under Vitest", async () => {
+  it("does not print doctor output during setup", async () => {
     const vitest = process.env.VITEST;
     delete process.env.VITEST;
     const logger = vi.fn();
@@ -127,35 +127,8 @@ describe("runSetupCli", () => {
           logger,
         }),
       );
-      expect(runDoctor).toHaveBeenCalled();
-    } finally {
-      if (vitest !== undefined) {
-        process.env.VITEST = vitest;
-      }
-    }
-  });
-
-  it("logs doctor failures but continues setup", async () => {
-    runDoctor.mockResolvedValueOnce({
-      ok: false,
-      checks: [
-        { name: "npm-ci", ok: false, detail: "missing", fix: "npm ci" },
-        { name: "node", ok: true, detail: "ok" },
-      ],
-    });
-    const vitest = process.env.VITEST;
-    delete process.env.VITEST;
-    const logger = vi.fn();
-    try {
-      await withStdinIsTTY(true, () =>
-        runSetupCli([], {
-          prompter: stubPrompter(),
-          filesystem: stubFilesystem(),
-          runners: {},
-          logger,
-        }),
-      );
-      expect(logger).toHaveBeenCalledWith(expect.stringContaining("doctor checks failed"));
+      expect(runDoctor).not.toHaveBeenCalled();
+      expect(logger).not.toHaveBeenCalledWith(expect.stringContaining("doctor"));
       expect(runSetup).toHaveBeenCalledOnce();
     } finally {
       if (vitest !== undefined) {

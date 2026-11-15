@@ -9,7 +9,8 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 
 function runSyncEntry(args: readonly string[], cwd: string, envOverrides?: NodeJS.ProcessEnv) {
   const tsx = path.join(repoRoot, "node_modules", ".bin", "tsx");
-  const env = { ...process.env, ...envOverrides };
+  // Never read the developer's real OS keychain: a stored key would change the outcome of these tests.
+  const env: NodeJS.ProcessEnv = { ...process.env, LUNCH_MONEY_API_KEY_STORE: "none", ...envOverrides };
   if (
     envOverrides &&
     Object.prototype.hasOwnProperty.call(envOverrides, "LUNCH_MONEY_API_KEY") &&

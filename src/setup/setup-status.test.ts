@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { reportSetupError, statusError, statusOk } from "./setup-status.js";
+import { isPromptInterrupted, reportSetupError, SETUP_PAUSED_MESSAGE, statusError, statusOk } from "./setup-status.js";
 
 describe("setup-status", () => {
   it("formats status lines", () => {
@@ -12,6 +12,20 @@ describe("setup-status", () => {
     delete process.env.DEBUG;
     reportSetupError(new Error("friendly"));
     expect(stderr).toHaveBeenCalledWith("friendly");
+    stderr.mockRestore();
+  });
+
+  it("recognises prompt interrupts", () => {
+    expect(isPromptInterrupted(Object.assign(new Error("User force closed"), { name: "ExitPromptError" }))).toBe(
+      true,
+    );
+    expect(isPromptInterrupted(new Error("Other"))).toBe(false);
+  });
+
+  it("prints a resume hint when setup is interrupted", () => {
+    const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+    reportSetupError(Object.assign(new Error("User force closed"), { name: "ExitPromptError" }));
+    expect(stderr).toHaveBeenCalledWith(SETUP_PAUSED_MESSAGE);
     stderr.mockRestore();
   });
 

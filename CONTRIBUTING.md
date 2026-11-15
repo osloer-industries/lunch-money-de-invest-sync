@@ -3,8 +3,8 @@
 1. Install Node.js 24.22.0 (see `.nvmrc`).
 2. Run `npm ci`.
 3. Create a focused branch and add tests with the change.
-4. Run `npm run check` (or `npm run precommit` — same gate as CI and the lefthook hook) and `npm audit --omit=dev`.
-5. Open a pull request using the provided template and a Conventional Commit title.
+4. Run `npm run check` (or `npm run precommit` — same gate as CI and the lefthook hook) and `npm audit --omit=dev` before you push (do not skip the pre-commit hook).
+5. Push your branch and open a pull request using the provided template and a Conventional Commit title. Resolve conflicts by merging `main` into your branch — do not rebase or force-push. After pushing, you do not need to watch CI; fix failures if you are asked to.
 
 Coverage must remain at least 80% for branches, functions, lines, and statements. Keep dependencies exact and commit lockfile changes. Never commit secrets or generated output.
 
@@ -20,6 +20,8 @@ commits bump the **0.x** minor/patch series instead of leaping to `1.0.0`. Do no
 major version to `1` without an explicit maintainer decision.
 
 Pull request titles are validated automatically. Squash merging uses the validated title as the commit subject on `main`, giving Release Please one reliable Conventional Commit per pull request. Dependabot uses `chore(deps):` for npm updates and `ci(deps):` for GitHub Actions updates.
+
+Automated agents and contributors should follow [AGENTS.md](AGENTS.md), including the org-wide **Agent workflow** section.
 
 ## Continuous integration
 

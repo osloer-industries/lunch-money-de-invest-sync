@@ -17,6 +17,24 @@ describe("parseSetupCliOptions", () => {
     expect(options.lunchMoneyAssetId).toBe(42);
   });
 
+  it("parses optional balance tracking account ids", () => {
+    const options = parseSetupCliOptions([
+      "--trade-republic-holdings-account-id",
+      "5",
+      "--scalable-holdings-account-id",
+      "6",
+      "--scalable-savings-account-id",
+      "7",
+    ]);
+    expect(options).toMatchObject({
+      tradeRepublicHoldingsAccountId: 5,
+      scalableHoldingsAccountId: 6,
+      scalableSavingsAccountId: 7,
+    });
+    expect(parseSetupCliOptions([]).scalableSavingsAccountId).toBeNull();
+    expect(() => parseSetupCliOptions(["--scalable-savings-account-id", "x"])).toThrow(/positive integer/);
+  });
+
   it("returns help when requested", () => {
     expect(parseSetupCliOptions(["-h"]).help).toBe(true);
   });

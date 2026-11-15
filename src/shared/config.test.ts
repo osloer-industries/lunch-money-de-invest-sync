@@ -82,6 +82,35 @@ describe("loadConfig", () => {
     expect(config.tradeRepublicProfiles[0]?.pytrMinVersion).toBe("0.4.10");
   });
 
+  it("accepts optional balance tracking account ids and keeps old profiles valid", () => {
+    const config = loadConfig({
+      ...validRaw,
+      tradeRepublicProfiles: [
+        { owner: "operator-a", lunchMoneyAssetId: 1, holdingsAccountId: 2 },
+        { owner: "operator-b", lunchMoneyAssetId: 5 },
+      ],
+      scalableCapitalProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 3, holdingsAccountId: 4, savingsAccountId: 6 }],
+    });
+    expect(config.tradeRepublicProfiles[0]?.holdingsAccountId).toBe(2);
+    expect(config.tradeRepublicProfiles[1]?.holdingsAccountId).toBeUndefined();
+    expect(config.scalableCapitalProfiles[0]).toMatchObject({ holdingsAccountId: 4, savingsAccountId: 6 });
+  });
+
+  it("rejects invalid balance tracking ids and savingsAccountId on Trade Republic profiles", () => {
+    expect(() =>
+      loadConfig({ ...validRaw, tradeRepublicProfiles: [{ owner: "a", lunchMoneyAssetId: 1, holdingsAccountId: 0 }] }),
+    ).toThrow();
+    expect(() =>
+      loadConfig({ ...validRaw, tradeRepublicProfiles: [{ owner: "a", lunchMoneyAssetId: 1, savingsAccountId: 2 }] }),
+    ).toThrow();
+    expect(() =>
+      loadConfig({
+        ...validRaw,
+        scalableCapitalProfiles: [{ owner: "a", lunchMoneyAssetId: 1, savingsAccountId: "2" }],
+      }),
+    ).toThrow();
+  });
+
   it("rejects removed loginV2 and wafTokenMode profile keys", () => {
     expect(() =>
       loadConfig({
