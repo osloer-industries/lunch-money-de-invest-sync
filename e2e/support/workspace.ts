@@ -86,5 +86,9 @@ export function cliEntryArgs(
   scriptArgs: readonly string[] = [],
 ): { readonly command: string; readonly args: readonly string[] } {
   const script = path.join(repoRoot, "dist", `${entry}.js`);
+  // node-pty on macOS rejects some hostedtoolcache Node paths via posix_spawnp; env(1) is reliable.
+  if (process.platform === "darwin") {
+    return { command: "/usr/bin/env", args: ["node", script, ...scriptArgs] };
+  }
   return { command: process.execPath, args: [script, ...scriptArgs] };
 }
