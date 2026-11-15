@@ -15,7 +15,7 @@ These rules apply to every agent (Cursor, Grok Bot, any other) working in this r
 
 ### CI and workflows
 - Pin GitHub Actions by full commit SHA with an accurate version comment. Org reusables from `osloer-industries/.github` are pinned `@<full sha> # v0.x.y` (a release tag, never `# main`).
-- Every CI job feeds the single `ci-passed` aggregate job, including Workflow security, CodeQL and the SonarCloud zero-issues job. `ci-passed` is the only required status check.
+- Every CI job feeds the single `ci-passed` aggregate job, including Workflow security, CodeQL, the SonarCloud scan job in `ci.yml` (coverage upload), and the SonarCloud zero-issues job. `ci-passed` is the only required status check.
 - Only Dependabot patch/minor bumps and patch/minor release PRs auto-merge. Majors (or pre-1.0 breaking changes) never auto-merge; they wait for a human.
 - Run the repo's linters, tests and pre-commit checks locally before pushing. The pre-commit hook is never skipped (`--no-verify` is not allowed).
 - Push, then stop: do not wait on, watch or poll CI. Failures are handed back to you.
