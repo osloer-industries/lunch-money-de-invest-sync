@@ -13,6 +13,7 @@ import { createPytrCliRunner, createScCliRunner, type PytrCliRunner, type ScCliR
 import { runCliModuleMain } from "./shared/cli-main.js";
 import { assertNodeMajorVersion } from "./setup/broker-preflight.js";
 import { statusError, statusOk, statusWarn } from "./setup/setup-status.js";
+import { parseScriptableFlags, writeStdoutJson } from "./shared/scriptable-cli.js";
 
 export interface DoctorCheck {
   readonly name: string;
@@ -287,11 +288,34 @@ export async function runDoctorCli(
   deps: DoctorDeps = {},
 ): Promise<void> {
   const logger = deps.logger ?? defaultLogger;
-  if (argv.includes("--help")) {
-    logger("Usage: npm run doctor\n\nChecks local prerequisites for sync and setup.");
+  const scriptable = parseScriptableFlags(argv);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    logger(`Usage: npm run doctor [options]
+
+Checks local prerequisites for sync and setup.
+
+  --json              Machine-readable result on stdout (no secrets)
+  --non-interactive   Alias for scripted use (doctor never prompts)
+  -h, --help          Show this help`);
     return;
   }
   const result = await runDoctor(deps);
+  if (scriptable.flags.json) {
+    writeStdoutJson({
+      ok: result.ok,
+      checks: result.checks.map((check) => ({
+        name: check.name,
+        ok: check.ok,
+        detail: check.detail,
+        ...(check.fix ? { fix: check.fix } : {}),
+        ...(check.warning ? { warning: true } : {}),
+      })),
+    });
+    if (!result.ok) {
+      throw new Error("doctor found issues — fix the items above and re-run `npm run doctor`");
+    }
+    return;
+  }
   for (const check of result.checks) {
     const summary = `${check.name}: ${check.detail}`;
     let line: string;

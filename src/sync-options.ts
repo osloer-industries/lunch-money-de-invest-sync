@@ -1,6 +1,7 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { exportTypeSummaryPath } from "./shared/cli-args.js";
 import { parseSinceDate } from "./dry-run-review/since.js";
+import { parseScriptableFlags, scriptableOptionConfig } from "./shared/scriptable-cli.js";
 
 export type SyncBroker = "trade-republic" | "scalable-capital";
 
@@ -12,6 +13,9 @@ export interface SyncCliOptions {
   readonly exportTypeSummary: string | null;
   readonly reconcileCash: boolean;
   readonly help: boolean;
+  readonly json: boolean;
+  readonly events: boolean;
+  readonly nonInteractive: boolean;
 }
 
 const PARSE_CONFIG: ParseArgsConfig = {
@@ -23,6 +27,7 @@ const PARSE_CONFIG: ParseArgsConfig = {
     "export-type-summary": { type: "string" },
     "reconcile-cash": { type: "boolean", default: false },
     help: { type: "boolean", default: false, short: "h" },
+    ...scriptableOptionConfig(),
   },
   allowPositionals: false,
   strict: true,
@@ -78,6 +83,9 @@ export const SYNC_HELP_TEXT = `Usage: npm run sync -- [options]
   --export-type-summary <file>                Write anonymised broker type summary (opt-in)
   --reconcile-cash                            Set the Lunch Money cash balance to the broker-reported
                                               cash when they differ by more than 1.00 (opt-in)
+  --json                                      Machine-readable result on stdout (no secrets)
+  --events                                    Broker login NDJSON events on stderr during fetch
+  --non-interactive                           Required when stdin is not a TTY
   -h, --help                                  Show this help
 
 After the transactions, each profile's cash balance is compared with the broker (warning only), and
@@ -87,6 +95,7 @@ Unknown flags or invalid broker names exit with an error. When no filters are se
 
 export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
   const values = parseArgsOrThrow(argv).values as Record<string, unknown>;
+  const scriptable = parseScriptableFlags(argv);
   if (values.help === true) {
     return {
       brokers: [],
@@ -96,6 +105,9 @@ export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
       exportTypeSummary: null,
       reconcileCash: false,
       help: true,
+      json: false,
+      events: false,
+      nonInteractive: false,
     };
   }
 
@@ -111,6 +123,9 @@ export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
     exportTypeSummary: exportTypeSummaryPath(values),
     reconcileCash: values["reconcile-cash"] === true,
     help: false,
+    json: scriptable.flags.json,
+    events: scriptable.flags.events,
+    nonInteractive: scriptable.flags.nonInteractive,
   };
 }
 

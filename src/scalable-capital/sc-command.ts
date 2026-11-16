@@ -2,6 +2,11 @@ import { parseScMachineEnvelopeStdout } from "./sc-envelope.js";
 import type { ScalableCapitalCliConfig, ScMachineEnvelope } from "./types.js";
 import { isErrnoCode } from "../shared/errno.js";
 import type { ScCliRunner } from "../shared/subprocess-cli.js";
+import type { BrokerLoginEventSink } from "../shared/cli-events.js";
+
+export interface ScJsonCommandContext {
+  readonly loginEvents?: BrokerLoginEventSink;
+}
 
 function cliErrorMessage(envelope: ScMachineEnvelope): string {
   const code = envelope.error?.code ?? "unknown";
@@ -11,11 +16,24 @@ function cliErrorMessage(envelope: ScMachineEnvelope): string {
     : `Scalable CLI command failed (${code})`;
 }
 
-export function assertSuccessEnvelope(envelope: ScMachineEnvelope): void {
+export function assertSuccessEnvelope(
+  envelope: ScMachineEnvelope,
+  context: ScJsonCommandContext = {},
+): void {
   if (envelope.ok) {
     return;
   }
   if (envelope.error?.code === "no_session") {
+    context.loginEvents?.({
+      kind: "broker_login",
+      broker: "scalable-capital",
+      phase: "session_needed",
+    });
+    context.loginEvents?.({
+      kind: "broker_login",
+      broker: "scalable-capital",
+      phase: "login_required",
+    });
     throw new Error("Scalable CLI has no active session — run `sc login` on this machine first");
   }
   throw new Error(cliErrorMessage(envelope));
@@ -55,6 +73,7 @@ export async function runScJsonCommand(
   runner: ScCliRunner,
   config: ScalableCapitalCliConfig,
   argv: readonly string[],
+  context: ScJsonCommandContext = {},
 ): Promise<ScMachineEnvelope> {
   const env = scChildEnv(config);
   const run = await runOnce(runner, argv, env);
@@ -62,9 +81,9 @@ export async function runScJsonCommand(
   if (!envelope.ok && envelope.error?.code === "refresh_retryable") {
     const retry = await runOnce(runner, argv, env);
     const retryEnvelope = parseScMachineEnvelopeStdout(retry.stdout);
-    assertSuccessEnvelope(retryEnvelope);
+    assertSuccessEnvelope(retryEnvelope, context);
     return retryEnvelope;
   }
-  assertSuccessEnvelope(envelope);
+  assertSuccessEnvelope(envelope, context);
   return envelope;
 }
