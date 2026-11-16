@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.5...v0.2.6) (2026-11-16)
+
+
+### Features
+
+* scriptable JSON CLI layer for assistant tooling ([#91](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/91)) ([f641a27](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/f641a27843920b8a03de102beebe19e0e11cfc69))
+
 ## [0.2.5](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.4...v0.2.5) (2026-11-15)
 
 
