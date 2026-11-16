@@ -9,13 +9,16 @@ import {
 /** Lunch Money cash may drift from the broker by rounding; anything above this is reported. */
 export const CASH_RECONCILIATION_TOLERANCE = 1;
 
-export interface BalanceSyncParams {
+type BalanceOptionalAccountIds = Partial<{
+  readonly holdingsAccountId: number;
+  readonly savingsAccountId: number;
+}>;
+
+export type BalanceSyncParams = BalanceOptionalAccountIds & {
   /** Log prefix, e.g. `[scalable-capital:me]`. */
   readonly label: string;
   readonly snapshot: BrokerBalanceSnapshot;
   readonly cashAccountId: number;
-  readonly holdingsAccountId?: number | undefined;
-  readonly savingsAccountId?: number | undefined;
   /**
    * Canonical sum of rows a dry-run would still insert (0 after a real sync), so the dry-run
    * reconciliation compares the balance Lunch Money will have after the sync.
@@ -25,7 +28,7 @@ export interface BalanceSyncParams {
   readonly logger: (message: string) => void;
   readonly dryRun: boolean;
   readonly reconcileCash: boolean;
-}
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
