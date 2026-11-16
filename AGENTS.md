@@ -40,8 +40,9 @@ These rules apply to every agent (Cursor, Grok Bot, any other) working in this r
   dependency intentionally changes, then commit `package-lock.json`.
 - Run `npm run check` before **every push** (`npm run precommit` is identical). This runs
   Oxlint (including Sonar-aligned `require-await` / `no-await-in-loop`), `eslint-plugin-sonarjs`
-  recommended rules, TypeScript, coverage, and the production build. A lefthook `pre-commit`
-  hook runs the same command via `npm run prepare`.
+  recommended rules, `npm run lint:dup` (jscpd at **3%** duplicated lines via `.jscpd.json`, aligned
+  with the SonarCloud duplicated-lines-on-new-code gate), TypeScript, coverage, and the production
+  build. A lefthook `pre-commit` hook runs the same command via `npm run prepare`.
 - The only documented lint override is the existing `no-await-in-loop` carve-out for broker pagination/sync.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
 - Dependabot `github-actions` on `/` bumps org reusable refs together with Action SHAs.

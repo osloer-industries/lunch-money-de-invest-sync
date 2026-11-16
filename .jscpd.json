@@ -1,0 +1,28 @@
+{
+  "absolute": true,
+  "format": ["typescript", "javascript", "markdown", "yaml", "bash"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/package-lock.json",
+    "tools/eslint-sonar/package-lock.json"
+  ],
+  "minLines": 8,
+  "minTokens": 70,
+  "mode": "strict",
+  "path": [
+    "src",
+    "docs",
+    "AGENTS.md",
+    "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    ".github/pull_request_template.md",
+    ".github/workflows",
+    "tools/eslint-sonar"
+  ],
+  "reporters": ["console"],
+  "threshold": 3
+}
