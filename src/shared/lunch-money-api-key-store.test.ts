@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   API_KEY_STORE_ENV,
   createDefaultLunchMoneyApiKeyStore,
   disabledLunchMoneyApiKeyStore,
   formatKeychainAccessError,
+  MemoryLunchMoneyApiKeyStore,
+  setDefaultLunchMoneyApiKeyStoreForTests,
 } from "./lunch-money-api-key-store.js";
 
 describe("formatKeychainAccessError", () => {
@@ -16,13 +18,33 @@ describe("formatKeychainAccessError", () => {
 });
 
 describe("createDefaultLunchMoneyApiKeyStore", () => {
-  const previous = process.env[API_KEY_STORE_ENV];
+  const previousDisabled = process.env[API_KEY_STORE_ENV];
+  const previousMemory = process.env.LM_MEMORY_API_KEY_STORE;
+
+  beforeEach(() => {
+    setDefaultLunchMoneyApiKeyStoreForTests(undefined);
+  });
+
   afterEach(() => {
-    if (previous === undefined) {
+    if (previousDisabled === undefined) {
       delete process.env[API_KEY_STORE_ENV];
     } else {
-      process.env[API_KEY_STORE_ENV] = previous;
+      process.env[API_KEY_STORE_ENV] = previousDisabled;
     }
+    if (previousMemory === undefined) {
+      delete process.env.LM_MEMORY_API_KEY_STORE;
+    } else {
+      process.env.LM_MEMORY_API_KEY_STORE = previousMemory;
+    }
+    setDefaultLunchMoneyApiKeyStoreForTests(undefined);
+  });
+
+  it("uses the in-memory store when LM_MEMORY_API_KEY_STORE is set", async () => {
+    process.env.LM_MEMORY_API_KEY_STORE = "1";
+    const store = createDefaultLunchMoneyApiKeyStore();
+    await store.set("lm_memory_key");
+    expect(await store.get()).toBe("lm_memory_key");
+    expect(store).toBeInstanceOf(MemoryLunchMoneyApiKeyStore);
   });
 
   it("returns a store that never touches the OS keychain when disabled", async () => {

@@ -1,7 +1,13 @@
 import { LunchMoneyClient } from "@lunch-money/lunch-money-js-v2";
 
+function optionalApiBaseUrl(): string | undefined {
+  const fromEnv = process.env["LUNCH_MONEY_API_BASE_URL"]?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
+}
+
 export function createLunchMoneyClient(apiKey: string): LunchMoneyClient {
-  return new LunchMoneyClient({ apiKey });
+  const baseUrl = optionalApiBaseUrl();
+  return baseUrl === undefined ? new LunchMoneyClient({ apiKey }) : new LunchMoneyClient({ apiKey, baseUrl });
 }
 
 /** Narrow slice of the client that tag resolution needs, so tests can pass a stub instead of a real client. */

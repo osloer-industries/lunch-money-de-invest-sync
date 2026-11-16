@@ -95,6 +95,10 @@ export const disabledLunchMoneyApiKeyStore: LunchMoneyApiKeyStore = {
 };
 
 export function createDefaultLunchMoneyApiKeyStore(): LunchMoneyApiKeyStore {
+  if (process.env["LM_MEMORY_API_KEY_STORE"] === "1") {
+    defaultStore ??= new MemoryLunchMoneyApiKeyStore();
+    return defaultStore;
+  }
   if (process.env[API_KEY_STORE_ENV] === "none") {
     return disabledLunchMoneyApiKeyStore;
   }
