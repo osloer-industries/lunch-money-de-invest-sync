@@ -398,12 +398,13 @@ export async function runSync(
   return { balanceFailures };
 }
 
-interface BalanceTrackedProfile {
+type BalanceTrackedProfile = {
   readonly owner: string;
   readonly lunchMoneyAssetId: number;
-  readonly holdingsAccountId?: number | undefined;
-  readonly savingsAccountId?: number | undefined;
-}
+} & Partial<{
+  readonly holdingsAccountId: number | undefined;
+  readonly savingsAccountId: number | undefined;
+}>;
 
 async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
   profiles: readonly T[],
@@ -452,8 +453,12 @@ async function syncProfilesForBroker<T extends BalanceTrackedProfile>(
       label: `[${source}:${profile.owner}]`,
       snapshot,
       cashAccountId: profile.lunchMoneyAssetId,
-      holdingsAccountId: profile.holdingsAccountId,
-      savingsAccountId: profile.savingsAccountId,
+      ...(profile.holdingsAccountId === undefined
+        ? {}
+        : { holdingsAccountId: profile.holdingsAccountId }),
+      ...(profile.savingsAccountId === undefined
+        ? {}
+        : { savingsAccountId: profile.savingsAccountId }),
       pendingCashDelta,
       client: context.client,
       logger: context.logger,
