@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.6...v0.2.7) (2026-11-16)
+
+
+### Bug Fixes
+
+* **deps:** patch minimatch in tools/eslint-sonar ([#105](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/105)) ([c6b4381](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/c6b43819aa05fe1020d3132a8f2209c4f841b243))
+
 ## [0.2.6](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.5...v0.2.6) (2026-11-16)
 
 
