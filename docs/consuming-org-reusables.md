@@ -4,8 +4,8 @@ Shared GitHub Actions behavior lives in [osloer-industries/.github](https://gith
 This repository keeps **thin caller workflows** under `.github/workflows/` and pins each org `uses:` ref to a full
 commit SHA with a `# v0.x.y` version comment (never `# main`). The org contract, input defaults, and copy-paste YAML
 live in
-[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/2359eb885c7c2ef7a2cb966348076392809b0f03/docs/consuming-workflows.md)
-on that repository (**v0.1.5**: `2359eb885c7c2ef7a2cb966348076392809b0f03`).
+[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/348b254ef112f4f8e239a41e7adb3f3e2dac3944/docs/consuming-workflows.md)
+on that repository (**v0.1.6**: `348b254ef112f4f8e239a41e7adb3f3e2dac3944`).
 
 Do not pass a `reusables-ref` input. Reusables that need their own scripts check out
 `osloer-industries/.github` at `job.workflow_sha` (the commit in the `uses:` pin).
@@ -18,9 +18,9 @@ Do not pass a `reusables-ref` input. Reusables that need their own scripts check
 | same | `node-npm-quality.yml` | Check name **Quality** (`npm run check`, production audit). |
 | same | `codeql-javascript-typescript.yml` | Public repo: default Code Scanning upload. Weekly schedule on `CI`. |
 | same | `sonarqube-cloud-node.yml` | Check name **Analyze**; `coverage-npm-script: test:coverage`. Skips when `SONAR_TOKEN` is empty (fork/Dependabot). |
-| same | `sonarcloud-zero-issues.yml` | PR-only; polls SonarCloud for zero open issues at head SHA. |
+| same | `sonarcloud-zero-issues.yml` | PR-only; `ce-task-id` from `sonar-analyze` waits for compute-engine SUCCESS, then polls for zero open issues. |
 | same | `ci-passed.yml` | Aggregate required check; includes repo-specific test and E2E jobs. |
-| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` | Default `mode: auto` (GitHub Dependency Review on this public repo). **Job**-level `actions: read`, `pull-requests: read`, and `security-events: write` for v0.1.5 cross-repo `workflow_call` (org reusable OSV nest permission fix pending). Separate required check, not part of `ci-passed`. |
+| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` | Default `mode: auto` (GitHub Dependency Review on this public repo). **Job**-level `contents: read`, `actions: read`, `pull-requests: read`, and `security-events: write` (required for nested OSV reusable startup on every repo visibility). Separate required check, not part of `ci-passed`. |
 | [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) | `semantic-pull-request.yml` | Conventional Commits PR titles. |
 | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `release-please.yml` | Release GitHub App (`vars.OSLOER_RELEASE_APP_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`). |
 
