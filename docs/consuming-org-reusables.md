@@ -20,7 +20,7 @@ Do not pass a `reusables-ref` input. Reusables that need their own scripts check
 | same | `sonarqube-cloud-node.yml` | Check name **Analyze**; `coverage-npm-script: test:coverage`. Skips when `SONAR_TOKEN` is empty (fork/Dependabot). |
 | same | `sonarcloud-zero-issues.yml` | PR-only; polls SonarCloud for zero open issues at head SHA. |
 | same | `ci-passed.yml` | Aggregate required check; includes repo-specific test and E2E jobs. |
-| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` | Default `mode: auto` (GitHub Dependency Review on this public repo). **Job**-level `actions: read`, `pull-requests: read`, and `security-events: write` so cross-repo startup validation passes for the v0.1.5 OSV nested reusable (OSV jobs stay skipped here; GitHub Dependency Review runs). Separate required check, not part of `ci-passed`. |
+| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` (v0.1.5 **inlined** on this public repo) | GitHub Dependency Review with the same pins as org `github-dependency-review` until v0.1.5 `workflow_call` can start cross-repo (OSV nest needs `security-events: write` on the org `osv-dependency-review` job). Separate required check, not part of `ci-passed`. |
 | [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) | `semantic-pull-request.yml` | Conventional Commits PR titles. |
 | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `release-please.yml` | Release GitHub App (`vars.OSLOER_RELEASE_APP_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`). |
 

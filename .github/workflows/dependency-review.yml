@@ -11,10 +11,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Public repo: same steps as github-dependency-review in org dependency-review.yml@v0.1.5.
+  # Cross-repo workflow_call to that reusable fails startup: nested osv-dependency-review
+  # omits security-events: write while Google osv-scanner-reusable-pr still requires it at
+  # validation time (auto mode skips OSV at run time).
   review:
-    uses: osloer-industries/.github/.github/workflows/dependency-review.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    name: Review dependency changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
-      actions: read
-      pull-requests: read
-      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: GitHub Dependency Review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
