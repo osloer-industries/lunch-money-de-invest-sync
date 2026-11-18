@@ -9,6 +9,6 @@ permissions:
 
 jobs:
   semantic-title:
-    uses: osloer-industries/.github/.github/workflows/semantic-pull-request.yml@a081e1b87b5309ff2b3999e8d6804d8ebec5c518 # v0.1.1
+    uses: osloer-industries/.github/.github/workflows/semantic-pull-request.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
     permissions:
       pull-requests: read
