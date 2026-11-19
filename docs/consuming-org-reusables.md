@@ -18,9 +18,9 @@ Do not pass a `reusables-ref` input. Reusables that need their own scripts check
 | same | `node-npm-quality.yml` | Check name **Quality** (`npm run check`, production audit). |
 | same | `codeql-javascript-typescript.yml` | Public repo: default Code Scanning upload. Weekly schedule on `CI`. |
 | same | `sonarqube-cloud-node.yml` | Check name **Analyze**; `coverage-npm-script: test:coverage`. Skips when `SONAR_TOKEN` is empty (fork/Dependabot). |
-| same | `sonarcloud-zero-issues.yml` | PR-only; polls SonarCloud for zero open issues at head SHA. |
+| same | `sonarcloud-zero-issues.yml` | PR-only; `ce-task-id` from `sonar-analyze` waits for compute-engine SUCCESS, then polls for zero open issues. |
 | same | `ci-passed.yml` | Aggregate required check; includes repo-specific test and E2E jobs. |
-| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` | Default `mode: auto` (GitHub Dependency Review on this public repo). |
+| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` | Default `mode: auto` (GitHub Dependency Review on this public repo). **Job**-level `contents: read`, `actions: read`, `pull-requests: read`, and `security-events: write` (required for nested OSV reusable startup on every repo visibility). Separate required check, not part of `ci-passed`. |
 | [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) | `semantic-pull-request.yml` | Conventional Commits PR titles. |
 | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `release-please.yml` | Release GitHub App (`vars.OSLOER_RELEASE_APP_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`). |
 

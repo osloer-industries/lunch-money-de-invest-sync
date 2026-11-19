@@ -122,6 +122,7 @@ jobs:
     uses: osloer-industries/.github/.github/workflows/sonarcloud-zero-issues.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     with:
       project-key: osloer-industries_lunch-money-de-invest-sync
+      ce-task-id: ${{ needs.sonar-analyze.outputs.ce-task-id }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
