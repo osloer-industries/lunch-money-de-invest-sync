@@ -1,4 +1,4 @@
-import { expect, type Mock } from "vitest";
+import type { Mock } from "vitest";
 
 function callArgument(callIndex: number, argIndex: number, mock: Mock): unknown {
   return mock.mock.calls[callIndex]?.[argIndex];
@@ -14,29 +14,27 @@ export function mockCallArgumentAt(mock: Mock, callIndex: number, argIndex: numb
 
 export function expectStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
-    throw new Error("expected string array");
+    throw new TypeError("expected string array");
   }
   for (const entry of value) {
     if (typeof entry !== "string") {
-      throw new Error("expected string array");
+      throw new TypeError("expected string array");
     }
   }
-  expect(value).toEqual(value);
   return value;
 }
 
 export function expectStringRecord(value: unknown): Record<string, string> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("expected string record");
+    throw new TypeError("expected string record");
   }
   const out: Record<string, string> = {};
   for (const [key, entry] of Object.entries(value)) {
     if (typeof entry !== "string") {
-      throw new Error("expected string record");
+      throw new TypeError("expected string record");
     }
     out[key] = entry;
   }
-  expect(out).toEqual(out);
   return out;
 }
 
