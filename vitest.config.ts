@@ -15,7 +15,6 @@ export default defineConfig({
         "src/**/*.test.ts",
         "src/**/*.spec.ts",
         "src/**/parity-fixture.ts",
-        "scripts/**",
       ],
       thresholds: { branches: 80, functions: 80, lines: 80, statements: 80 }
     }
