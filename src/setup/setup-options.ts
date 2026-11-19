@@ -1,6 +1,7 @@
 import type { ParseArgsConfig } from "node:util";
 import { exportTypeSummaryPath, parseCliArgv } from "../shared/cli-args.js";
 import { parseScriptableFlags, scriptableOptionConfig } from "../shared/scriptable-cli.js";
+import { booleanArg, optionalStringArg } from "../shared/parse-args-values.js";
 
 export interface SetupCliOptions {
   readonly nonInteractive: boolean;
@@ -94,29 +95,29 @@ function parsePositiveIntFlag(values: Record<string, unknown>, key: string): num
 export function parseSetupCliOptions(argv: readonly string[]): SetupCliOptions {
   const parsed = parseCliArgv(argv, PARSE_CONFIG, "Invalid setup arguments");
   const scriptable = parseScriptableFlags(argv);
-  const values = parsed.values as Record<string, unknown>;
+  const values: Record<string, unknown> = parsed.values;
   const lunchMoneyAssetId = parsePositiveIntFlag(values, "lunch-money-asset-id");
   const tradeRepublicAssetId = parsePositiveIntFlag(values, "trade-republic-asset-id");
   const scalableAssetId = parsePositiveIntFlag(values, "scalable-asset-id");
   return {
-    nonInteractive: values["non-interactive"] === true,
-    skipBrokerCheck: values["skip-broker-check"] === true,
-    yes: values.yes === true,
-    tradeRepublic: values["trade-republic"] === true,
-    scalableCapital: values["scalable-capital"] === true,
-    owner: typeof values.owner === "string" ? values.owner : null,
+    nonInteractive: booleanArg(values, "non-interactive"),
+    skipBrokerCheck: booleanArg(values, "skip-broker-check"),
+    yes: booleanArg(values, "yes"),
+    tradeRepublic: booleanArg(values, "trade-republic"),
+    scalableCapital: booleanArg(values, "scalable-capital"),
+    owner: optionalStringArg(values, "owner") ?? null,
     lunchMoneyAssetId,
     tradeRepublicAssetId,
     scalableAssetId,
-    portfolioId: typeof values["portfolio-id"] === "string" ? values["portfolio-id"] : null,
+    portfolioId: optionalStringArg(values, "portfolio-id") ?? null,
     tradeRepublicHoldingsAccountId: parsePositiveIntFlag(values, "trade-republic-holdings-account-id"),
     scalableHoldingsAccountId: parsePositiveIntFlag(values, "scalable-holdings-account-id"),
     scalableSavingsAccountId: parsePositiveIntFlag(values, "scalable-savings-account-id"),
-    categories: values.categories === true,
+    categories: booleanArg(values, "categories"),
     exportTypeSummary: exportTypeSummaryPath(values),
-    replaceApiKey: values["replace-api-key"] === true,
-    clearApiKey: values["clear-api-key"] === true,
-    help: values.help === true,
+    replaceApiKey: booleanArg(values, "replace-api-key"),
+    clearApiKey: booleanArg(values, "clear-api-key"),
+    help: booleanArg(values, "help"),
     json: scriptable.flags.json,
     events: scriptable.flags.events,
   };

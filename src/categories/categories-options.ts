@@ -5,6 +5,7 @@ import {
   parseTagMapAssignment,
   scriptableOptionConfig,
 } from "../shared/scriptable-cli.js";
+import { booleanArg, optionalStringArg, stringListArg } from "../shared/parse-args-values.js";
 
 export type CategoriesCommand = "list" | "edit" | "reapply" | "apply" | "list-lunch-money";
 
@@ -86,25 +87,19 @@ export function parseCategoriesCliOptions(argv: readonly string[]): CategoriesCl
   if (positionals.length > 1) {
     throw new Error("Too many arguments — use npm run categories -- list");
   }
-  const values = parsed.values as Record<string, unknown>;
-  const mapValues = Array.isArray(values.map)
-    ? values.map.filter((entry): entry is string => typeof entry === "string")
-    : [];
-  const tagValues = Array.isArray(values.tag)
-    ? values.tag.filter((entry): entry is string => typeof entry === "string")
-    : [];
+  const values: Record<string, unknown> = parsed.values;
   const scriptable = parseScriptableFlags(argv);
   return {
     command,
-    dryRun: values["dry-run"] === true,
-    help: values.help === true,
+    dryRun: booleanArg(values, "dry-run"),
+    help: booleanArg(values, "help"),
     json: scriptable.flags.json,
     events: scriptable.flags.events,
     nonInteractive: scriptable.flags.nonInteractive,
-    applyFromPath: typeof values.from === "string" ? values.from : null,
-    categoryMapAssignments: mapValues,
-    tagMapAssignments: tagValues,
-    yes: values.yes === true,
+    applyFromPath: optionalStringArg(values, "from") ?? null,
+    categoryMapAssignments: stringListArg(values, "map"),
+    tagMapAssignments: stringListArg(values, "tag"),
+    yes: booleanArg(values, "yes"),
   };
 }
 

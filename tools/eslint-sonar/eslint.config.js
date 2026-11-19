@@ -21,6 +21,11 @@ sonarRules["sonarjs/declarations-in-global-scope"] = "off";
 sonarRules["sonarjs/arrow-function-convention"] = "off";
 sonarRules["sonarjs/file-header"] = "off";
 
+const recommendedSonarConfigs = Array.isArray(sonarjs.configs.recommended)
+  ? sonarjs.configs.recommended
+  : [sonarjs.configs.recommended];
+const baseSonarConfig = recommendedSonarConfigs[0] ?? {};
+
 /** @type {import("eslint").Linter.Config[]} */
 export default [
   {
@@ -33,8 +38,10 @@ export default [
     ],
   },
   {
+    ...baseSonarConfig,
     files: ["src/**/*.ts"],
     languageOptions: {
+      ...baseSonarConfig.languageOptions,
       parser: tsParser,
       parserOptions: {
         ecmaVersion: "latest",
@@ -46,7 +53,9 @@ export default [
         NodeJS: "readonly",
       },
     },
-    ...sonarjs.configs.recommended,
-    rules: sonarRules,
+    rules: {
+      ...baseSonarConfig.rules,
+      ...sonarRules,
+    },
   },
 ];

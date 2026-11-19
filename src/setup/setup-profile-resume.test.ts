@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { promptSharedCardDigits, runSavedBrokerProfilesStep } from "./setup-profile-resume.js";
 import type { PromptChoice, SetupFilesystem, SetupPrompter } from "./types.js";
+import { assertDefined } from "../shared/assert.js";
 
 function fakePrompter(
   overrides: {
@@ -16,7 +17,7 @@ function fakePrompter(
     select:
       overrides.select ??
       (<T extends string>(_message: string, choices: readonly PromptChoice<T>[]): Promise<T> =>
-        Promise.resolve((choices[0]?.value ?? "keep") as T)),
+        Promise.resolve(assertDefined(choices[0], "select choice").value)),
     checkbox: vi.fn(),
     search: vi.fn(),
     confirm: vi.fn(),
@@ -50,8 +51,10 @@ describe("runSavedBrokerProfilesStep", () => {
     };
     const result = await runSavedBrokerProfilesStep(
       fakePrompter({
-        select: <T extends string>(_message: string, _choices: readonly PromptChoice<T>[]): Promise<T> =>
-          Promise.resolve("keep" as T),
+        select: <T extends string>(_message: string, choices: readonly PromptChoice<T>[]): Promise<T> => {
+          const keep = choices.find((choice) => choice.value === "keep");
+          return Promise.resolve(assertDefined(keep, "keep choice").value);
+        },
       }),
       fs,
       vi.fn(),
@@ -66,8 +69,10 @@ describe("runSavedBrokerProfilesStep", () => {
 describe("promptSharedCardDigits", () => {
   it("reuses saved digits when keeping", async () => {
     const prompter = fakePrompter({
-      select: <T extends string>(_message: string, _choices: readonly PromptChoice<T>[]): Promise<T> =>
-        Promise.resolve("keep" as T),
+      select: <T extends string>(_message: string, choices: readonly PromptChoice<T>[]): Promise<T> => {
+        const keep = choices.find((choice) => choice.value === "keep");
+        return Promise.resolve(assertDefined(keep, "keep choice").value);
+      },
     });
     const digits = await promptSharedCardDigits(prompter, ["1234", "5678"], (raw) => raw.split(","), vi.fn());
     expect(digits).toEqual(["1234", "5678"]);

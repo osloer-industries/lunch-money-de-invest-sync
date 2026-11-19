@@ -17,13 +17,13 @@ concurrency:
 
 jobs:
   workflow-security:
-    uses: osloer-industries/.github/.github/workflows/workflow-security.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    uses: osloer-industries/.github/.github/workflows/workflow-security.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     permissions:
       contents: read
       actions: read
 
   quality:
-    uses: osloer-industries/.github/.github/workflows/node-npm-quality.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    uses: osloer-industries/.github/.github/workflows/node-npm-quality.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     permissions:
       contents: read
 
@@ -99,14 +99,14 @@ jobs:
       - run: npm run test:e2e
 
   codeql:
-    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    uses: osloer-industries/.github/.github/workflows/codeql-javascript-typescript.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     permissions:
       contents: read
       actions: read
       security-events: write
 
   sonar-analyze:
-    uses: osloer-industries/.github/.github/workflows/sonarqube-cloud-node.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    uses: osloer-industries/.github/.github/workflows/sonarqube-cloud-node.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     permissions:
       contents: read
       pull-requests: read
@@ -119,7 +119,7 @@ jobs:
   sonar-zero-open-issues:
     if: github.event_name == 'pull_request'
     needs: sonar-analyze
-    uses: osloer-industries/.github/.github/workflows/sonarcloud-zero-issues.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    uses: osloer-industries/.github/.github/workflows/sonarcloud-zero-issues.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     with:
       project-key: osloer-industries_lunch-money-de-invest-sync
     secrets:
@@ -139,6 +139,6 @@ jobs:
       - sonar-analyze
       - sonar-zero-open-issues
     if: always()
-    uses: osloer-industries/.github/.github/workflows/ci-passed.yml@2359eb885c7c2ef7a2cb966348076392809b0f03 # v0.1.5
+    uses: osloer-industries/.github/.github/workflows/ci-passed.yml@a6ee91211fd9ba096ec141bacdb67985a82b6767 # v0.1.7
     with:
       needs-json: ${{ toJSON(needs) }}

@@ -68,15 +68,16 @@ describe("toInsertPayload", () => {
 
 describe("summarizeInsertResult", () => {
   it("counts inserted and skipped transactions", () => {
-    const summary = summarizeInsertResult({
-      transactions: [{ id: 1 } as never, { id: 2 } as never],
+    const response: Parameters<typeof summarizeInsertResult>[0] = {
+      transactions: [{ id: 1 }, { id: 2 }],
       skipped_duplicates: [
         {
           reason: "duplicate_external_id",
-          request_transaction: { external_id: "tr:evt-9" } as never,
+          request_transaction: { external_id: "tr:evt-9" },
         },
       ],
-    });
+    };
+    const summary = summarizeInsertResult(response);
     expect(summary).toEqual({
       insertedCount: 2,
       skippedCount: 1,
@@ -103,10 +104,11 @@ describe("upsertTransactions", () => {
   });
 
   it("sends the built payload and summarizes the response", async () => {
-    const create = vi.fn().mockResolvedValue({
-      transactions: [{ id: 1 } as never],
+    const createResponse: Parameters<typeof summarizeInsertResult>[0] = {
+      transactions: [{ id: 1 }],
       skipped_duplicates: [],
-    });
+    };
+    const create = vi.fn().mockResolvedValue(createResponse);
     const client: TransactionsApi = { transactions: { create } };
     const summary = await upsertTransactions(client, [tx()], 42, new Map());
     expect(create).toHaveBeenCalledWith(toInsertPayload([tx()], 42, new Map()));

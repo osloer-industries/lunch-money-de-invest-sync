@@ -20,6 +20,7 @@ import {
   parityDryRunCollectors,
   paritySyncConfig,
 } from "../dry-run-review/parity-fixture.js";
+import { stubCategoriesCliClient } from "../test-support/lunch-money-stubs.js";
 
 function parseLastStdoutJson(stdout: ReturnType<typeof vi.spyOn>, index = 0): unknown {
   const line = String(stdout.mock.calls[index]?.[0]);
@@ -53,7 +54,7 @@ describe("scriptable JSON contract", () => {
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     await runSyncCli(["--dry-run", "--json", "--non-interactive"], {
       readConfig: () => paritySyncConfig(),
-      createClient: () => parityDryRunClient() as never,
+      createClient: () => parityDryRunClient(),
       collectors: parityDryRunCollectors(),
     });
     const parsed = assertScriptableJsonContract(
@@ -70,7 +71,7 @@ describe("scriptable JSON contract", () => {
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     await runSyncCli(["--json", "--non-interactive"], {
       readConfig: () => paritySyncConfig(),
-      createClient: () => parityDryRunClient() as never,
+      createClient: () => parityDryRunClient(),
       collectors: parityDryRunCollectors(),
     });
     const live = assertScriptableJsonContract(syncLiveJsonSchema, parseLastStdoutJson(stdout), "sync live");
@@ -94,20 +95,20 @@ describe("scriptable JSON contract", () => {
       writeText: vi.fn(),
       chmod: vi.fn(),
     };
-    const client = {
+    const client = stubCategoriesCliClient({
       categories: {
         getAll: vi.fn().mockResolvedValue([
           { id: 9, name: "Transfer", is_income: false, exclude_from_budget: false, exclude_from_totals: false },
         ]),
       },
       tags: { getAll: vi.fn().mockResolvedValue([{ id: 2, name: "bank" }]) },
-    };
+    });
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await runCategoriesCli(["list", "--json"], {
       filesystem,
       readConfig: () => config,
-      createClient: () => client as never,
+      createClient: () => client,
     });
     const list = assertScriptableJsonContract(
       categoriesListJsonSchema,
@@ -119,7 +120,7 @@ describe("scriptable JSON contract", () => {
     await runCategoriesCli(["list-lunch-money", "--json"], {
       filesystem,
       readConfig: () => config,
-      createClient: () => client as never,
+      createClient: () => client,
     });
     const catalog = assertScriptableJsonContract(
       categoriesListLunchMoneyJsonSchema,
@@ -131,7 +132,7 @@ describe("scriptable JSON contract", () => {
     await runCategoriesCli(["apply", "--non-interactive", "--map", "buy=9", "--json"], {
       filesystem,
       readConfig: () => config,
-      createClient: () => client as never,
+      createClient: () => client,
     });
     const applied = assertScriptableJsonContract(
       categoriesApplyJsonSchema,

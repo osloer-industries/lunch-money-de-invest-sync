@@ -29,8 +29,9 @@ describe("sync CLI entry", () => {
   let tempDir: string | undefined;
 
   afterEach(async () => {
-    if (tempDir) {
-      await import("node:fs/promises").then(({ rm }) => rm(tempDir!, { recursive: true, force: true }));
+    if (tempDir !== undefined) {
+      const dir = tempDir;
+      await import("node:fs/promises").then(({ rm }) => rm(dir, { recursive: true, force: true }));
       tempDir = undefined;
     }
   });

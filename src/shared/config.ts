@@ -95,7 +95,7 @@ export function resolveConfigFilePath(configPath = CONFIG_BASENAME): string {
 
 /** Parse JSON text without prototype-pollution keys (see secure-json-parse). */
 export function parseJsonText(text: string): unknown {
-  return parseJson(text, undefined, { protoAction: "remove", constructorAction: "remove" }) as unknown;
+  return parseJson(text, undefined, { protoAction: "remove", constructorAction: "remove" });
 }
 
 const jsonTextSchema = z.string().transform((text, ctx): unknown => {

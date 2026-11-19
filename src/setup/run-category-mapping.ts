@@ -326,8 +326,7 @@ async function pickCategoryId(
   client: CategoryMappingSetupClient,
   group: CategoryPromptGroup,
 ): Promise<number | undefined> {
-  const categories = await client.categories.getAll();
-  const categoryRows = categories as readonly SetupCategoryRow[];
+  const categoryRows = await client.categories.getAll();
   printGroupGuidance(prompter, group, categoryRows);
   const match = findGroupMatch(prompter, group, categoryRows);
   const choice = await prompter.search(
@@ -346,7 +345,7 @@ async function pickCategoryId(
   }
   const categoryId = parsePromptPositiveInt(choice, {
     entityLabel: "Category id",
-    exists: (id) => categories.some((category) => category.id === id),
+    exists: (id) => categoryRows.some((category) => category.id === id),
   });
   const picked = categoryRows.find((category) => category.id === categoryId);
   return validateExistingCategoryPick(prompter, categoryId, picked, group);

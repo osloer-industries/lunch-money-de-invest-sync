@@ -9,7 +9,15 @@ describe("test timezone environment", () => {
   it("honors TZ from the process environment and defaults to UTC", () => {
     const tz = process.env.TZ ?? "";
     expect(Object.keys(expectedIsoForLocalMidnight)).toContain(tz);
-    const expectedIso = expectedIsoForLocalMidnight[tz as keyof typeof expectedIsoForLocalMidnight];
+    let expectedIso: string | undefined;
+    if (tz === "UTC") {
+      expectedIso = expectedIsoForLocalMidnight.UTC;
+    } else if (tz === "Europe/Berlin") {
+      expectedIso = expectedIsoForLocalMidnight["Europe/Berlin"];
+    }
+    if (expectedIso === undefined) {
+      throw new Error(`unexpected TZ value in tests: ${tz}`);
+    }
     expect(new Date(2026, 0, 15, 0, 0, 0, 0).toISOString()).toBe(expectedIso);
   });
 });

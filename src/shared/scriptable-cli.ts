@@ -1,5 +1,7 @@
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { z } from "zod";
+import { assertDefined } from "./assert.js";
+import { booleanArg } from "./parse-args-values.js";
 
 export interface ScriptableCliFlags {
   readonly json: boolean;
@@ -26,12 +28,12 @@ export function parseScriptableFlags(argv: readonly string[]): {
   readonly rest: readonly string[];
 } {
   const parsed = parseArgs({ ...SCRIPTABLE_PARSE_CONFIG, args: [...argv] });
-  const values = parsed.values as Record<string, unknown>;
+  const values: Record<string, unknown> = parsed.values;
   return {
     flags: {
-      json: values.json === true,
-      events: values.events === true,
-      nonInteractive: values["non-interactive"] === true,
+      json: booleanArg(values, "json"),
+      events: booleanArg(values, "events"),
+      nonInteractive: booleanArg(values, "non-interactive"),
     },
     rest: parsed.positionals,
   };
@@ -83,7 +85,7 @@ export type MappingFilePayload = z.infer<typeof mappingFileSchema>;
 export function parseMappingFileJson(text: string, sourceLabel: string): MappingFilePayload {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text) as unknown;
+    parsed = JSON.parse(text);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid JSON in ${sourceLabel}: ${message}`, { cause: error });
@@ -105,7 +107,8 @@ export function parseCategoryMapAssignment(raw: string): { readonly type: string
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
     throw new Error(`Invalid category id in --map "${raw}"`);
   }
-  return { type: match[1]!.trim(), categoryId };
+  const canonicalType = assertDefined(match[1], "category map canonical type").trim();
+  return { type: canonicalType, categoryId };
 }
 
 /** Parses `--tag canonicalType=tag-one,tag-two` assignments. */
@@ -114,9 +117,11 @@ export function parseTagMapAssignment(raw: string): { readonly type: string; rea
   if (!match) {
     throw new Error(`Invalid --tag value "${raw}" — use canonicalType=tag-one,tag-two`);
   }
-  const tags = match[2]!
+  const tagSegment = assertDefined(match[2], "tag map tag list");
+  const canonicalType = assertDefined(match[1], "tag map canonical type").trim();
+  const tags = tagSegment
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
-  return { type: match[1]!.trim(), tags };
+  return { type: canonicalType, tags };
 }

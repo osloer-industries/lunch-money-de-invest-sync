@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assertDefined } from "../shared/assert.js";
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import { toCurrency } from "../shared/transaction.js";
 import { classifyScalableSummary } from "../shared/broker-type-classification.js";
@@ -82,7 +83,7 @@ describe("Trade Republic mapper → Lunch Money v2 insert amount", () => {
   it.each(cases)("$label", ({ event, expectedV2 }) => {
     const mapped = mapTradeRepublicEvent(event);
     expect(mapped).not.toBeNull();
-    expect(v2AmountFromCanonical(mapped!)).toBe(expectedV2);
+    expect(v2AmountFromCanonical(assertDefined(mapped, "mapped trade republic event"))).toBe(expectedV2);
   });
 });
 
@@ -104,7 +105,7 @@ describe("Scalable Capital mapper → Lunch Money v2 insert amount", () => {
   it.each(cases)("$label", ({ row, expectedV2 }) => {
     const mapped = mapScalableCapitalTransaction(row);
     expect(mapped).not.toBeNull();
-    expect(v2AmountFromCanonical(mapped!)).toBe(expectedV2);
+    expect(v2AmountFromCanonical(assertDefined(mapped, "mapped trade republic event"))).toBe(expectedV2);
   });
 });
 
@@ -126,14 +127,14 @@ function canonicalFromScalableSummary(
     currency: "EUR",
     last_event_datetime: "2026-01-01T00:00:00Z",
   });
-  expect(observed).not.toBeNull();
+  const defined = assertDefined(observed, "classified scalable summary");
   return {
     externalId: `scalable-capital:${id}`,
-    date: observed!.date,
-    amount: observed!.amount,
-    currency: toCurrency(observed!.currency),
-    payee: observed!.payee,
-    canonicalType: observed!.canonicalType,
+    date: defined.date,
+    amount: defined.amount,
+    currency: toCurrency(defined.currency),
+    payee: defined.payee,
+    canonicalType: defined.canonicalType,
     source: "scalable-capital",
   };
 }

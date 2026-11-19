@@ -4,8 +4,8 @@ Shared GitHub Actions behavior lives in [osloer-industries/.github](https://gith
 This repository keeps **thin caller workflows** under `.github/workflows/` and pins each org `uses:` ref to a full
 commit SHA with a `# v0.x.y` version comment (never `# main`). The org contract, input defaults, and copy-paste YAML
 live in
-[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/2359eb885c7c2ef7a2cb966348076392809b0f03/docs/consuming-workflows.md)
-on that repository (**v0.1.5**: `2359eb885c7c2ef7a2cb966348076392809b0f03`).
+[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/a6ee91211fd9ba096ec141bacdb67985a82b6767/docs/consuming-workflows.md)
+on that repository (**v0.1.7**: `a6ee91211fd9ba096ec141bacdb67985a82b6767`).
 
 Do not pass a `reusables-ref` input. Reusables that need their own scripts check out
 `osloer-industries/.github` at `job.workflow_sha` (the commit in the `uses:` pin).

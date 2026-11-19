@@ -10,6 +10,8 @@ import {
   parityDryRunCollectors,
   paritySyncConfig,
 } from "../dry-run-review/parity-fixture.js";
+import { stubCategoriesCliClient } from "../test-support/lunch-money-stubs.js";
+import { assertDefined } from "./assert.js";
 
 const runSetup = vi.hoisted(() => vi.fn());
 const runCategoryMappingSetup = vi.hoisted(() => vi.fn());
@@ -90,7 +92,7 @@ describe("scriptable CLI no-prompt guard", () => {
         }),
       ).rejects.toThrow(/requires --owner/);
     });
-    const payload = JSON.parse(String(stdout.mock.calls.at(-1)?.[0])) as unknown;
+    const payload: unknown = JSON.parse(String(assertDefined(stdout.mock.calls.at(-1)?.[0], "stdout error json")));
     expect(scriptableCliErrorSchema.safeParse(payload).success).toBe(true);
     expect(prompter.confirm).not.toHaveBeenCalled();
     stdout.mockRestore();
@@ -103,7 +105,7 @@ describe("scriptable CLI no-prompt guard", () => {
     await withStdinIsTTY(false, () =>
       runSyncCli(["--dry-run", "--json", "--non-interactive"], {
         readConfig: () => paritySyncConfig(),
-        createClient: () => parityDryRunClient() as never,
+        createClient: () => parityDryRunClient(),
         collectors: parityDryRunCollectors(),
         prompter,
         filesystem: stubFilesystem(),
@@ -130,12 +132,12 @@ describe("scriptable CLI no-prompt guard", () => {
         runCategoriesCli(["apply", "--json", "--non-interactive"], {
           filesystem: stubFilesystem(),
           readConfig: () => config,
-          createClient: () => ({}) as never,
+          createClient: () => stubCategoriesCliClient(),
           prompter,
         }),
       ).rejects.toThrow(/apply requires/);
     });
-    const payload = JSON.parse(String(stdout.mock.calls[0]?.[0])) as unknown;
+    const payload: unknown = JSON.parse(String(assertDefined(stdout.mock.calls[0]?.[0], "stdout apply error")));
     expect(scriptableCliErrorSchema.safeParse(payload).success).toBe(true);
     expect(prompter.confirm).not.toHaveBeenCalled();
     stdout.mockRestore();

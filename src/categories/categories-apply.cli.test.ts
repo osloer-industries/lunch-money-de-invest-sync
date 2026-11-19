@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SetupFilesystem } from "../setup/types.js";
 import { runCategoriesCli } from "./run-categories-cli.js";
 import type { SyncConfig } from "../shared/config.js";
+import { stubCategoriesCliClient } from "../test-support/lunch-money-stubs.js";
 
 const config: SyncConfig = {
   lunchMoneyApiKey: "k",
@@ -29,7 +30,7 @@ describe("categories apply", () => {
     await runCategoriesCli(["apply", "--non-interactive", "--map", "deposit=9", "--json"], {
       filesystem: fs,
       readConfig: () => ({ ...config, categoryMap: { deposit: 9 } }),
-      createClient: () => ({}) as never,
+      createClient: () => stubCategoriesCliClient(),
     });
     expect(writeText).not.toHaveBeenCalled();
   });
@@ -40,7 +41,7 @@ describe("categories apply", () => {
     await runCategoriesCli(["apply", "--non-interactive", "--map", "deposit=9", "--json"], {
       filesystem: filesystem(writeText),
       readConfig: () => config,
-      createClient: () => ({}) as never,
+      createClient: () => stubCategoriesCliClient(),
     });
     expect(writeText).toHaveBeenCalled();
     expect(stdout.mock.calls.some((call) => String(call[0]).includes('"changed":true'))).toBe(true);

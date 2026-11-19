@@ -1,4 +1,5 @@
 import path from "node:path";
+import { assertDefined } from "../shared/assert.js";
 import { readConfigJsonObject, storedMapsFromConfigObject, writeConfigJsonObject } from "./config-json.js";
 import { loadConfig } from "../shared/config.js";
 import { ensureReadableConfigForSetup } from "./corrupt-config-recovery.js";
@@ -685,7 +686,7 @@ function nonInteractiveProfiles(options: SetupCliOptions): {
       ? [
           {
             owner: options.owner,
-            lunchMoneyAssetId: tradeAsset!,
+            lunchMoneyAssetId: assertDefined(tradeAsset, "trade republic lunch money asset id"),
             ...holdingsAccountIdField(options.tradeRepublicHoldingsAccountId),
             pytrCommand: ["pytr"],
           },
@@ -695,7 +696,7 @@ function nonInteractiveProfiles(options: SetupCliOptions): {
       ? [
           {
             owner: options.owner,
-            lunchMoneyAssetId: scalableAsset!,
+            lunchMoneyAssetId: assertDefined(scalableAsset, "scalable capital lunch money asset id"),
             ...holdingsAccountIdField(options.scalableHoldingsAccountId),
             ...savingsAccountIdField(options.scalableSavingsAccountId),
             ...(options.portfolioId ? { portfolioId: options.portfolioId } : {}),
