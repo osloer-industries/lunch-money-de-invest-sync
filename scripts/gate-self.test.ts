@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,11 +56,28 @@ function runOxlintOnFile(filePath: string): CommandResult {
   return execCommand(oxlintExecutable, ["-c", oxlintConfig, filePath], repoRoot);
 }
 
+const eslintSonarBin = join(repoRoot, "tools", "eslint-sonar", "node_modules", "eslint", "bin", "eslint.js");
+
+function ensureEslintSonarReady(): void {
+  if (existsSync(eslintSonarBin)) {
+    return;
+  }
+  const install = execCommand(
+    "npm",
+    ["ci", "--ignore-scripts", "--prefix", join(repoRoot, "tools", "eslint-sonar")],
+    repoRoot,
+  );
+  if (install.status !== 0) {
+    throw new Error(`eslint-sonar install failed (status ${install.status}):\n${install.output}`);
+  }
+  if (!existsSync(eslintSonarBin)) {
+    throw new Error(`missing eslint binary at ${eslintSonarBin}`);
+  }
+}
+
 function resolveEslintBin(): string {
-  const sonarPkgJson = join(repoRoot, "tools/eslint-sonar/package.json");
-  const requireFromSonarPkg = createRequire(sonarPkgJson);
-  const eslintPackageRoot = resolve(requireFromSonarPkg.resolve("eslint/package.json"), "..");
-  return join(eslintPackageRoot, "bin", "eslint.js");
+  ensureEslintSonarReady();
+  return eslintSonarBin;
 }
 
 function runSonarjsOnFile(filePath: string): CommandResult {
