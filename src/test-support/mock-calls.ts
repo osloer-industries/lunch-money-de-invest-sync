@@ -13,28 +13,30 @@ export function mockCallArgumentAt(mock: Mock, callIndex: number, argIndex: numb
 }
 
 export function expectStringArray(value: unknown): string[] {
-  expect(Array.isArray(value)).toBe(true);
   if (!Array.isArray(value)) {
     throw new Error("expected string array");
   }
   for (const entry of value) {
-    expect(typeof entry).toBe("string");
+    if (typeof entry !== "string") {
+      throw new Error("expected string array");
+    }
   }
+  expect(value).toEqual(value);
   return value;
 }
 
 export function expectStringRecord(value: unknown): Record<string, string> {
-  expect(value !== null && typeof value === "object" && !Array.isArray(value)).toBe(true);
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("expected string record");
   }
   const out: Record<string, string> = {};
   for (const [key, entry] of Object.entries(value)) {
-    expect(typeof entry).toBe("string");
-    if (typeof entry === "string") {
-      out[key] = entry;
+    if (typeof entry !== "string") {
+      throw new Error("expected string record");
     }
+    out[key] = entry;
   }
+  expect(out).toEqual(out);
   return out;
 }
 

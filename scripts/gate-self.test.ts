@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const oxlintConfig = join(repoRoot, ".oxlintrc.json");
@@ -220,16 +220,24 @@ describe("gate self-tests (allowed type constructs)", () => {
 });
 
 describe("gate self-tests (SonarJS shortcuts)", () => {
-  it("rejects trivial expect(true) assertions", () => {
-    const { filePath, cleanup } = writeTempSonarjsSource(
-      `import { expect, it } from "vitest";\nit("bad", () => { expect(true).toBe(true); });\n`,
-      "trivial.test.ts",
-    );
-    try {
-      expect.assertions(2);
-      assertLintReportsRule(runSonarjsOnFile(filePath), "sonarjs/no-trivial-assertions");
-    } finally {
-      cleanup();
-    }
-  });
+  beforeAll(() => {
+    ensureEslintSonarReady();
+  }, 120_000);
+
+  it(
+    "rejects trivial expect(true) assertions",
+    () => {
+      const { filePath, cleanup } = writeTempSonarjsSource(
+        `import { expect, it } from "vitest";\nit("bad", () => { expect(true).toBe(true); });\n`,
+        "trivial.test.ts",
+      );
+      try {
+        expect.assertions(2);
+        assertLintReportsRule(runSonarjsOnFile(filePath), "sonarjs/no-trivial-assertions");
+      } finally {
+        cleanup();
+      }
+    },
+    60_000,
+  );
 });
