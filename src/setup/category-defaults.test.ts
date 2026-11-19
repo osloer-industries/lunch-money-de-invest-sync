@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SUGGESTED_CATEGORIES, SUGGESTED_TAGS } from "./category-defaults.js";
 import { formatGroupLabel, groupTypesForCategoryPrompts, parseTagList } from "./run-category-mapping.js";
+import { canonicalTypeSchema } from "../shared/canonical-type.js";
 
 describe("category defaults", () => {
   it("suggests plain budget Income for interest and dividend", () => {
@@ -68,7 +69,7 @@ describe("groupTypesForCategoryPrompts", () => {
   });
 
   it("rejects non-canonical types", () => {
-    expect(() => groupTypesForCategoryPrompts(["bogus" as never])).toThrow();
+    expect(() => canonicalTypeSchema.parse("bogus")).toThrow();
   });
 
   it("labels single and grouped types", () => {

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { assertDefined } from "./assert.js";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -42,8 +43,10 @@ export class SubprocessTimeoutError extends Error {
 }
 
 function shouldPassThroughEnvKey(key: string): boolean {
-  if ((PASSTHROUGH_ENV_KEYS as readonly string[]).includes(key)) {
-    return true;
+  for (const allowed of PASSTHROUGH_ENV_KEYS) {
+    if (key === allowed) {
+      return true;
+    }
   }
   return key.startsWith("UV_") || key.startsWith("XDG_");
 }
@@ -189,7 +192,7 @@ export function createArgvPrefixCliRunner(
   return {
     run(subcommandArgv, extraEnv, options) {
       const resolved = resolvePrefix(command);
-      const executable = resolved[0]!;
+      const executable = assertDefined(resolved[0], "CLI argv prefix executable");
       const argv = [...resolved.slice(1), ...subcommandArgv];
       const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
       return run(executable, argv, extraEnv, { ...options, timeoutMs });

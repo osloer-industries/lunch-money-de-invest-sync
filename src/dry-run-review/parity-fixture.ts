@@ -1,14 +1,32 @@
-import type { InsertTransactionsResponse } from "@lunch-money/lunch-money-js-v2";
+import type { Category, InsertTransactionsResponse } from "@lunch-money/lunch-money-js-v2";
 import type { BrokerBalanceSnapshot } from "../shared/broker-balances.js";
 import type { SyncConfig } from "../shared/config.js";
 import type { CanonicalTransaction } from "../shared/transaction.js";
-import type { ManualAccountBalanceApi } from "../lunch-money/manual-account-balance.js";
-import type { TagsApi } from "../lunch-money/client.js";
 import type { DryRunCollectionClient } from "./collect.js";
+import type { LunchMoneySyncClient } from "../sync.js";
 
-export type ParityDryRunClient = DryRunCollectionClient & TagsApi & ManualAccountBalanceApi;
+export type ParityDryRunClient = LunchMoneySyncClient;
 
 /** Shared broker + Lunch Money fake data for terminal vs JSON dry-run parity tests. */
+function parityCategory(id: number, name: string): Category {
+  return {
+    id,
+    name,
+    description: null,
+    is_income: false,
+    exclude_from_budget: false,
+    exclude_from_totals: false,
+    updated_at: "2024-01-01T00:00:00.000Z",
+    created_at: "2024-01-01T00:00:00.000Z",
+    group_id: null,
+    is_group: false,
+    archived: false,
+    archived_at: null,
+    collapsed: false,
+    order: null,
+  };
+}
+
 export const parityTradeRepublicTransactions: readonly CanonicalTransaction[] = [
   {
     externalId: "trade-republic:dep-1",
@@ -116,10 +134,10 @@ export function parityDryRunCollectionClient(): DryRunCollectionClient {
 }
 
 /** Wider stub for `runSync` / CLI tests (structural superset of the dry-run client). */
-export function parityDryRunClient(): ParityDryRunClient {
-  const base = parityDryRunCollectionClient();
+export function parityDryRunClient(): LunchMoneySyncClient {
+  const collection = parityDryRunCollectionClient();
   return {
-    ...base,
+    ...collection,
     tags: {
       getAll: () => Promise.resolve([]),
       create: (data) => Promise.resolve({ id: 1, name: data.name }),
@@ -127,6 +145,13 @@ export function parityDryRunClient(): ParityDryRunClient {
     manualAccounts: {
       get: () => Promise.resolve({ balance: "0", currency: "eur" }),
       update: () => Promise.resolve({}),
+    },
+    categories: {
+      getAll: () => Promise.resolve([parityCategory(11, "Transfer"), parityCategory(22, "Investments")]),
+      get: () => Promise.reject(new Error("not implemented in parity fixture")),
+      create: () => Promise.reject(new Error("not implemented in parity fixture")),
+      update: () => Promise.reject(new Error("not implemented in parity fixture")),
+      delete: () => Promise.reject(new Error("not implemented in parity fixture")),
     },
   };
 }

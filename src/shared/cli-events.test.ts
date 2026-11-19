@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assertDefined } from "./assert.js";
 import { createNdjsonEventWriter, envelopeBrokerLoginEvent, mergeBrokerLoginSinks } from "./cli-events.js";
 
 describe("cli-events", () => {
@@ -7,10 +8,19 @@ describe("cli-events", () => {
     const emit = createNdjsonEventWriter((line) => lines.push(line));
     emit({ kind: "broker_login", broker: "trade-republic", phase: "waiting_for_app_approval" });
     expect(lines).toHaveLength(1);
-    const parsed = JSON.parse(lines[0]!) as { event: string; data: { phase: string } };
-    expect(parsed.event).toBe("broker_login");
-    expect(parsed.data.phase).toBe("waiting_for_app_approval");
-    expect(envelopeBrokerLoginEvent(parsed.data as never).event).toBe("broker_login");
+    const line = assertDefined(lines[0], "NDJSON line");
+    const parsed: unknown = JSON.parse(line);
+    expect(parsed).toMatchObject({
+      event: "broker_login",
+      data: { phase: "waiting_for_app_approval" },
+    });
+    expect(
+      envelopeBrokerLoginEvent({
+        kind: "broker_login",
+        broker: "trade-republic",
+        phase: "waiting_for_app_approval",
+      }).event,
+    ).toBe("broker_login");
   });
 
   it("merges multiple sinks", () => {

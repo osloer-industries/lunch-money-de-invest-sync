@@ -14,7 +14,8 @@ import {
   paritySyncConfig,
   parityTradeRepublicBalances,
 } from "./parity-fixture.js";
-import { runSync, type BrokerCollectors, type LunchMoneySyncClient } from "../sync.js";
+import { runSync, type BrokerCollectors } from "../sync.js";
+import type { SyncBroker } from "../sync-options.js";
 import type { SyncRunJsonResult } from "../sync-result.js";
 
 function stubPrompter(overrides: Partial<SetupPrompter> = {}): SetupPrompter {
@@ -103,11 +104,12 @@ function assertJsonMatchesReview(jsonResult: SyncRunJsonResult, review: DryRunRe
 describe("dry-run terminal and JSON parity", () => {
   it("reports the same metrics from runDryRunCollection, terminal review, and sync --dry-run --json", async () => {
     const config = paritySyncConfig();
-    const client = parityDryRunClient() as LunchMoneySyncClient;
-    const collectors = parityDryRunCollectors();
+    const client = parityDryRunClient();
+    const collectors: BrokerCollectors = parityDryRunCollectors();
+    const includeBrokers = new Set<SyncBroker>(["trade-republic", "scalable-capital"]);
     const selection = {
-      includeBrokers: new Set(["trade-republic", "scalable-capital"] as const),
-      owners: [] as string[],
+      includeBrokers,
+      owners: [],
     };
 
     const review = await runDryRunCollection(config, client, collectors, selection);
@@ -132,7 +134,7 @@ describe("dry-run terminal and JSON parity", () => {
     const thresholdExceeded = dryRunAggregateUncategorisedShareExceedsThreshold(review);
     assertTerminalMatchesReview(print, review, thresholdExceeded);
 
-    const jsonResult = await runSync(config, client, collectors as BrokerCollectors, () => {}, {
+    const jsonResult = await runSync(config, client, collectors, () => {}, {
       includeBrokers: selection.includeBrokers,
       owners: selection.owners,
       dryRun: true,

@@ -7,6 +7,7 @@ import {
   type SetupCategoryRow,
 } from "./category-matching.js";
 import { SUGGESTED_CATEGORIES } from "./category-defaults.js";
+import { assertDefined } from "../shared/assert.js";
 
 function row(overrides: Partial<SetupCategoryRow> & Pick<SetupCategoryRow, "id" | "name">): SetupCategoryRow {
   return {
@@ -24,7 +25,7 @@ describe("category-matching", () => {
     const category = row({ id: 1, name: "Savings", exclude_from_budget: false, exclude_from_totals: false });
     const template = SUGGESTED_CATEGORIES.deposit;
     expect(template).toBeDefined();
-    expect(categoryFlagsMatchTemplate(category, template!)).toBe(false);
+    expect(categoryFlagsMatchTemplate(category, assertDefined(template, "deposit template"))).toBe(false);
   });
   it("prefers Payment, Transfer over a bare Transfer name", () => {
     const categories = [
@@ -40,7 +41,7 @@ describe("category-matching", () => {
     expect(suggestion).toBeDefined();
     const { category, warnedMissingExclusion } = findSuggestedCategoryMatch(
       categories,
-      suggestion!,
+      assertDefined(suggestion, "deposit suggestion"),
       "deposit",
     );
     expect(category?.id).toBe(42);
@@ -71,7 +72,7 @@ describe("category-matching", () => {
     expect(suggestion).toBeDefined();
     const { category, warnedMissingExclusion } = findSuggestedCategoryMatch(
       categories,
-      suggestion!,
+      assertDefined(suggestion, "dividend suggestion"),
       "dividend",
     );
     expect(category?.id).toBe(10);
@@ -84,8 +85,12 @@ describe("category-matching", () => {
     ];
     const suggestion = SUGGESTED_CATEGORIES.transfer;
     expect(suggestion).toBeDefined();
-    const { warnedMissingExclusion } = findSuggestedCategoryMatch(categories, suggestion!, "transfer");
+    const { warnedMissingExclusion } = findSuggestedCategoryMatch(
+      categories,
+      assertDefined(suggestion, "transfer suggestion"),
+      "transfer",
+    );
     expect(warnedMissingExclusion).toBe(true);
-    expect(transferCategoryMissingExclusionFlags(categories[0]!)).toBe(true);
+    expect(transferCategoryMissingExclusionFlags(assertDefined(categories[0], "transfer category"))).toBe(true);
   });
 });

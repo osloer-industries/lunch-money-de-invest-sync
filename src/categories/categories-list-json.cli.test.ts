@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { SetupFilesystem } from "../setup/types.js";
 import { runCategoriesCli } from "./run-categories-cli.js";
 import type { SyncConfig } from "../shared/config.js";
+import { stubCategoriesCliClient } from "../test-support/lunch-money-stubs.js";
+import { assertDefined } from "../shared/assert.js";
 
 const config: SyncConfig = {
   lunchMoneyApiKey: "k",
@@ -28,9 +30,9 @@ describe("categories list --json", () => {
       filesystem: filesystem(),
       readConfig: () => config,
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           categories: { getAll: vi.fn().mockResolvedValue([{ id: 9, name: "Transfer" }]) },
-        }) as never,
+        }),
     });
     const line = String(stdout.mock.calls[0]?.[0]);
     expect(line).toContain('"canonicalType":"deposit"');
@@ -43,12 +45,29 @@ describe("categories list --json", () => {
       filesystem: filesystem(),
       readConfig: () => config,
       createClient: () =>
-        ({
-          categories: { getAll: vi.fn().mockResolvedValue([{ id: 1, name: "Income", is_income: true, exclude_from_budget: false, exclude_from_totals: false }]) },
+        stubCategoriesCliClient({
+          categories: {
+            getAll: vi
+              .fn()
+              .mockResolvedValue([
+                {
+                  id: 1,
+                  name: "Income",
+                  is_income: true,
+                  exclude_from_budget: false,
+                  exclude_from_totals: false,
+                },
+              ]),
+          },
           tags: { getAll: vi.fn().mockResolvedValue([{ id: 2, name: "bank" }]) },
-        }) as never,
+        }),
     });
-    const parsed = JSON.parse(String(stdout.mock.calls[0]?.[0])) as { tags: unknown[] };
+    const firstStdout = assertDefined(stdout.mock.calls[0]?.[0], "stdout json line");
+    const parsed: unknown = JSON.parse(String(firstStdout));
+    expect(parsed).toMatchObject({ tags: expect.any(Array) });
+    if (typeof parsed !== "object" || parsed === null || !("tags" in parsed) || !Array.isArray(parsed.tags)) {
+      throw new Error("expected tags array in stdout json");
+    }
     expect(parsed.tags).toHaveLength(1);
     stdout.mockRestore();
   });

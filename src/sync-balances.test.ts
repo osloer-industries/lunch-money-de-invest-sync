@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { requireMockFunction } from "./test-support/mock-calls.js";
 import { syncBrokerBalances, type BalanceSyncParams } from "./sync-balances.js";
 import type { BrokerBalanceSnapshot } from "./shared/broker-balances.js";
 
@@ -17,7 +18,7 @@ function fakeClient(balances: Record<number, string> = {}, currency = "eur") {
 
 function params(overrides: Partial<BalanceSyncParams> & { snapshot: BrokerBalanceSnapshot }) {
   const lines: string[] = [];
-  const client = (overrides.client ?? fakeClient()) as ReturnType<typeof fakeClient>;
+  const client = overrides.client ?? fakeClient();
   const full: BalanceSyncParams = {
     label: "[scalable-capital:me]",
     cashAccountId: CASH_ACCOUNT,
@@ -50,7 +51,7 @@ describe("syncBrokerBalances — holdings and savings", () => {
       },
     });
     await expect(syncBrokerBalances(full)).resolves.toBe(0);
-    expect(client.manualAccounts.update.mock.calls).toEqual([
+    expect(requireMockFunction(client.manualAccounts.update, "manualAccounts.update").mock.calls).toEqual([
       [HOLDINGS_ACCOUNT, { balance: "1234.56", balance_as_of: "2026-07-01T16:00:00Z" }],
       [SAVINGS_ACCOUNT, { balance: "5000.00" }],
     ]);

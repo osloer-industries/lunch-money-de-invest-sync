@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { fetchAllScalableCapitalTransactions, fetchAllScalableTransactionSummaries } from "./client.js";
 import type { ScCliRunner } from "../shared/subprocess-cli.js";
+import {
+  expectStringArray,
+  expectStringRecord,
+  mockCallArgumentAt,
+  requireMockFunction,
+} from "../test-support/mock-calls.js";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -14,13 +20,69 @@ function loadFixture(name: string): string {
 function runnerFromResponses(responses: string[]): ScCliRunner {
   const queue = [...responses];
   return {
-    run: vi.fn(() => {
+    run: vi.fn<ScCliRunner["run"]>(() => {
       const stdout = queue.shift();
       if (stdout === undefined) {
         throw new Error("unexpected extra sc invocation");
       }
       return Promise.resolve({ stdout, stderr: "", exitCode: 0 });
     }),
+  };
+}
+
+type BrokerTransactionsEnvelope = {
+  ok: boolean;
+  command: string;
+  data: {
+    result: {
+      items: unknown[];
+      cursor?: string | null;
+    };
+  };
+};
+
+function recordFrom(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    throw new Error(label);
+  }
+  return { ...value };
+}
+
+function parseBrokerTransactionsResult(
+  result: unknown,
+  fixtureName: string,
+): BrokerTransactionsEnvelope["data"]["result"] {
+  const resultRecord = recordFrom(result, `fixture ${fixtureName} is missing data.result`);
+  const items = resultRecord["items"];
+  if (!Array.isArray(items)) {
+    throw new Error(`fixture ${fixtureName} is missing data.result.items array`);
+  }
+  const cursorValue = resultRecord["cursor"];
+  const cursor =
+    cursorValue === null || typeof cursorValue === "string" ? cursorValue : undefined;
+  return {
+    items,
+    ...(cursor === undefined ? {} : { cursor }),
+  };
+}
+
+function parseBrokerTransactionsFixture(name: string): BrokerTransactionsEnvelope {
+  const envelope = recordFrom(JSON.parse(loadFixture(name)), `fixture ${name} is not an object`);
+  if (!("data" in envelope)) {
+    throw new Error(`fixture ${name} is missing data`);
+  }
+  const dataRecord = recordFrom(envelope["data"], `fixture ${name} is missing data`);
+  if (!("result" in dataRecord)) {
+    throw new Error(`fixture ${name} is missing data.result`);
+  }
+  const ok = envelope["ok"] === true;
+  const command = typeof envelope["command"] === "string" ? envelope["command"] : "broker.transactions";
+  return {
+    ok,
+    command,
+    data: {
+      result: parseBrokerTransactionsResult(dataRecord["result"], name),
+    },
   };
 }
 
@@ -60,7 +122,8 @@ describe("fetchAllScalableCapitalTransactions", () => {
       ["tx-cash-2", "BrokerCashTransaction"],
     ]);
     expect(runner.run).toHaveBeenCalledTimes(2);
-    const secondArgs = (runner.run as ReturnType<typeof vi.fn>).mock.calls[1]?.[0] as string[];
+    const runMock = requireMockFunction(runner.run, "runner.run");
+    const secondArgs = expectStringArray(mockCallArgumentAt(runMock, 1, 0));
     expect(secondArgs).toContain("--cursor");
     expect(secondArgs).toContain("page-2");
   });
@@ -81,8 +144,9 @@ describe("fetchAllScalableCapitalTransactions", () => {
       portfolioId: "portfolio-operator-b",
       scConfigDir: "/tmp/sc-operator-b",
     });
-    const args = (runner.run as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string[];
-    const env = (runner.run as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Record<string, string>;
+    const runMock = requireMockFunction(runner.run, "runner.run");
+    const args = expectStringArray(mockCallArgumentAt(runMock, 0, 0));
+    const env = expectStringRecord(mockCallArgumentAt(runMock, 0, 1));
     expect(args).toContain("--portfolio-id");
     expect(args).toContain("portfolio-operator-b");
     expect(env.SC_CONFIG_DIR).toBe("/tmp/sc-operator-b");
@@ -125,9 +189,7 @@ describe("fetchAllScalableCapitalTransactions", () => {
   });
 
   it("skips cancellation cash summaries", async () => {
-    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
-      data: { result: { items: unknown[] } };
-    };
+    const body = parseBrokerTransactionsFixture("broker-transactions-page-2.json");
     body.data.result.items = [
       {
         id: "tx-cancel",
@@ -144,9 +206,7 @@ describe("fetchAllScalableCapitalTransactions", () => {
   });
 
   it("keeps security type and side, and skips trades that moved no cash", async () => {
-    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
-      data: { result: { items: unknown[] } };
-    };
+    const body = parseBrokerTransactionsFixture("broker-transactions-page-2.json");
     body.data.result.items = [
       security("sp-1", { status: "SETTLED", security_transaction_type: " SAVINGS_PLAN ", side: "BUY" }),
       security("sell-1", { status: "filled", side: "SELL" }),
@@ -169,9 +229,7 @@ describe("fetchAllScalableCapitalTransactions", () => {
   });
 
   it("throws when an executed security trade is missing last_event_datetime", async () => {
-    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
-      data: { result: { items: unknown[] } };
-    };
+    const body = parseBrokerTransactionsFixture("broker-transactions-page-2.json");
     body.data.result.items = [
       { id: "tx-sec", summary_type: "BrokerSecurityTransactionSummary", status: "FILLED", amount: "-1" },
     ];
@@ -181,9 +239,7 @@ describe("fetchAllScalableCapitalTransactions", () => {
   });
 
   it("keeps the structured cash_transaction_type for classification", async () => {
-    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
-      data: { result: { items: unknown[] } };
-    };
+    const body = parseBrokerTransactionsFixture("broker-transactions-page-2.json");
     body.data.result.items = [
       {
         id: "tx-internal",
@@ -210,9 +266,7 @@ describe("fetchAllScalableCapitalTransactions", () => {
   });
 
   it("throws when a cash item is missing last_event_datetime", async () => {
-    const body = JSON.parse(loadFixture("broker-transactions-page-2.json")) as {
-      data: { result: { items: unknown[] } };
-    };
+    const body = parseBrokerTransactionsFixture("broker-transactions-page-2.json");
     body.data.result.items = [
       {
         id: "tx-missing-date",
@@ -241,9 +295,7 @@ describe("fetchAllScalableCapitalTransactions", () => {
   });
 
   it("stops and throws if the cursor never terminates", async () => {
-    const looping = JSON.parse(loadFixture("broker-transactions-page-1.json")) as {
-      data: { result: { cursor: string } };
-    };
+    const looping = parseBrokerTransactionsFixture("broker-transactions-page-1.json");
     looping.data.result.cursor = "same-cursor-forever";
     const runner = runnerFromResponses(Array.from({ length: 60 }, () => JSON.stringify(looping)));
     await expect(fetchAllScalableCapitalTransactions(runner, {})).rejects.toThrow(/Stopped after/);

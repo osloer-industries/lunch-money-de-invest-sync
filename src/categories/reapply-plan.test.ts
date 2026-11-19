@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assertDefined } from "../shared/assert.js";
 import type { CanonicalTransaction } from "../shared/transaction.js";
 import type { ListedTransaction } from "./lm-transactions.js";
 import { planReapplyForAccount, summarizeReapplyPlan } from "./reapply-plan.js";
@@ -59,10 +60,11 @@ describe("planReapplyForAccount", () => {
     const existing = listed({ categoryId: 1, tagIds: [7] });
     const first = planReapplyForAccount([mapped], new Map([[existing.externalId, existing]]), tagMap, tagIdByName, tagNameById);
     expect(first.changes).toHaveLength(1);
+    const firstChange = assertDefined(first.changes[0], "first planned change");
     const updatedExisting: ListedTransaction = {
       ...existing,
-      categoryId: first.changes[0]!.categoryId,
-      tagIds: first.changes[0]!.tagIds,
+      categoryId: firstChange.categoryId,
+      tagIds: firstChange.tagIds,
     };
     const second = planReapplyForAccount(
       [mapped],
