@@ -2,13 +2,13 @@ import { vi } from "vitest";
 import type { LunchMoneyClient } from "@lunch-money/lunch-money-js-v2";
 import type { CategoryMappingSetupClient, LunchMoneySetupClient } from "../setup/types.js";
 
-const unimplemented = (method: string): (() => never) => {
+export const unimplementedForTest = (method: string): (() => never) => {
   return () => {
     throw new Error(`${method} was not stubbed for this test`);
   };
 };
 
-function stubCategoriesApi(): LunchMoneyClient["categories"] {
+export function stubCategoriesApi(): LunchMoneyClient["categories"] {
   return {
     getAll: vi.fn<LunchMoneyClient["categories"]["getAll"]>().mockResolvedValue([]),
     get: vi.fn<LunchMoneyClient["categories"]["get"]>(),
@@ -48,11 +48,11 @@ export function stubLunchMoneySetupClient(overrides: LunchMoneySetupClientOverri
   return {
     categories: { ...stubCategoriesApi(), ...overrides.categories },
     manualAccounts: {
-      getAll: vi.fn(unimplemented("manualAccounts.getAll")),
-      create: vi.fn(unimplemented("manualAccounts.create")),
-      get: vi.fn(unimplemented("manualAccounts.get")),
-      update: vi.fn(unimplemented("manualAccounts.update")),
-      delete: vi.fn(unimplemented("manualAccounts.delete")),
+      getAll: vi.fn(unimplementedForTest("manualAccounts.getAll")),
+      create: vi.fn(unimplementedForTest("manualAccounts.create")),
+      get: vi.fn(unimplementedForTest("manualAccounts.get")),
+      update: vi.fn(unimplementedForTest("manualAccounts.update")),
+      delete: vi.fn(unimplementedForTest("manualAccounts.delete")),
       ...overrides.manualAccounts,
     },
   };

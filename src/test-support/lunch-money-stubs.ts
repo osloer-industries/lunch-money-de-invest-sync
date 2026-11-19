@@ -7,28 +7,13 @@ import type { TransactionsApi } from "../lunch-money/upsert.js";
 import type { CategoryMappingSetupClient } from "../setup/types.js";
 
 export type { LunchMoneySetupClientOverrides, CategoryMappingSetupClientOverrides } from "./setup-client-stubs.js";
-import { stubCategoryMappingClient } from "./setup-client-stubs.js";
-
-export {
+import {
+  stubCategoriesApi,
   stubCategoryMappingClient,
-  stubLunchMoneySetupClient,
+  unimplementedForTest,
 } from "./setup-client-stubs.js";
 
-const unimplemented = (method: string): (() => never) => {
-  return () => {
-    throw new Error(`${method} was not stubbed for this test`);
-  };
-};
-
-function stubCategoriesApi(): LunchMoneyClient["categories"] {
-  return {
-    getAll: vi.fn<LunchMoneyClient["categories"]["getAll"]>().mockResolvedValue([]),
-    get: vi.fn<LunchMoneyClient["categories"]["get"]>(),
-    create: vi.fn<LunchMoneyClient["categories"]["create"]>(),
-    update: vi.fn<LunchMoneyClient["categories"]["update"]>(),
-    delete: vi.fn<LunchMoneyClient["categories"]["delete"]>(),
-  };
-}
+export { stubCategoryMappingClient, stubLunchMoneySetupClient } from "./setup-client-stubs.js";
 
 function stubTagsApi(): LunchMoneyClient["tags"] {
   return {
@@ -41,7 +26,7 @@ function stubTagsApi(): LunchMoneyClient["tags"] {
 }
 
 function stubTransactionsApi(): LunchMoneyClient["transactions"] {
-  const missing = unimplemented("transactions");
+  const missing = unimplementedForTest("transactions");
   return {
     getAll: vi.fn<LunchMoneyClient["transactions"]["getAll"]>().mockResolvedValue({
       transactions: [],
