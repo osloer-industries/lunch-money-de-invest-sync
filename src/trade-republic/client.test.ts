@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import { expectStringArray, requireMockFunction } from "../test-support/mock-calls.js";
+import { mockCallArgumentAt } from "../test-support/mock-calls.js";
 import {
   assertPytrMinVersion,
   createDefaultPytrCliRunner,
@@ -161,7 +163,8 @@ describe("fetchTradeRepublicTimeline", () => {
     const fixture = await loadFixture();
     const runner = fakeRunner([{ exitCode: 0 }]);
     await fetchTradeRepublicTimeline(runner, {}, fakeFilesystem(fixture));
-    const calls = (runner.run as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string[]);
+    const runMock = requireMockFunction(runner.run, "runner.run");
+    const calls = runMock.mock.calls.map((_call, index) => expectStringArray(mockCallArgumentAt(runMock, index, 0)));
     expect(calls[0]).toEqual(expect.arrayContaining(["export_transactions", "--last_days", "1", "--v2"]));
     expect(calls[1]).not.toContain("--last_days");
   });

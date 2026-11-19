@@ -23,6 +23,33 @@ vi.mock("./doctor.js", () => ({
 }));
 
 import { assertInteractiveSetupAllowed, runSetupCli } from "./setup.js";
+import type { SetupCliOptions } from "./setup/setup-options.js";
+
+function baseSetupOptions(overrides: Partial<SetupCliOptions> = {}): SetupCliOptions {
+  return {
+    nonInteractive: false,
+    skipBrokerCheck: false,
+    yes: false,
+    tradeRepublic: false,
+    scalableCapital: false,
+    owner: null,
+    lunchMoneyAssetId: null,
+    tradeRepublicAssetId: null,
+    scalableAssetId: null,
+    portfolioId: null,
+    tradeRepublicHoldingsAccountId: null,
+    scalableHoldingsAccountId: null,
+    scalableSavingsAccountId: null,
+    categories: false,
+    exportTypeSummary: null,
+    replaceApiKey: false,
+    clearApiKey: false,
+    help: false,
+    json: false,
+    events: false,
+    ...overrides,
+  };
+}
 
 async function withStdinIsTTY<T>(value: boolean | undefined, run: () => T | Promise<T>): Promise<T> {
   const descriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
@@ -67,13 +94,17 @@ function stubFilesystem(): SetupFilesystem {
 describe("assertInteractiveSetupAllowed", () => {
   it("allows non-interactive setup without a TTY", async () => {
     await withStdinIsTTY(false, () => {
-      expect(() => assertInteractiveSetupAllowed({ help: false, nonInteractive: true } as never)).not.toThrow();
+      expect(() =>
+        assertInteractiveSetupAllowed(baseSetupOptions({ help: false, nonInteractive: true })),
+      ).not.toThrow();
     });
   });
 
   it("rejects interactive setup when stdin is not a TTY", async () => {
     await withStdinIsTTY(false, () => {
-      expect(() => assertInteractiveSetupAllowed({ help: false, nonInteractive: false } as never)).toThrow(/TTY/);
+      expect(() =>
+        assertInteractiveSetupAllowed(baseSetupOptions({ help: false, nonInteractive: false })),
+      ).toThrow(/TTY/);
     });
   });
 });

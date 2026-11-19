@@ -8,6 +8,8 @@ import type {
   SetupPrompter,
 } from "./types.js";
 import { MemoryLunchMoneyApiKeyStore } from "../shared/lunch-money-api-key-store.js";
+import { stubLunchMoneySetupClient } from "../test-support/lunch-money-stubs.js";
+import { assertDefined } from "../shared/assert.js";
 
 const baseOptions = (): SetupCliOptions => ({
   nonInteractive: false,
@@ -33,7 +35,7 @@ const baseOptions = (): SetupCliOptions => ({
 });
 
 function fakeLmClient(): LunchMoneySetupClient {
-  return {
+  return stubLunchMoneySetupClient({
     manualAccounts: {
       getAll: vi.fn().mockResolvedValue([{ id: 3, name: "TR operator-a" }]),
       create: vi.fn(),
@@ -45,7 +47,7 @@ function fakeLmClient(): LunchMoneySetupClient {
       update: vi.fn(),
       delete: vi.fn(),
     },
-  } as unknown as LunchMoneySetupClient;
+  });
 }
 
 describe("runSetup API key storage", () => {
@@ -59,7 +61,7 @@ describe("runSetup API key storage", () => {
       select: <T extends string>(
         _message: string,
         choices: readonly PromptChoice<T>[],
-      ): Promise<T> => Promise.resolve(choices[0]?.value as T),
+      ): Promise<T> => Promise.resolve(assertDefined(choices[0], "select choice").value),
       checkbox: vi.fn(() => Promise.resolve([])),
       search: vi.fn(() => Promise.resolve("")),
       confirm: vi.fn(() => Promise.resolve(false)),

@@ -2,6 +2,7 @@ import { parseArgs, type ParseArgsConfig } from "node:util";
 import { exportTypeSummaryPath } from "./shared/cli-args.js";
 import { parseSinceDate } from "./dry-run-review/since.js";
 import { parseScriptableFlags, scriptableOptionConfig } from "./shared/scriptable-cli.js";
+import { booleanArg, optionalStringArg } from "./shared/parse-args-values.js";
 
 export type SyncBroker = "trade-republic" | "scalable-capital";
 
@@ -94,9 +95,9 @@ holdingsAccountId / savingsAccountId accounts get their balance set to the broke
 Unknown flags or invalid broker names exit with an error. When no filters are set, all configured profiles run.`;
 
 export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
-  const values = parseArgsOrThrow(argv).values as Record<string, unknown>;
+  const values: Record<string, unknown> = parseArgsOrThrow(argv).values;
   const scriptable = parseScriptableFlags(argv);
-  if (values.help === true) {
+  if (booleanArg(values, "help")) {
     return {
       brokers: [],
       owners: [],
@@ -111,17 +112,16 @@ export function parseSyncCliOptions(argv: readonly string[]): SyncCliOptions {
     };
   }
 
-  const sinceRaw = values.since;
-  const since =
-    typeof sinceRaw === "string" && sinceRaw.trim().length > 0 ? parseSinceDate(sinceRaw) : null;
+  const sinceRaw = optionalStringArg(values, "since");
+  const since = sinceRaw !== undefined && sinceRaw.trim().length > 0 ? parseSinceDate(sinceRaw) : null;
 
   return {
     brokers: parseBrokerValues(values.broker),
     owners: parseOwnerValues(values.account),
-    dryRun: values["dry-run"] === true,
+    dryRun: booleanArg(values, "dry-run"),
     since,
     exportTypeSummary: exportTypeSummaryPath(values),
-    reconcileCash: values["reconcile-cash"] === true,
+    reconcileCash: booleanArg(values, "reconcile-cash"),
     help: false,
     json: scriptable.flags.json,
     events: scriptable.flags.events,

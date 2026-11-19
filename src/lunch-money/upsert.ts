@@ -66,7 +66,15 @@ export function toInsertPayload(
   };
 }
 
-export function summarizeInsertResult(response: InsertTransactionsResponse): UpsertSummary {
+export type InsertResultSummarySource = {
+  readonly transactions: ReadonlyArray<{ readonly id: number }>;
+  readonly skipped_duplicates: ReadonlyArray<{
+    readonly reason?: string;
+    readonly request_transaction?: { readonly external_id?: string | null };
+  }>;
+};
+
+export function summarizeInsertResult(response: InsertResultSummarySource): UpsertSummary {
   return {
     insertedCount: response.transactions.length,
     skippedCount: response.skipped_duplicates.length,

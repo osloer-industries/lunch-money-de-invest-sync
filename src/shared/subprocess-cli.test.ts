@@ -1,5 +1,7 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectStringRecord, requireMockFunction } from "../test-support/mock-calls.js";
+import { assertDefined } from "./assert.js";
 
 const spawnMock = vi.hoisted(() => vi.fn());
 const existsSyncMock = vi.hoisted(() => vi.fn<typeof import("node:fs").existsSync>());
@@ -85,11 +87,17 @@ describe("createScCliRunner", () => {
     const runner = createScCliRunner("/usr/bin/sc");
     const result = await runner.run(["broker", "transactions", "--json"], { SC_CONFIG_DIR: "/tmp/sc" });
     expect(result).toEqual({ stdout: '{"ok":true}', stderr: "", exitCode: 0 });
-    const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env: Record<string, string> };
+    const spawnMockFn = requireMockFunction(spawnMock, "spawn");
+    const spawnOptions = assertDefined(spawnMockFn.mock.calls[0]?.[2], "spawn options");
+    const env = expectStringRecord(
+      typeof spawnOptions === "object" && spawnOptions !== null && "env" in spawnOptions
+        ? spawnOptions.env
+        : undefined,
+    );
     expect(spawnMock).toHaveBeenCalledWith("/usr/bin/sc", ["broker", "transactions", "--json"], expect.any(Object));
-    expect(spawnOptions.env.SC_CONFIG_DIR).toBe("/tmp/sc");
-    expect(spawnOptions.env.PATH).toContain("/usr/bin");
-    expect(spawnOptions.env.PATH).not.toBe(process.env.PATH);
+    expect(env.SC_CONFIG_DIR).toBe("/tmp/sc");
+    expect(env.PATH).toContain("/usr/bin");
+    expect(env.PATH).not.toBe(process.env.PATH);
   });
 
   it("resolves a relative binary name to an absolute path under trusted dirs", () => {
@@ -149,8 +157,14 @@ describe("createPytrCliRunner", () => {
     mockChild("", "", 0);
     const runner = createPytrCliRunner(["/usr/bin/pytr"]);
     await runner.run(["export_transactions"], { HOME: "/tmp/home" });
-    const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env: Record<string, string> };
-    expect(spawnOptions.env.HOME).toBe("/tmp/home");
+    const spawnMockFn = requireMockFunction(spawnMock, "spawn");
+    const spawnOptions = assertDefined(spawnMockFn.mock.calls[0]?.[2], "spawn options");
+    const env = expectStringRecord(
+      typeof spawnOptions === "object" && spawnOptions !== null && "env" in spawnOptions
+        ? spawnOptions.env
+        : undefined,
+    );
+    expect(env.HOME).toBe("/tmp/home");
   });
 
   it("rejects an empty pytrCommand array", () => {
@@ -171,9 +185,15 @@ describe("createPytrCliRunner", () => {
     try {
       const runner = createPytrCliRunner(["/usr/bin/pytr"]);
       await runner.run(["export_transactions"]);
-      const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env: Record<string, string> };
-      expect(spawnOptions.env.UV_PYTHON).toBe("/tmp/uv-python");
-      expect(spawnOptions.env.TMPDIR).toBe("/tmp");
+      const spawnMockFn = requireMockFunction(spawnMock, "spawn");
+      const spawnOptions = assertDefined(spawnMockFn.mock.calls[0]?.[2], "spawn options");
+      const env = expectStringRecord(
+        typeof spawnOptions === "object" && spawnOptions !== null && "env" in spawnOptions
+          ? spawnOptions.env
+          : undefined,
+      );
+      expect(env.UV_PYTHON).toBe("/tmp/uv-python");
+      expect(env.TMPDIR).toBe("/tmp");
     } finally {
       if (previousUv === undefined) {
         delete process.env.UV_PYTHON;

@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import type { LunchMoneyClient } from "@lunch-money/lunch-money-js-v2";
 import type { SyncConfig } from "../shared/config.js";
 import { runCategoryMappingSetup } from "./run-category-mapping.js";
 import type { SetupCliOptions } from "./setup-options.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "./types.js";
+import { stubCategoryMappingClient } from "../test-support/lunch-money-stubs.js";
+import { assertDefined } from "../shared/assert.js";
+import { mockCallArgumentAt, requireMockFunction } from "../test-support/mock-calls.js";
 import type { TypeObservation } from "../shared/canonical-type.js";
 
 const options: SetupCliOptions = {
@@ -84,10 +88,10 @@ function readConfigFixture(overrides: Partial<SyncConfig> = {}): SyncConfig {
 }
 
 function stubCategoryClient(
-  getAll: ReturnType<typeof vi.fn>,
-  create: ReturnType<typeof vi.fn> = vi.fn(),
+  getAll: CategoryMappingSetupClient["categories"]["getAll"],
+  create: LunchMoneyClient["categories"]["create"] = vi.fn(),
 ): CategoryMappingSetupClient {
-  return {
+  return stubCategoryMappingClient({
     categories: {
       getAll,
       create,
@@ -95,7 +99,7 @@ function stubCategoryClient(
       update: vi.fn(),
       delete: vi.fn(),
     },
-  } as CategoryMappingSetupClient;
+  });
 }
 
 const buyObservation: TypeObservation = {
@@ -217,8 +221,13 @@ describe("runCategoryMappingSetup", () => {
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
       collectObservations: () => Promise.resolve([unknownObservation]),
     });
-    const choices = search.mock.calls[0]?.[1] as Array<{ value: string }>;
-    expect(choices.some((choice) => choice.value === "__new__")).toBe(false);
+    const searchMock = requireMockFunction(search, "search");
+    const rawChoices = mockCallArgumentAt(searchMock, 0, 1);
+    expect(Array.isArray(rawChoices)).toBe(true);
+    if (!Array.isArray(rawChoices)) {
+      throw new Error("expected search choices array");
+    }
+    expect(rawChoices.some((choice) => typeof choice === "object" && choice !== null && "value" in choice && choice.value === "__new__")).toBe(false);
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
@@ -301,7 +310,7 @@ describe("runCategoryMappingSetup", () => {
       filesystem: fakeCategoryFilesystem(),
       readConfig: () => readConfigFixture(),
       createClient: () => stubCategoryClient(vi.fn().mockResolvedValue([])),
-      collectObservations: () => Promise.resolve([buyObservation, observations[0]!]),
+      collectObservations: () => Promise.resolve([buyObservation, assertDefined(observations[0], "deposit observation")]),
     });
     expect(searchMessages.some((message) => message.includes('"buy"'))).toBe(true);
     expect(searchMessages.some((message) => message.includes('"deposit"'))).toBe(true);
@@ -514,10 +523,14 @@ function withTags(
 
 type Choice = { name: string; value: string; checked?: boolean };
 
+function choiceValue(choices: readonly Choice[], index: number): string {
+  return assertDefined(choices[index], `choice ${index}`).value;
+}
+
 describe("runCategoryMappingSetup — grouped journey", () => {
   it("asks once for buy and savings-plan and maps both to the matching existing category", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choiceValue(choices, 0)));
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({ confirms: [false] }), search },
       filesystem: memoryFilesystem(),
@@ -539,7 +552,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
   it("offers create-new Income first for dividend + interest and scopes their suggested tags", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
     const create = vi.fn().mockResolvedValue({ id: 31, name: "Income" });
-    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choiceValue(choices, 0)));
     const checkbox = vi.fn((_message: string, choices: readonly Choice[]) =>
       Promise.resolve(choices.filter((choice) => choice.checked).map((choice) => choice.value)),
     );
@@ -567,7 +580,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
 
   it("defaults unknown to Skip, lists the transfer category next, and offers no create-new", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[0]!.value));
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choiceValue(choices, 0)));
     const confirm = vi.fn(() => Promise.resolve(false));
     const print = vi.fn();
     const result = await runCategoryMappingSetup(options, {
@@ -591,7 +604,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
 
   it("still lets unknown be mapped to the transfer category without a flag warning", async () => {
     process.env["LUNCH_MONEY_API_KEY"] = "lm_test_key";
-    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choices[1]!.value));
+    const search = vi.fn((_message: string, choices: readonly Choice[]) => Promise.resolve(choiceValue(choices, 1)));
     const confirm = vi.fn(() => Promise.resolve(false));
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({}), search, confirm },
@@ -611,7 +624,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
     const searchMessages: string[] = [];
     const search = vi.fn((message: string, choices: readonly Choice[]) => {
       searchMessages.push(message);
-      return Promise.resolve(message.includes("unknown") ? "__skip__" : choices[0]!.value);
+      return Promise.resolve(message.includes("unknown") ? "__skip__" : choiceValue(choices, 0));
     });
     const result = await runCategoryMappingSetup(options, {
       prompter: { ...prompter({ confirms: [false] }), search },
@@ -717,7 +730,7 @@ describe("runCategoryMappingSetup — grouped journey", () => {
       }),
     ).rejects.toThrow(/force closed/);
     expect(filesystem.writes).toHaveLength(1);
-    const saved = JSON.parse(filesystem.writes[0]!);
+    const saved = JSON.parse(assertDefined(filesystem.writes[0], "saved config write"));
     expect(saved.categoryMap).toEqual({ sell: 5, deposit: 99 });
     expect(saved.tagMap).toEqual({ deposit: ["bank"] });
     delete process.env["LUNCH_MONEY_API_KEY"];

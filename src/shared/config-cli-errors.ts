@@ -30,8 +30,14 @@ function unrecognizedKeyFromIssue(issue: ZodIssue): string | undefined {
   if (issue.code !== "unrecognized_keys") {
     return undefined;
   }
-  const params = issue as ZodIssue & { keys?: string[] };
-  return params.keys?.[0];
+  if (!("keys" in issue)) {
+    return undefined;
+  }
+  if (!Array.isArray(issue.keys) || issue.keys.length === 0) {
+    return undefined;
+  }
+  const firstKey = issue.keys[0];
+  return typeof firstKey === "string" ? firstKey : undefined;
 }
 
 function formatSingleZodIssue(issue: ZodIssue): string {
@@ -50,7 +56,11 @@ function formatZodConfigError(error: ZodError): string {
   const lines = error.issues.map(formatSingleZodIssue);
   const unique = [...new Set(lines)];
   if (unique.length === 1) {
-    return unique[0]!;
+    const only = unique[0];
+    if (only === undefined) {
+      return "config.json failed validation";
+    }
+    return only;
   }
   return `config.json failed validation — ${unique.join("; ")}`;
 }

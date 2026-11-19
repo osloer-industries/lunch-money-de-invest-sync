@@ -12,6 +12,7 @@ import path from "node:path";
 import { pytrAllEventsSchema, type TradeRepublicPytrConfig } from "./types.js";
 import { isErrnoCode } from "../shared/errno.js";
 import { createPytrCliRunner, type PytrCliRunner } from "../shared/subprocess-cli.js";
+import { assertDefined } from "../shared/assert.js";
 
 const PYTR_DOC = "https://github.com/pytr-org/pytr";
 
@@ -108,8 +109,8 @@ function assertMinVersion(actual: string, required: string): void {
     throw new Error(`Could not parse pytr version (got "${actual}", required >= ${required})`);
   }
   for (let i = 0; i < 3; i++) {
-    const a = actualParts[i]!;
-    const r = requiredParts[i]!;
+    const a = assertDefined(actualParts[i], `pytr version segment ${i}`);
+    const r = assertDefined(requiredParts[i], `required pytr version segment ${i}`);
     if (a > r) {
       return;
     }
@@ -292,7 +293,7 @@ export async function fetchTradeRepublicTimeline(
   const raw = await runExport(runner, config, filesystem, context);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    parsed = JSON.parse(raw);
   } catch {
     throw new Error("pytr all_events.json is not valid JSON");
   }

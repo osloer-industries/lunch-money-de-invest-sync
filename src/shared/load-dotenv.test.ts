@@ -11,8 +11,9 @@ describe("loadDotenvFromCwd", () => {
 
   afterEach(async () => {
     process.chdir(originalCwd);
-    if (tempDir) {
-      await import("node:fs/promises").then(({ rm }) => rm(tempDir!, { recursive: true, force: true }));
+    if (tempDir !== undefined) {
+      const dir = tempDir;
+      await import("node:fs/promises").then(({ rm }) => rm(dir, { recursive: true, force: true }));
       tempDir = undefined;
     }
     if (originalKey === undefined) {
