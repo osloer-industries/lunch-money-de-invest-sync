@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SetupFilesystem } from "../setup/types.js";
 import { runCategoriesCli } from "./run-categories-cli.js";
 import type { SyncConfig } from "../shared/config.js";
+import { stubCategoriesCliClient } from "../test-support/lunch-money-stubs.js";
 
 const config: SyncConfig = {
   lunchMoneyApiKey: "k",
@@ -33,9 +34,9 @@ describe("runCategoriesCli", () => {
       filesystem: filesystem(),
       readConfig: () => config,
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           categories: { getAll: vi.fn().mockResolvedValue([{ id: 9, name: "Transfer" }]) },
-        }) as never,
+        }),
       logger,
     });
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("deposit"));
@@ -58,7 +59,7 @@ describe("runCategoriesCli", () => {
       filesystem: filesystem(),
       readConfig: () => config,
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           tags: {
             getAll: vi.fn().mockResolvedValue([{ id: 2, name: "bank" }]),
             create: vi.fn(),
@@ -76,7 +77,7 @@ describe("runCategoriesCli", () => {
               hasMore: false,
             }),
           },
-        }) as never,
+        }),
       collectors: {
         collectTradeRepublic: vi.fn().mockResolvedValue([mappedTx]),
         collectScalableCapital: vi.fn().mockResolvedValue([]),
@@ -105,7 +106,7 @@ describe("runCategoriesCli", () => {
       readConfig: () => config,
       confirmReapply: vi.fn().mockResolvedValue(true),
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           tags: {
             getAll: vi.fn().mockResolvedValue([{ id: 2, name: "bank" }]),
             create: vi.fn(),
@@ -124,7 +125,7 @@ describe("runCategoriesCli", () => {
             }),
             updateMany,
           },
-        }) as never,
+        }),
       collectors: {
         collectTradeRepublic: vi.fn().mockResolvedValue([mappedTx]),
         collectScalableCapital: vi.fn().mockResolvedValue([]),
@@ -141,9 +142,9 @@ describe("runCategoriesCli", () => {
       filesystem: filesystem(),
       readConfig: () => config,
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           categories: { getAll: vi.fn().mockRejectedValue(new Error("offline")) },
-        }) as never,
+        }),
       logger,
     });
     expect(logger).toHaveBeenCalledWith(expect.stringContaining("Lunch Money connection"));
@@ -156,7 +157,7 @@ describe("runCategoriesCli", () => {
       readConfig: () => config,
       confirmReapply: vi.fn(),
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           tags: { getAll: vi.fn().mockResolvedValue([{ id: 2, name: "bank" }]) },
           transactions: {
             getAll: vi.fn().mockResolvedValue({
@@ -166,7 +167,7 @@ describe("runCategoriesCli", () => {
               hasMore: false,
             }),
           },
-        }) as never,
+        }),
       collectors: {
         collectTradeRepublic: vi.fn().mockResolvedValue([
           {
@@ -196,7 +197,7 @@ describe("runCategoriesCli", () => {
       readConfig: () => config,
       confirmReapply: vi.fn().mockResolvedValue(false),
       createClient: () =>
-        ({
+        stubCategoriesCliClient({
           tags: {
             getAll: vi.fn().mockResolvedValue([{ id: 2, name: "bank" }]),
           },
@@ -209,7 +210,7 @@ describe("runCategoriesCli", () => {
             }),
             updateMany,
           },
-        }) as never,
+        }),
       collectors: {
         collectTradeRepublic: vi.fn().mockResolvedValue([
           {

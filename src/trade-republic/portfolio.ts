@@ -1,4 +1,5 @@
 import os from "node:os";
+import { assertDefined } from "../shared/assert.js";
 import path from "node:path";
 import {
   actionablePytrFailure,
@@ -75,7 +76,7 @@ export function parsePytrPortfolioStdout(stdout: string): PytrPortfolioStdout {
     const match = /^Cash\s+([A-Za-z]{3})\s+(\S+)$/.exec(trimmed);
     const amount = match ? parseBrokerDecimal(match[2]) : null;
     if (match && amount !== null) {
-      cash = { currency: match[1]!.toLowerCase(), amount };
+      cash = { currency: assertDefined(match[1], "portfolio cash currency").toLowerCase(), amount };
     }
   }
   return { cash, missingPriceCount };

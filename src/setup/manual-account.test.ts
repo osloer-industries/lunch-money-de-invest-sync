@@ -1,16 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { createManualAccountOrReuse } from "./manual-account.js";
 import type { LunchMoneySetupClient, SetupPrompter } from "./types.js";
+import {
+  stubLunchMoneySetupClient,
+  type LunchMoneySetupClientOverrides,
+} from "../test-support/lunch-money-stubs.js";
 
-function client(overrides: Partial<LunchMoneySetupClient> = {}): LunchMoneySetupClient {
-  return {
+function client(overrides: LunchMoneySetupClientOverrides = {}): LunchMoneySetupClient {
+  return stubLunchMoneySetupClient({
     manualAccounts: {
       getAll: vi.fn().mockResolvedValue([{ id: 7, name: "Trade Republic (a)" }]),
       create: vi.fn().mockRejectedValue(new Error("ASSET_DISPLAY_NAME_ALREADY_EXISTS")),
     },
-    categories: { getAll: vi.fn() },
     ...overrides,
-  } as unknown as LunchMoneySetupClient;
+  });
 }
 
 function prompter(confirm: boolean): SetupPrompter {
@@ -28,13 +31,13 @@ function prompter(confirm: boolean): SetupPrompter {
 
 describe("createManualAccountOrReuse", () => {
   it("creates a new manual account", async () => {
-    const lm = {
+    const lm = stubLunchMoneySetupClient({
       manualAccounts: {
         getAll: vi.fn().mockResolvedValue([]),
         create: vi.fn().mockResolvedValue({ id: 9, name: "Trade Republic (a)" }),
       },
       categories: { getAll: vi.fn().mockResolvedValue([]) },
-    } as unknown as LunchMoneySetupClient;
+    });
     const id = await createManualAccountOrReuse(
       prompter(true),
       lm,

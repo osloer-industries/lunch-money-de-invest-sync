@@ -39,16 +39,32 @@ These rules apply to every agent (Cursor, Grok Bot, any other) working in this r
 - Install reproducibly with `npm ci`. Use `npm install --save-exact` when a
   dependency intentionally changes, then commit `package-lock.json`.
 - Run `npm run check` before **every push** (`npm run precommit` is identical). This runs
-  Oxlint (including Sonar-aligned `require-await` / `no-await-in-loop`), `eslint-plugin-sonarjs`
-  recommended rules, `npm run lint:dup` (jscpd at **3%** duplicated lines via `.jscpd.json`, aligned
-  with the SonarCloud duplicated-lines-on-new-code gate), TypeScript, coverage, and the production
-  build. A lefthook `pre-commit` hook runs the same command via `npm run prepare`.
+  Oxlint (including Sonar-aligned `require-await` / `no-await-in-loop`), the shrink-only
+  suppression baseline (`npm run lint:suppressions`), `eslint-plugin-sonarjs` recommended rules,
+  `npm run lint:dup` (jscpd at **3%** duplicated lines via `.jscpd.json`, aligned with the
+  SonarCloud duplicated-lines-on-new-code gate), TypeScript, coverage, and the production build.
+  A lefthook `pre-commit` hook runs the same command via `npm run prepare`.
 - The only documented lint override is the existing `no-await-in-loop` carve-out for broker pagination/sync.
 - Run `npm audit --omit=dev` whenever dependencies or the lockfile change.
 - Dependabot `github-actions` on `/` bumps org reusable refs together with Action SHAs.
 - **Local tool only:** sync runs on the operator's machine. Nothing in GitHub Actions runs `npm run sync` or calls brokers or Lunch Money. GitHub Actions secrets for this repo are only the default `GITHUB_TOKEN`, org
   `SONAR_TOKEN`, and `RELEASE_APP_PRIVATE_KEY` (with variable `OSLOER_RELEASE_APP_ID` for
   Release Please). Never add broker, Lunch Money, or other financial credentials to CI.
+
+## Enforced escape-hatch rules (Oxlint)
+
+| Rule | Fix instead of bypassing |
+| --- | --- |
+| `typescript/no-explicit-any` | Use `unknown` and narrow, or a proper generic/interface. |
+| `typescript/ban-ts-comment` (all directives, including described `@ts-expect-error`) | Fix the type error; in tests pass bad input as `unknown` through the real parser. |
+| `typescript/no-non-null-assertion` | Guard with `if`, optional chaining, or `assertDefined` from `src/shared/assert.ts`. |
+| `typescript/consistent-type-assertions` (`never`: every `as`/`<T>`; `as const` and `satisfies` allowed) | Zod at boundaries, type guards, typed stubs in `src/test-support/`. |
+| `osloer/no-definite-assignment` (`tools/oxlint-plugin-osloer.ts`) | Initialise fields/variables or type as optional and narrow. |
+| `unicorn/no-abusive-eslint-disable` | Do not blanket-disable rules; shrink `scripts/suppression-baseline.json` instead. |
+| `reportUnusedDisableDirectives` | Do not add disable comments that hide real findings. |
+
+The suppression baseline (`scripts/suppression-baseline.json`) may only shrink. Regenerate with
+`npm run lint:suppressions -- --write-baseline` after intentional cleanup.
 
 ## Architecture
 

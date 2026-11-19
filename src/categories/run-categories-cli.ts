@@ -1,4 +1,3 @@
-import type { LunchMoneyClient } from "@lunch-money/lunch-money-js-v2";
 import { createLunchMoneyClient, resolveTagIds } from "../lunch-money/client.js";
 import { applyCategoryTagMappings } from "../shared/apply-mappings.js";
 import type { SyncConfig, TradeRepublicProfile, ScalableCapitalProfile } from "../shared/config.js";
@@ -13,6 +12,7 @@ import type { BrokerCollectors } from "../sync.js";
 import { createLiveCollectors } from "../sync.js";
 import { createInquirerPrompter } from "../setup/inquirer-prompter.js";
 import type { CategoryMappingSetupClient, SetupFilesystem, SetupPrompter } from "../setup/types.js";
+import type { CategoriesCliClient } from "./categories-cli-client.js";
 import { loadBrokerTransactionsByExternalId } from "./lm-transactions.js";
 import { buildMappingRows, formatMappingListLines } from "./mapping-view.js";
 import { runMappingEditSession } from "./mapping-edit-session.js";
@@ -40,9 +40,11 @@ export type CategoriesLogger = (line: string) => void;
 
 type Profile = TradeRepublicProfile | ScalableCapitalProfile;
 
+export type { CategoriesCliClient } from "./categories-cli-client.js";
+
 export interface CategoriesCliDeps {
   readonly readConfig?: typeof readConfigFromDiskForCli;
-  readonly createClient?: typeof createLunchMoneyClient;
+  readonly createClient?: (apiKey: string) => CategoriesCliClient;
   readonly collectors?: BrokerCollectors;
   readonly logger?: CategoriesLogger;
   readonly apiKeyStore?: LunchMoneyApiKeyStore;
@@ -103,7 +105,7 @@ async function listMappings(
 }
 
 async function listLunchMoneyCatalog(
-  client: LunchMoneyClient,
+  client: CategoriesCliClient,
   json: boolean,
   logger: CategoriesLogger,
 ): Promise<void> {
@@ -169,7 +171,7 @@ interface PlannedReapplyRow extends ReapplyChange {
 
 interface ReapplyContext {
   readonly config: SyncConfig;
-  readonly client: LunchMoneyClient;
+  readonly client: CategoriesCliClient;
   readonly collectors: BrokerCollectors;
   readonly dryRun: boolean;
   readonly logger: CategoriesLogger;
@@ -246,7 +248,7 @@ async function reapplyMappings(context: ReapplyContext): Promise<void> {
 
 async function loadAuthedClient(
   deps: CategoriesCliDeps,
-): Promise<{ config: SyncConfig; client: LunchMoneyClient }> {
+): Promise<{ config: SyncConfig; client: CategoriesCliClient }> {
   await ensureLunchMoneyApiKeyForCli(deps.apiKeyStore ?? createDefaultLunchMoneyApiKeyStore());
   const config = (deps.readConfig ?? readConfigFromDiskForCli)();
   const client = (deps.createClient ?? createLunchMoneyClient)(config.lunchMoneyApiKey);

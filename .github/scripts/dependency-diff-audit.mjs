@@ -70,7 +70,7 @@ export function parseAuditJson(text, context) {
     return JSON.parse(text);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`npm audit returned invalid JSON (${context}): ${message}`);
+    throw new Error(`npm audit returned invalid JSON (${context}): ${message}`, { cause: err });
   }
 }
 

@@ -6,7 +6,6 @@ import type { CanonicalType } from "../shared/canonical-type.js";
 import { readConfigJsonObject, writeConfigJsonObject } from "../setup/config-json.js";
 import type { CategoryMappingSetupClient, PromptChoice, SetupFilesystem, SetupPrompter } from "../setup/types.js";
 import { resolveConfigFilePath } from "../shared/config.js";
-import type { SetupCategoryRow } from "../setup/category-matching.js";
 import { parseSinceDate } from "./since.js";
 import { forEachSequentially } from "../shared/sequential-profiles.js";
 import type { DryRunCategoryBucket, DryRunProfileSummary, DryRunReviewSummary } from "./types.js";
@@ -130,7 +129,7 @@ async function pickCategoryForType(
   client: CategoryMappingSetupClient,
   canonicalType: CanonicalType,
 ): Promise<number | null | undefined> {
-  const categoryRows = (await client.categories.getAll()) as readonly SetupCategoryRow[];
+  const categoryRows = await client.categories.getAll();
   const choice = await prompter.search(
     `Lunch Money category for "${canonicalType}"`,
     buildSingleTypeCategoryChoices(canonicalType, categoryRows),

@@ -58,8 +58,12 @@ function dateRange(rows: readonly DryRunReviewRow[]): { from: string | null; to:
   if (rows.length === 0) {
     return { from: null, to: null };
   }
-  let from = rows[0]!.date;
-  let to = rows[0]!.date;
+  const first = rows[0];
+  if (first === undefined) {
+    return { from: null, to: null };
+  }
+  let from = first.date;
+  let to = first.date;
   for (const row of rows) {
     if (row.date < from) {
       from = row.date;
@@ -79,7 +83,12 @@ function inOutTotalsPlain(transactions: readonly CanonicalTransaction[]): {
     const zero = formatPlainCanonicalAmount(0, "eur");
     return { inTotalPlain: zero, outTotalPlain: zero };
   }
-  const currency = transactions[0]!.currency;
+  const first = transactions[0];
+  if (first === undefined) {
+    const zero = formatPlainCanonicalAmount(0, "eur");
+    return { inTotalPlain: zero, outTotalPlain: zero };
+  }
+  const currency = first.currency;
   let inSum = 0;
   let outSum = 0;
   for (const tx of transactions) {

@@ -552,7 +552,7 @@ async function maybeWriteTypeSummaryExport(
 
 type RunSyncCliDeps = {
   readConfig?: typeof readConfigFromDisk;
-  createClient?: typeof createLunchMoneyClient;
+  createClient?: (apiKey: string) => LunchMoneySyncClient;
   collectors?: BrokerCollectors;
   logger?: SyncLogger;
   apiKeyStore?: LunchMoneyApiKeyStore;

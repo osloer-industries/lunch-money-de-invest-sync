@@ -11,7 +11,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "html", "lcov"],
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts", "src/**/*.spec.ts", "src/**/parity-fixture.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.spec.ts",
+        "src/**/parity-fixture.ts",
+        "src/test-support/**",
+        "scripts/**",
+      ],
       thresholds: { branches: 80, functions: 80, lines: 80, statements: 80 }
     }
   }

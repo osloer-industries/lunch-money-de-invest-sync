@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { mockCallArgumentAt, requireMockFunction } from "../test-support/mock-calls.js";
+import { harnessSelectAnswer } from "../test-support/harness-select.js";
 
 const runCategoryMappingSetup = vi.hoisted(() => vi.fn().mockResolvedValue({ kind: "completed" as const }));
 
@@ -6,6 +8,7 @@ vi.mock("./run-category-mapping.js", () => ({
   runCategoryMappingSetup,
 }));
 
+import { stubLunchMoneySetupClient } from "../test-support/setup-client-stubs.js";
 import { MemoryLunchMoneyApiKeyStore } from "../shared/lunch-money-api-key-store.js";
 import { manualAccountChoices, runSetup } from "./run-setup.js";
 import type { SetupCliOptions } from "./setup-options.js";
@@ -26,9 +29,11 @@ function fakePrompter(options: FakePrompterOptions): SetupPrompter {
     password: vi.fn<() => Promise<string>>(() => Promise.resolve(options.password ?? "")),
     input: vi.fn<() => Promise<string>>(() => Promise.resolve(options.inputs?.[inputIndex++] ?? "")),
     checkbox: vi.fn<() => Promise<string[]>>(() => Promise.resolve(options.brokers ?? [])),
-    select<T extends string>(_message: string, _choices: readonly PromptChoice<T>[]): Promise<T> {
-      const value = options.selects?.[selectIndex++] ?? "";
-      return Promise.resolve(value as T);
+    select<T extends string>(
+      _message: string,
+      choices: readonly PromptChoice<T>[],
+    ): Promise<T> {
+      return harnessSelectAnswer(choices, options.selects?.[selectIndex++]);
     },
     search: vi.fn<() => Promise<string>>(() => Promise.resolve("")),
     confirm: vi.fn<(message: string, defaultValue?: boolean) => Promise<boolean>>(
@@ -79,19 +84,15 @@ function pytrCredentialStorageAccepted(message: string): boolean {
 }
 
 function fakeLmClient(): LunchMoneySetupClient {
-  return {
+  return stubLunchMoneySetupClient({
     manualAccounts: {
       getAll: vi.fn().mockResolvedValue([{ id: 3, name: "TR operator-a" }]),
       create: vi.fn().mockResolvedValue({ id: 99, name: "Trade Republic (operator-a)" }),
     },
     categories: {
       getAll: vi.fn().mockResolvedValue([]),
-      create: vi.fn(),
-      get: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
     },
-  } as unknown as LunchMoneySetupClient;
+  });
 }
 
 function trInteractivePrompter(overrides: Partial<FakePrompterOptions> = {}): SetupPrompter {
@@ -204,7 +205,8 @@ describe("runSetup", () => {
       throw new Error("expected completed setup");
     }
     expect(result.config.tradeRepublicProfiles[0]?.owner).toBe("operator-a");
-    const written = String((filesystem.writeText as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] ?? "");
+    const writePayload = mockCallArgumentAt(requireMockFunction(filesystem.writeText, "writeText"), 0, 1);
+    const written = typeof writePayload === "string" ? writePayload : JSON.stringify(writePayload);
     expect(written).not.toContain("lm_test_key");
     expect(written).not.toContain("lunchMoneyApiKey");
     delete process.env["LUNCH_MONEY_API_KEY"];
@@ -277,11 +279,11 @@ describe("runSetup", () => {
   const accounts = [
     { id: 3, name: "Trade Republic (operator-a)" },
   ];
-  (lm.manualAccounts.getAll as ReturnType<typeof vi.fn>)
+  requireMockFunction(lm.manualAccounts.getAll, "manualAccounts.getAll")
     .mockResolvedValueOnce(accounts)
     .mockResolvedValueOnce(accounts)
     .mockResolvedValue(accounts);
-    (lm.manualAccounts.create as ReturnType<typeof vi.fn>).mockRejectedValue(
+    requireMockFunction(lm.manualAccounts.create, "manualAccounts.create").mockRejectedValue(
       new Error("ASSET_DISPLAY_NAME_ALREADY_EXISTS"),
     );
     const result = await runSetup(
@@ -436,11 +438,14 @@ describe("runSetup", () => {
     );
     expect(result.kind).toBe("completed");
     expect(runCategoryMappingSetup).toHaveBeenCalledTimes(1);
-    const deps = runCategoryMappingSetup.mock.calls[0]?.[1] as {
-      createClient?: (apiKey: string) => unknown;
-    };
-    expect(typeof deps.createClient).toBe("function");
-    expect(deps.createClient?.("lm_test_key")).toBe(lm);
+    const deps = runCategoryMappingSetup.mock.calls[0]?.[1];
+    if (deps === null || deps === undefined) {
+      throw new Error("category mapping deps");
+    }
+    if (!("createClient" in deps) || typeof deps.createClient !== "function") {
+      throw new Error("expected createClient on category mapping deps");
+    }
+    expect(deps.createClient("lm_test_key")).toBe(lm);
     delete process.env["LUNCH_MONEY_API_KEY"];
   });
 
@@ -473,7 +478,7 @@ describe("runSetup", () => {
     const prompter = trInteractivePrompter({
       confirms: (message) => pytrCredentialStorageAccepted(message) || message.includes("dry-run"),
     });
-    (prompter.password as ReturnType<typeof vi.fn>)
+    requireMockFunction(prompter.password, "prompter.password")
       .mockResolvedValueOnce("")
       .mockResolvedValueOnce("lm_test_key");
     await expect(
@@ -540,7 +545,7 @@ describe("runSetup", () => {
 
   it("offers holdings and overnight savings accounts for Scalable Capital", async () => {
     const lm = fakeLmClient();
-    (lm.manualAccounts.getAll as ReturnType<typeof vi.fn>).mockResolvedValue([
+    requireMockFunction(lm.manualAccounts.getAll, "manualAccounts.getAll").mockResolvedValue([
       { id: 3, name: "Scalable Capital (operator-b)" },
       { id: 4, name: "Scalable Capital Holdings (operator-b)" },
     ]);
@@ -682,10 +687,12 @@ describe("runSetup with a resumed config.json", () => {
       }),
     );
     expect(result.kind).toBe("completed");
-    const pytrCalls = pytr.run.mock.calls.map((call) => call[0] as string[]);
+    const pytrCalls = requireMockFunction(pytr.run, "pytr.run").mock.calls
+      .map((call) => call[0])
+      .filter((argv): argv is string[] => Array.isArray(argv) && argv.every((entry) => typeof entry === "string"));
     expect(pytrCalls.some((argv) => argv.includes("export_transactions") && argv.includes("--last_days"))).toBe(true);
     expect(sc.run).toHaveBeenCalledWith(["broker", "portfolios", "--json"]);
-    const printed = (prompter.print as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]));
+    const printed = requireMockFunction(prompter.print, "prompter.print").mock.calls.map((call) => String(call[0]));
     expect(printed.some((line) => line.includes("Using existing Trade Republic profile(s)"))).toBe(true);
     expect(printed.some((line) => line.includes("Using existing Scalable Capital profile(s)"))).toBe(true);
   });
@@ -712,10 +719,12 @@ describe("runSetup with a resumed config.json", () => {
       baseSetupOptions(),
       defaultRunSetupDeps({ prompter, filesystem, runners: { pytr, sc }, runSync: vi.fn(), createLunchMoneyClient: () => lm }),
     );
-    const confirmMessages = (prompter.confirm as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]));
+    const confirmMessages = requireMockFunction(prompter.confirm, "prompter.confirm").mock.calls.map((call) =>
+      String(call[0]),
+    );
     expect(confirmMessages.filter((message) => message.startsWith("Track portfolio market value"))).toHaveLength(1);
     expect(confirmMessages.filter((message) => message.startsWith("Track your Scalable overnight"))).toHaveLength(1);
-    const progressWrite = (filesystem.writeText as ReturnType<typeof vi.fn>).mock.calls
+    const progressWrite = requireMockFunction(filesystem.writeText, "filesystem.writeText").mock.calls
       .map((call) => JSON.parse(String(call[1])))
       .find((written) => written.tradeRepublicProfiles?.[0]?.holdingsAccountId === 3);
     expect(progressWrite).toMatchObject({

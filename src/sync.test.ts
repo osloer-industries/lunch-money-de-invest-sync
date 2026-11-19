@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CanonicalTransaction } from "./shared/transaction.js";
 import type { SyncConfig } from "./shared/config.js";
 import { createLiveCollectors, runSync, runSyncCli, type BrokerCollectors, type LunchMoneySyncClient } from "./sync.js";
+import { stubSyncCliClient } from "./test-support/lunch-money-stubs.js";
 
 const fetchAllScalableCapitalTransactions = vi.hoisted(() => vi.fn());
 const createDefaultScCliRunner = vi.hoisted(() => vi.fn(() => ({})));
@@ -43,7 +44,7 @@ function tx(overrides: Partial<CanonicalTransaction> = {}): CanonicalTransaction
 
 function fakeClient(): LunchMoneySyncClient {
   let nextTagId = 1;
-  return {
+  return stubSyncCliClient({
     tags: {
       getAll: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockImplementation(({ name }: { name: string }) =>
@@ -60,7 +61,7 @@ function fakeClient(): LunchMoneySyncClient {
       getAll: vi.fn().mockResolvedValue({ transactions: [], hasMore: false }),
       create: vi.fn().mockResolvedValue({ transactions: [{ id: 1 }], skipped_duplicates: [] }),
     },
-  } as unknown as LunchMoneySyncClient;
+  });
 }
 
 function baseConfig(overrides: Partial<SyncConfig> = {}): SyncConfig {
@@ -350,7 +351,7 @@ describe("runSync", () => {
               tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
               scalableCapitalProfiles: [],
             }),
-          createClient: () => client as never,
+          createClient: () => client,
           collectors: { collectTradeRepublic: vi.fn(), collectScalableCapital: vi.fn() },
         },
       ),
@@ -386,7 +387,7 @@ describe("runSync", () => {
               { owner: "operator-b", lunchMoneyAssetId: 2 },
             ],
           }),
-        createClient: () => client as never,
+        createClient: () => client,
         collectors,
         logger: () => {},
       },
@@ -406,7 +407,7 @@ describe("runSync", () => {
           tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 1 }],
           scalableCapitalProfiles: [{ owner: "operator-b", lunchMoneyAssetId: 2 }],
         }),
-      createClient: () => client as never,
+      createClient: () => client,
       collectors,
       logger: () => {},
     });
@@ -438,7 +439,7 @@ describe("runSync", () => {
     await runSyncCli(["--export-type-summary", "types.json"], {
       readConfig: () =>
         baseConfig({ scalableCapitalProfiles: [{ owner: "operator-b", lunchMoneyAssetId: 2 }] }),
-      createClient: () => client as never,
+      createClient: () => client,
       collectors: { collectTradeRepublic: vi.fn().mockResolvedValue([]), collectScalableCapital: vi.fn().mockResolvedValue([]) },
       logger,
     });
@@ -455,22 +456,22 @@ describe("runSync", () => {
           categoryMap: { unknown: 1 },
           tradeRepublicProfiles: [{ owner: "operator-a", lunchMoneyAssetId: 7 }],
         }),
-      createClient: () => client as never,
+      createClient: () => client,
       collectors: {
         collectTradeRepublic: vi.fn().mockResolvedValue([tx()]),
         collectScalableCapital: vi.fn(),
       },
     });
-    const payload = JSON.parse(String(stdout.mock.calls[0]?.[0])) as {
-      dryRunReview?: { uncategorisedShareExceedsThreshold: boolean };
-      accounts: Array<{
-        firstSyncForAccount: boolean;
-        dryRunSummary?: { rows: Array<{ payee: string }> };
-      }>;
-    };
-    expect(payload.accounts[0]?.firstSyncForAccount).toBe(true);
-    expect(payload.accounts[0]?.dryRunSummary?.rows).toHaveLength(1);
-    expect(payload.dryRunReview?.uncategorisedShareExceedsThreshold).toBe(false);
+    const payload: unknown = JSON.parse(String(stdout.mock.calls[0]?.[0]));
+    expect(payload).toMatchObject({
+      dryRunReview: { uncategorisedShareExceedsThreshold: false },
+      accounts: [
+        {
+          firstSyncForAccount: true,
+          dryRunSummary: { rows: [{ payee: expect.any(String) }] },
+        },
+      ],
+    });
     stdout.mockRestore();
   });
 
