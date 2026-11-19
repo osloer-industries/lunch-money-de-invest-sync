@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.7...v0.2.8) (2026-11-19)
+
+
+### Features
+
+* **lint:** blanket-block every type escape hatch ([#114](https://github.com/osloer-industries/lunch-money-de-invest-sync/issues/114)) ([35cf1a7](https://github.com/osloer-industries/lunch-money-de-invest-sync/commit/35cf1a70389bed565f987f2b31a47e0509c10265))
+
 ## [0.2.7](https://github.com/osloer-industries/lunch-money-de-invest-sync/compare/v0.2.6...v0.2.7) (2026-11-16)
 
 
