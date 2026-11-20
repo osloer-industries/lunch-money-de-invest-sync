@@ -1,10 +1,11 @@
 # Consuming org reusable workflows
 
 Shared GitHub Actions behavior lives in [osloer-industries/.github](https://github.com/osloer-industries/.github).
-This repository keeps **thin caller workflows** under `.github/workflows/` and pins each `uses:` ref to a full
-commit SHA with a `# v0.x.y` comment. The org contract lives in
-[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/a081e1b87b5309ff2b3999e8d6804d8ebec5c518/docs/consuming-workflows.md)
-on that repository.
+This repository keeps **thin caller workflows** under `.github/workflows/` and pins each org `uses:` ref to a full
+commit SHA with a `# v0.x.y` version comment (never `# main`). The org contract, input defaults, and copy-paste YAML
+live in
+[consuming-workflows.md](https://github.com/osloer-industries/.github/blob/a6ee91211fd9ba096ec141bacdb67985a82b6767/docs/consuming-workflows.md)
+on that repository (**v0.1.7**: `a6ee91211fd9ba096ec141bacdb67985a82b6767`).
 
 Do not pass a `reusables-ref` input. Reusables that need their own scripts check out
 `osloer-industries/.github` at `job.workflow_sha` (the commit in the `uses:` pin).
@@ -13,32 +14,38 @@ Do not pass a `reusables-ref` input. Reusables that need their own scripts check
 
 | Caller file | Org reusable | Notes |
 | --- | --- | --- |
-| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (`workflow-security` job) | `workflow-security.yml` | actionlint + zizmor. Check name: `Workflow security` (often shown as `CI / workflow-security / Workflow security`). |
-| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (`quality` job) | `node-npm-quality.yml` | Defaults already match this repo (`npm ci --ignore-scripts`, `npm audit --omit=dev --audit-level=high`, `npm run check`). Check name: `Quality` (often shown as `CI / quality / Quality`). |
-| [`.github/workflows/codeql.yml`](../.github/workflows/codeql.yml) | `codeql-javascript-typescript.yml` | **Private repo today:** SARIF artifact mode (`code-scanning-upload: false`). After going public, consider enabling default upload for GitHub code scanning alerts. Check name: `Analyze JavaScript and TypeScript`. |
-| [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) | `semantic-pull-request.yml` | Accepts the org pin of `amannn/action-semantic-pull-request` (currently v6.1.1). Check name: `Semantic pull request`. |
-| [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `release-please.yml` | Mints a release GitHub App token (`vars.OSLOER_RELEASE_APP_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`) with workflows write so Release Please can update refs. Check name: `Prepare or publish release`. |
-| [`.github/workflows/sonar.yml`](../.github/workflows/sonar.yml) | `sonarcloud-zero-issues.yml` | Polls SonarCloud on pull requests and fails when open issues remain on the PR head commit. Check name: `SonarCloud zero open issues`. |
+| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | `workflow-security.yml` | actionlint + zizmor; **job**-level `actions: read` (no workflow-level `actions: read` per Sonar `githubactions:S8264`). |
+| same | `node-npm-quality.yml` | Check name **Quality** (`npm run check`, production audit). |
+| same | `codeql-javascript-typescript.yml` | Public repo: default Code Scanning upload. Weekly schedule on `CI`. |
+| same | `sonarqube-cloud-node.yml` | Check name **Analyze**; `coverage-npm-script: test:coverage`. Skips when `SONAR_TOKEN` is empty (fork/Dependabot). |
+| same | `sonarcloud-zero-issues.yml` | PR-only; `ce-task-id` from `sonar-analyze` waits for compute-engine SUCCESS, then polls for zero open issues. |
+| same | `ci-passed.yml` | Aggregate required check; includes repo-specific test and E2E jobs. |
+| [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) | `dependency-review.yml` | Default `mode: auto` (GitHub Dependency Review on this public repo). **Job**-level `contents: read`, `actions: read`, `pull-requests: read`, and `security-events: write` (required for nested OSV reusable startup on every repo visibility). Separate required check, not part of `ci-passed`. |
+| [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) | `semantic-pull-request.yml` | Conventional Commits PR titles. |
+| [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `release-please.yml` | Release GitHub App (`vars.OSLOER_RELEASE_APP_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`). |
 
-Repo-specific jobs that stay inlined:
+Repo-specific jobs that stay inlined in `ci.yml`:
 
-- CI **sonarcloud** (Node coverage + `SonarSource/sonarqube-scan-action` upload), **Tests (macOS)**, and **Tests (TZ=Europe/Berlin)** in [`ci.yml`](../.github/workflows/ci.yml)
-- [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml) — GHAS-free `dependency-diff-audit.mjs` gate (`Review dependency changes`). Do not replace this with the org `dependency-review.yml` reusable.
+- **Tests (macOS)** and **Tests (TZ=Europe/Berlin)** — platform and timezone coverage.
+- **E2E terminal** jobs (Linux, macOS, Europe/Berlin TZ) — `node-pty` terminal tests; no org reusable for matrix/OS/TZ.
+
+**Removed** from this repository: standalone `codeql.yml` and `sonar.yml`, inlined Sonar scan in `ci.yml`, vendored
+`.github/scripts/dependency-diff-audit.mjs`, and the custom dependency-review steps.
 
 This repository does **not** call `node-setup-smoke.yml` (template-only) or `mutation-changed.yml` (no Stryker setup here).
 
-Dependabot `github-actions` updates on `/` bump Action SHAs and org reusable workflow SHAs together (`ci(deps)`).
+Dependabot `github-actions` updates on `/` bump Action SHAs and org reusable workflow SHAs (`ci(deps)`). Org reusables
+are grouped as `osloer-reusables` (`osloer-industries/.github*`).
 
-When adding org reusables as required branch protection checks, use the names from the
-[org workflow table](https://github.com/osloer-industries/.github/blob/a081e1b87b5309ff2b3999e8d6804d8ebec5c518/docs/consuming-workflows.md#available-reusables).
-Reusable jobs nested under `CI` may appear as `CI / <job id> / <job name>`. Confirm the exact required-check string after the first green run before locking rulesets.
+Branch protection should require only **`ci-passed`** on the `CI` workflow. Dependency review and semantic PR title are
+separate workflows and are not part of `ci-passed`.
 
 ## GitHub Actions secrets
 
 CI and release automation use only:
 
 - **`GITHUB_TOKEN`** — default per-workflow permissions (no broker or Lunch Money credentials).
-- **`SONAR_TOKEN`** — org secret for SonarCloud zero-open-issues polling.
+- **`SONAR_TOKEN`** — org secret for SonarCloud analyze and zero-open-issues polling.
 - **`RELEASE_APP_PRIVATE_KEY`** — PEM for the osloer-reviewer release GitHub App, with repository variable **`OSLOER_RELEASE_APP_ID`**.
 
 Never store Trade Republic, Scalable Capital, Lunch Money API keys, or operator `config.json` in GitHub Actions.
@@ -48,29 +55,7 @@ Never store Trade Republic, Scalable Capital, Lunch Money API keys, or operator 
 [`sonar-project.properties`](../sonar-project.properties) defines the SonarCloud project key
 `osloer-industries_lunch-money-de-invest-sync`, sources/tests, and `sonar.javascript.lcov.reportPaths=coverage/lcov.info`.
 
-The **sonarcloud** job in [`ci.yml`](../.github/workflows/ci.yml) runs `npm run test:coverage` (Vitest → `coverage/lcov.info`)
-and uploads analysis with `SonarSource/sonarqube-scan-action`. SonarCloud **Automatic Analysis** must be disabled for that
-CI scan to succeed.
+This project uses the **CI scanner** (`sonarqube-cloud-node.yml`), not SonarCloud Automatic Analysis alone. Disable
+Automatic Analysis for this project in SonarCloud so it does not conflict with the CI upload.
 
-The [`sonar.yml`](../.github/workflows/sonar.yml) caller polls SonarCloud on each pull request and fails when open
-issues remain on the PR head commit.
-
-### Test coverage in SonarCloud (new code)
-
-Local and CI **Quality** runs `npm run test:coverage`, which writes `coverage/lcov.info` with paths like `SF:src/...`
-(see [`vitest.config.ts`](../vitest.config.ts) and [`sonar-project.properties`](../sonar-project.properties)
-`sonar.javascript.lcov.reportPaths=coverage/lcov.info`).
-
-SonarCloud **does not see that file today** because:
-
-1. Analysis is **Automatic Analysis** in SonarCloud (not a `SonarSource/sonarqube-scan-action` job in CI).
-2. The reusable **Quality** job (`node-npm-quality.yml`) runs tests but does not upload `coverage/` to Sonar.
-3. `sonar.javascript.lcov.reportPaths` is only consumed when a Sonar scanner runs in the same workspace as the report.
-
-**Org-level fix (recommended):** mirror [osloer-industries/vakt](https://github.com/osloer-industries/vakt) — disable Automatic
-Analysis for this project in SonarCloud, then add a `sonarcloud` job to [`ci.yml`](../.github/workflows/ci.yml) that runs
-`npm run test:coverage` and `SonarSource/sonarqube-scan-action` with `SONAR_TOKEN` (keep the existing `sonar.yml`
-zero-open-issues gate). Alternatively extend `node-npm-quality.yml` with an optional coverage artifact + scan step shared
-across org repos.
-
-Do **not** run a CI Sonar scan while Automatic Analysis remains enabled (SonarCloud documents this as conflicting).
+PRs also run `sonarcloud-zero-issues.yml` inside `ci-passed`.
