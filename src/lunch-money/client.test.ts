@@ -63,4 +63,16 @@ describe("resolveTagIds", () => {
     expect(resolved.get("shared")).toBeDefined();
     expect(api.tags.create).toHaveBeenCalledTimes(1);
   });
+
+  it("creates missing tags in request order", async () => {
+    const api = fakeTagsApi([]);
+    const resolved = await resolveTagIds(api, ["alpha", "beta", "gamma"]);
+    expect(resolved.get("alpha")).toBe(1);
+    expect(resolved.get("beta")).toBe(2);
+    expect(resolved.get("gamma")).toBe(3);
+    expect(api.tags.create).toHaveBeenCalledTimes(3);
+    expect(api.tags.create).toHaveBeenNthCalledWith(1, { name: "alpha" });
+    expect(api.tags.create).toHaveBeenNthCalledWith(2, { name: "beta" });
+    expect(api.tags.create).toHaveBeenNthCalledWith(3, { name: "gamma" });
+  });
 });
