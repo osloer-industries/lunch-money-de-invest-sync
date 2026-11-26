@@ -53,7 +53,7 @@
       }
     },
     {
-      "files": ["src/sync.ts", "src/lunch-money/client.ts", "src/scalable-capital/client.ts"],
+      "files": ["src/sync.ts", "src/scalable-capital/client.ts"],
       "rules": {
         "eslint/no-await-in-loop": "off",
         "eslint/max-params": "off"

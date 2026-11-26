@@ -1,4 +1,6 @@
-import { ZodError, type ZodIssue } from "zod";
+import { ZodError, type z } from "zod";
+
+type ZodIssue = z.core.$ZodIssue;
 
 export const MISSING_LUNCH_MONEY_API_KEY_MESSAGE =
   "Lunch Money API key is not stored — run npm run setup (or npm run setup -- --replace-api-key).";

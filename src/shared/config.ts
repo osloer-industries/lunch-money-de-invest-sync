@@ -103,7 +103,7 @@ const jsonTextSchema = z.string().transform((text, ctx): unknown => {
     return parseJsonText(text);
   } catch {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: "invalid JSON",
     });
     return z.NEVER;

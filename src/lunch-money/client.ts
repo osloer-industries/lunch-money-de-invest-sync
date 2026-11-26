@@ -34,16 +34,17 @@ export async function resolveTagIds(
   const existing = await client.tags.getAll();
   const byName = new Map(existing.map((tag) => [tag.name, tag.id]));
 
-  for (const name of tagNames) {
+  await tagNames.reduce<Promise<void>>(async (previous, name) => {
+    await previous;
     const existingId = byName.get(name);
     if (existingId !== undefined) {
       resolved.set(name, existingId);
-      continue;
+      return;
     }
     const created = await client.tags.create({ name });
     byName.set(name, created.id);
     resolved.set(name, created.id);
-  }
+  }, Promise.resolve());
 
   return resolved;
 }
